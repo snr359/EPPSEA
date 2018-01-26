@@ -28,18 +28,6 @@ class GPNode:
         self.children = None
         self.parent = None
 
-    def limitedFac(self, nInput, limit=1000):
-        # a limited factorial function, whose max return value is limit!
-        n = int(min(abs(nInput), limit))
-        return math.factorial(n)
-
-    def combo(self, n, k):
-        # computes n-choose-k combination
-        if n - k < 0:
-            return 0
-        else:
-            return self.limitedFac(n) / (self.limitedFac(k) * self.limitedFac(n - k))
-
     def grow(self, depthLimit, parent):
         if depthLimit == 0:
             self.operation = random.choice(GPNode.numericTerminals + GPNode.dataTerminals)
