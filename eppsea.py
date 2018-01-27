@@ -19,8 +19,8 @@ import basicEA
 class GPNode:
     numericTerminals = ['constant'] #TODO: include random later?
     dataTerminals = ['fitness', 'fitnessProportion', 'fitnessRank', 'populationSize']
-    nonTerminals = ['+', '-', '*', '/', 'combo', 'step']
-    childCount = {'+': 2, '-': 2, '*': 2, '/': 2, 'combo': 2, 'step': 2}
+    nonTerminals = ['+', '-', '*', '/', 'step']
+    childCount = {'+': 2, '-': 2, '*': 2, '/': 2, 'step': 2}
 
     def __init__(self):
         self.operation = None
@@ -56,9 +56,6 @@ class GPNode:
             if denom == 0:
                 denom = 0.00001
             return self.children[0].get(terminalValues) / denom
-
-        elif self.operation == 'combo':
-            return self.combo(self.children[0].get(terminalValues), self.children[1].get(terminalValues))
 
         elif self.operation == 'step':
             if self.children[0].get(terminalValues) >= self.children[1].get(terminalValues):
@@ -100,8 +97,6 @@ class GPNode:
                     result = '(' + self.children[0].getCode() + self.operation + self.children[1].getCode() + ')'
                 elif self.operation == '/':
                     result = '(' + self.children[0].getCode() + self.operation + '(0.000001+' + self.children[1].getCode() + '))'
-                elif self.operation == 'combo':
-                    result = '(self.combo(' + self.children[0].getCode() + ',' + self.children[1].getCode() + ',p.populationSize))'
                 elif self.operation == 'step':
                     result = '(int(' + self.children[0].getCode() + '>=' + self.children[1].getCode() + '))'
 
@@ -296,7 +291,7 @@ def evaluateGPPopulation(population):
             numProcesses = getFromConfig('experiment', 'processes', 'int')
             if numProcesses <= 0:
                 if leaveOneCore:
-                    pool = multiprocessing.Pool(len(os.sched_getaffinity(0)) - 1)
+                    pool = multiprocessing.Pool(os.cpu_count() - 1)
                 else:
                     pool = multiprocessing.Pool()
             else:
