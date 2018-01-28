@@ -14,8 +14,6 @@ import statistics
 
 import numpy as np
 
-import basicEA
-
 class GPNode:
     numericTerminals = ['constant'] #TODO: include random later?
     dataTerminals = ['fitness', 'fitnessProportion', 'fitnessRank', 'populationSize']
@@ -73,14 +71,14 @@ class GPNode:
             return random.expovariate(0.07)
 
         else:
-            log('operation {0} not found in value getter'.format(str(self.operation)), 'ERROR', logFile)
+            log('operation {0} not found in value getter'.format(str(self.operation)), 'ERROR')
 
     def getString(self):
         if self.operation in GPNode.nonTerminals:
             if len(self.children) == 2:
                 result = "(" + self.children[0].getString() + " " + self.operation + " " + self.children[1].getString() + ")"
             else:
-                log('Nonterminal GP node with {0} children'.format(len(self.children)), 'WARNING', logFile)
+                log('Nonterminal GP node with {0} children'.format(len(self.children)), 'WARNING')
                 result = ''
         elif self.operation == 'constant':
             result = str(self.data)
@@ -101,7 +99,7 @@ class GPNode:
                     result = '(int(' + self.children[0].getCode() + '>=' + self.children[1].getCode() + '))'
 
             else:
-                log('Nonterminal GP node with {0} children'.format(len(self.children)), 'WARNING', logFile)
+                log('Nonterminal GP node with {0} children'.format(len(self.children)), 'WARNING')
 
         elif self.operation in GPNode.dataTerminals:
             result = '(p.' + self.operation + ')'
@@ -111,7 +109,7 @@ class GPNode:
         elif self.operation == 'random':
             result = '(random.expovariate(0.07))'
         else:
-            log('Operation {0} not found in code string generation'.format(str(self.operation)), 'ERROR', logFile)
+            log('Operation {0} not found in code string generation'.format(str(self.operation)), 'ERROR')
         return result
 
     def getAllNodes(self):
@@ -216,7 +214,7 @@ class GPTree:
     def replaceNode(self, nodeToReplace, replacementNode):
         # replaces node in GPTree. Uses the replacementNode directly, not a copy of it
         if nodeToReplace not in self.getAllNodes():
-            log('Attempting to replace node not in own tree', 'ERROR', logFile)
+            log('Attempting to replace node not in own tree', 'ERROR')
         if nodeToReplace is self.root:
             self.root = replacementNode
             self.root.parent = None
@@ -266,7 +264,7 @@ class GPTree:
             d = pickle.load(pickleFile)
             self.buildFromDict(d)
 
-def log(message, messageType, logFile):
+def log(message, messageType, logFile=None):
     # Builds a log message out of a timestamp, the passed message, and a message type, then prints the message and
     # writes it in the logFile
 
@@ -278,58 +276,57 @@ def log(message, messageType, logFile):
 
     # Print and log the message
     print(fullMessage)
-    logFile.write(fullMessage)
-    logFile.write('\n')
+    if logFile is not None:
+        logFile.write(fullMessage)
+        logFile.write('\n')
 
-def evaluateGPPopulation(population):
-    usingMultiprocessing = getFromConfig('experiment', 'use multiprocessing', 'bool')
-    leaveOneCore = getFromConfig('experiment', 'leave one core idle', 'bool')
-    numRuns = 5
+def evaluateGPPopulation(config, population, evaluator):
+    usingMultiprocessing = config.getboolean('experiment', 'use multiprocessing')
+    leaveOneCore = config.getboolean('experiment', 'leave one core idle')
 
-    for p in population:
-        if usingMultiprocessing:
-            numProcesses = getFromConfig('experiment', 'processes', 'int')
-            if numProcesses <= 0:
-                if leaveOneCore:
-                    pool = multiprocessing.Pool(os.cpu_count() - 1)
-                else:
-                    pool = multiprocessing.Pool()
+    if usingMultiprocessing:
+        numProcesses = config.getint('experiment', 'processes')
+        if numProcesses <= 0:
+            if leaveOneCore:
+                pool = multiprocessing.Pool(os.cpu_count() - 1)
             else:
-                pool = multiprocessing.Pool(processes=numProcesses)
-
-            params = ['rosenbrock', 20, 5000, 100, 20, 0.1, p]
-            results = pool.starmap(basicEA.one_run, [params]*numRuns)
+                pool = multiprocessing.Pool()
         else:
-            results = []
-            for i in range(numRuns):
-                results.append(basicEA.one_run('rosenbrock', 20, 5000, 100, 20, 0.1, p))
+            pool = multiprocessing.Pool(processes=numProcesses)
 
-        average_best = statistics.mean(r['best_fitness'] for r in results)
-        p.fitness = average_best
+        results = pool.map(evaluator.evaluate, population)
+    else:
+        results = []
+        for p in population:
+            results.append(evaluator.evaluate(p))
 
-def eppsea():
+
+    for p, r in zip(population, results):
+        p.fitness = r
+
+def eppseaOneRun(config, evaluator, resultsDirectory, logFile):
     # runs the meta EA for one run
 
     # get the parameters from the configuration file
-    GPMu = getFromConfig('metaEA', 'metaEA mu', 'int')
-    GPLambda = getFromConfig('metaEA', 'metaEA lambda', 'int')
-    maxGPEvals = getFromConfig('metaEA', 'metaEA maximum fitness evaluations', 'int')
-    initialGPDepthLimit = getFromConfig('metaEA', 'metaEA GP tree initialization depth limit', 'int')
-    GPKTournamentK = getFromConfig('metaEA', 'metaEA k-tournament size', 'int')
+    GPMu = config.getint('metaEA', 'metaEA mu')
+    GPLambda = config.getint('metaEA', 'metaEA lambda')
+    maxGPEvals = config.getint('metaEA', 'metaEA maximum fitness evaluations')
+    initialGPDepthLimit = config.getint('metaEA', 'metaEA GP tree initialization depth limit')
+    GPKTournamentK = config.getint('metaEA', 'metaEA k-tournament size')
 
-    terminateMaxEvals = getFromConfig('metaEA', 'terminate on maximum evals', 'bool')
-    terminateNoAvgFitnessChange = getFromConfig('metaEA', 'terminate on no improvement in average fitness', 'bool')
-    terminateNoBestFitnessChange = getFromConfig('metaEA', 'terminate on no improvement in best fitness', 'bool')
-    noChangeTerminationGeneraitons = getFromConfig('metaEA', 'generations to termination for no improvement', 'int')
+    terminateMaxEvals = config.getboolean('metaEA', 'terminate on maximum evals')
+    terminateNoAvgFitnessChange = config.getboolean('metaEA', 'terminate on no improvement in average fitness')
+    terminateNoBestFitnessChange = config.getboolean('metaEA', 'terminate on no improvement in best fitness')
+    noChangeTerminationGenerations = config.get('metaEA', 'generations to termination for no improvement')
 
-    restartNoAvgFitnessChange = getFromConfig('metaEA', 'restart on no improvement in average fitness', 'bool')
-    restartNoBestFitnessChange = getFromConfig('metaEA', 'restart on no improvement in best fitness', 'bool')
-    noChangeRestartGeneraitons = getFromConfig('metaEA', 'generations to restart for no improvement', 'int')
+    restartNoAvgFitnessChange = config.getboolean('metaEA', 'restart on no improvement in average fitness')
+    restartNoBestFitnessChange = config.getboolean('metaEA', 'restart on no improvement in best fitness')
+    noChangeRestartGenerations = config.getint('metaEA', 'generations to restart for no improvement')
 
-    GPmutationRate = getFromConfig('metaEA', 'metaEA mutation rate', 'float')
+    GPmutationRate = config.getfloat('metaEA', 'metaEA mutation rate')
 
-    pickleEveryPopulation = getFromConfig('experiment', 'pickle every population', 'bool')
-    pickleFinalPopulation = getFromConfig('experiment', 'pickle final population', 'bool')
+    pickleEveryPopulation = config.getboolean('experiment', 'pickle every population')
+    pickleFinalPopulation = config.getboolean('experiment', 'pickle final population')
 
     # create a dictionary for the results
     results = dict()
@@ -346,7 +343,7 @@ def eppsea():
 
     # Evaluate the initial population
     log('Evaluating initial population', 'INFO', logFile)
-    evaluateGPPopulation(GPPopulation)
+    evaluateGPPopulation(config, GPPopulation, evaluator)
 
     # initialize eval counter
     GPEvals = GPMu
@@ -393,7 +390,7 @@ def eppsea():
             children.append(newChild)
 
         # Evaluate children
-        evaluateGPPopulation(children)
+        evaluateGPPopulation(config, children, evaluator)
         GPEvals += GPLambda
 
         # population merging
@@ -425,10 +422,10 @@ def eppsea():
             gensSinceAvgFitnessImprovement = 0
         else:
             gensSinceAvgFitnessImprovement += 1
-            if terminateNoAvgFitnessChange and gensSinceAvgFitnessImprovement >= noChangeTerminationGeneraitons:
+            if terminateNoAvgFitnessChange and gensSinceAvgFitnessImprovement >= noChangeTerminationGenerations:
                 log('Terminating evolution due to no improvement in average fitness', 'INFO', logFile)
                 evolutionFinished = True
-            elif restartNoAvgFitnessChange and gensSinceAvgFitnessImprovement >= noChangeRestartGeneraitons:
+            elif restartNoAvgFitnessChange and gensSinceAvgFitnessImprovement >= noChangeRestartGenerations:
                 log('Restarting evolution due to no improvement in average fitness', 'INFO', logFile)
                 restarting = True
 
@@ -437,10 +434,10 @@ def eppsea():
             gensSinceBestFitnessImprovement = 0
         else:
             gensSinceBestFitnessImprovement += 1
-            if terminateNoBestFitnessChange and gensSinceBestFitnessImprovement >= noChangeTerminationGeneraitons:
+            if terminateNoBestFitnessChange and gensSinceBestFitnessImprovement >= noChangeTerminationGenerations:
                 log('Terminating evolution due to no improvement in best fitness', 'INFO', logFile)
                 evolutionFinished = True
-            elif restartNoBestFitnessChange and gensSinceBestFitnessImprovement >= noChangeRestartGeneraitons:
+            elif restartNoBestFitnessChange and gensSinceBestFitnessImprovement >= noChangeRestartGenerations:
                 log('Restarting evolution due to no improvement in best fitness', 'INFO', logFile)
                 restarting = True
 
@@ -456,7 +453,7 @@ def eppsea():
                 newTree.randomize(initialGPDepthLimit)
                 GPPopulation.append(newTree)
             log('Evaluating restarted population', 'INFO', logFile)
-            evaluateGPPopulation(GPPopulation)
+            evaluateGPPopulation(config, GPPopulation, evaluator)
             GPEvals += GPMu
 
             gensSinceAvgFitnessImprovement = 0
@@ -466,12 +463,6 @@ def eppsea():
             restarting = False
 
         genNumber += 1
-
-    # run the best population member one more time and get the full results
-    log('Running best population member', 'INFO', logFile)
-    bestGPPopi = max(GPPopulation, key=lambda p: p.fitness)
-    finalResults = str(basicEA.one_run('rosenbrock', 20, 5000, 100, 20, 0.1, bestGPPopi))
-    log('Result of best population member run: {0}'.format(finalResults), 'INFO', logFile)
 
     # write the results
     with open(resultsDirectory + '/results.csv', 'w') as resultFile:
@@ -492,9 +483,10 @@ def eppsea():
     log('Final Best Fitness: {0}'.format(finalBestFitness), 'INFO', logFile)
 
     # calculate and log string for final best GP popi
+    bestGPPopi = max(GPPopulation, key=lambda p: p.fitness)
     bestGPPopiString = bestGPPopi.getString()
     log('String form of best Popi: {0}'.format(bestGPPopiString), 'INFO', logFile)
-    
+
     # pickle the final population, if configured to
     if pickleFinalPopulation:
         pickleDirectory = resultsDirectory + '/pickledPopulations'
@@ -514,7 +506,7 @@ def generateDefaultConfig(filePath):
             'seed: time\n',
             'use multiprocessing: True\n',
             'processes: -1\n',
-            'leave one core idle: True\n',
+            'leave one core idle: False\n',
             'pickle every population: True\n',
             'pickle final population: True\n',
             '\n',
@@ -526,26 +518,16 @@ def generateDefaultConfig(filePath):
             'metaEA GP tree initialization depth limit: 3\n',
             'metaEA mutation rate: 0.01\n',
             'terminate on maximum evals: True\n',
-            'terminate on no improvement in average fitness: True\n',
-            'terminate on no improvement in best fitness: True\n',
-            'generations to termination for no improvement: 5\n',
+            'terminate on no improvement in average fitness: False\n',
+            'terminate on no improvement in best fitness: False\n',
+            'generations to termination for no improvement: 25\n',
             'restart on no improvement in average fitness: False\n',
             'restart on no improvement in best fitness: False\n',
             'generations to restart for no improvement: 5\n',
             '\n'
         ])
 
-def getFromConfig(section, value, dataType=None):
-    if dataType == 'bool':
-        return config.getboolean(section, value)
-    elif dataType == 'int':
-        return config.getint(section, value)
-    elif dataType == 'float':
-        return config.getfloat(section, value)
-    else:
-        return config.get(section, value)
-
-if __name__ == "__main__":
+def eppsea(evaluator, configPath=None):
     # set up the results directory
     presentTime = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
     experimentName = "eppsea_" + str(presentTime)
@@ -555,30 +537,37 @@ if __name__ == "__main__":
     # Set up the logging file
     logFile = open(resultsDirectory + '/log.txt', 'w')
 
+    # log start
+    log('Starting EPPSEA!', 'INFO', logFile)
+
+    # check to make sure the evaluator has an evaluation function
+    if not callable(getattr(evaluator, 'evaluate', None)):
+        log('Evaluator object has no evaluation function. Define the "evaluate(selection_function)" method for the evaluator', 'ERROR', logFile)
+        exit(1)
+
     # read sys.argv[1] as the config file path
     # if we do not have a config file, generate and use a default config
-    if len(sys.argv) < 2:
+    if configPath is None:
         log('No config file path provided. Generating and using default config.', 'INFO', logFile)
-        configPath = 'default.cfg'
+        configPath = 'config/base_config/default.cfg'
         generateDefaultConfig(configPath)
     # if the provided file path does not exist, generate and use a default config
-    elif not os.path.isfile(sys.argv[1]):
-        log('No config file found at {0}. Generating and using default config.'.format(sys.argv[1]), 'INFO', logFile)
-        configPath = 'default.cfg'
+    elif not os.path.isfile(str(configPath)):
+        log('No config file found at {0}. Generating and using default config.'.format(configPath), 'INFO', logFile)
+        configPath = 'config/base_config/default.cfg'
         generateDefaultConfig(configPath)
     else:
-        configPath = sys.argv[1]
         log('Using config file {0}'.format(configPath), 'INFO', logFile)
 
     # copy the used config file to the results path
-    shutil.copyfile(configPath, resultsDirectory + '/config.cfg')
+    shutil.copyfile(configPath, resultsDirectory + '/config_used.cfg')
 
     # set up the configuration object. This will be referenced by multiple functions and classes within this module
     config = configparser.ConfigParser()
     config.read(configPath)
 
     # seed RNGs and record seed
-    seed = getFromConfig('experiment', 'seed')
+    seed = config.get('experiment', 'seed')
     try:
         seed = int(seed)
     except ValueError:
@@ -591,7 +580,7 @@ if __name__ == "__main__":
     startTime = time.time()
 
     # run experiment
-    eppsea()
+    eppseaOneRun(config, evaluator, resultsDirectory, logFile)
 
     # log time elapsed
     timeElapsed = time.time() - startTime
