@@ -6,12 +6,66 @@ import eppsea_base
 
 class basicEA:
 
+    genome_lengths = {
+        'rosenbrock': 20,
+        'rastrigin': 20
+    }
+
+    fitness_function_as = {
+        'rosenbrock': 100,
+        'rastrigin': 10
+    }
+
+    genome_types = {
+        'rastrigin': 'float',
+        'rosenbrock': 'float'
+    }
+
+    max_ranges = {
+        'rosenbrock': 5,
+        'rastrigin': 5
+    }
+
+    def __init__(self, fitness_function, mu, lam, mutation_rate, max_evals, runs):
+        self.fitness_function = fitness_function
+        self.mu = mu
+        self.lam = lam
+
+        self.mutation_rate = mutation_rate
+        self.max_evals = max_evals
+
+        self.runs = runs
+
+        if self.fitness_function == 'rastrigin':
+            self.fitness_function_offset = self.generate_offset(20)
+        else:
+            self.fitness_function_offset = None
+
+        self.genome_type = self.genome_types.get(fitness_function, None)
+        self.genome_length = self.genome_lengths.get(fitness_function, None)
+        self.fitness_function_a = self.fitness_function_as.get(fitness_function, None)
+        self.max_range = self.max_ranges.get(fitness_function, None)
+
+    def evaluate(self, eppsea_selection_function):
+        results = list()
+        for _ in range(self.runs):
+            results.append(self.one_run(eppsea_selection_function))
+
+        average_best = statistics.mean(r['best_fitness'] for r in results)
+
+        return average_best
+
     class popi:
-        def __init__(self):
-            self.genome = None
-            self.genome_type = None
-            self.genome_length = None
-            self.fitness = None
+        def __init__(self, other=None):
+            if other is None:
+                self.genome = None
+                self.genome_type = None
+                self.genome_length = None
+                self.fitness = None
+            else:
+                self.genome = list(other.genome)
+                self.genome_type = other.genome_type
+                self.genome_length = other.genome_length
 
         def randomize(self, n, max_range, genome_type):
             self.genome = list()
@@ -21,8 +75,8 @@ class basicEA:
                 self.genome_type = 'bool'
                 for i in range(n):
                     self.genome.append(bool(random.random() > 0.5))
-            elif genome_type == 'real':
-                self.genome_type = 'real'
+            elif genome_type == 'float':
+                self.genome_type = 'float'
                 for i in range(n):
                     self.genome.append(random.uniform(-max_range, max_range))
 
@@ -30,7 +84,7 @@ class basicEA:
             if self.genome_type == 'bool':
                 self.genome[gene] = not self.genome[gene]
 
-            elif self.genome_type == 'real':
+            elif self.genome_type == 'float':
                 self.genome[gene] += random.triangular(-1, 1, 0)
 
         def mutate_one(self):
@@ -42,31 +96,18 @@ class basicEA:
                 self.mutate_gene(i)
 
         def recombine(self, parent2):
-            new_child = basicEA.popi()
-            new_child.genome = list(self.genome)
-            new_child.genome_length = self.genome_length
-            new_child.genome_type = self.genome_type
+            new_child = basicEA.popi(self)
             for i in range(self.genome_length):
                 if random.random() > 0.5:
                     new_child.genome[i] = parent2.genome[i]
 
             return new_child
 
-    def evaluate_child(self, popi, fitness_function, fitness_function_offset):
-        if fitness_function == 'rosenbrock':
-            popi.fitness = self.rosenbrock(popi.genome, 100)
-        elif fitness_function == 'rastrigin':
-            popi.fitness = self.offset_rastrigin(popi.genome, 10, fitness_function_offset)
-
-    def evaluate(self, eppsea_selection_function):
-        numRuns = 30
-        results = list()
-        for _ in range(numRuns):
-            results.append(self.one_run('rosenbrock', 20, 5000, 100, 20, 0.05, eppsea_selection_function))
-
-        average_best = statistics.mean(r['best_fitness'] for r in results)
-
-        return average_best
+    def evaluate_child(self, popi):
+        if self.fitness_function == 'rosenbrock':
+            popi.fitness = self.rosenbrock(popi.genome, self.fitness_function_a)
+        elif self.fitness_function == 'rastrigin':
+            popi.fitness = self.offset_rastrigin(popi.genome, self.fitness_function_a, self.fitness_function_offset)
 
     def rosenbrock(self, x, a):
         result = 0
@@ -122,9 +163,9 @@ class basicEA:
             for p in population:
                 p.selection_chance -= min_chance
 
-    def parent_selection_eppsea_function(self, population, parents_used, selection_function):
+    def parent_selection_eppsea_function(self, population, parents_used, eppsea_selection_function):
         candidates = list(population)
-        if not selection_function.reusingParents:
+        if not eppsea_selection_function.reusingParents:
             for p in parents_used:
                 try:
                     candidates.remove(p)
@@ -149,34 +190,21 @@ class basicEA:
 
         return selected
 
-    def one_run(self, fitness_function, genome_length, max_evals, population_size, offspring_size, mutation_rate, eppsea_selection_function):
-        if fitness_function == 'rasrigin':
-            fitness_function_offset = self.generate_offset(genome_length)
-        else:
-            fitness_function_offset = None
-
-        if fitness_function in ['rosenbrock',
-                                'rastrigin']:
-            genome_type = 'real'
-            max_range = 5
-        else:
-            #TODO: boolean fitness functions
-            genome_type = 'bool'
-            max_range = 1
+    def one_run(self, eppsea_selection_function):
 
         population = list()
-        for i in range(population_size):
+        for i in range(self.mu):
             new_child = self.popi()
-            new_child.randomize(genome_length, max_range, genome_type)
-            self.evaluate_child(new_child, fitness_function, fitness_function_offset)
+            new_child.randomize(self.genome_length, self.max_range, self.genome_type)
+            self.evaluate_child(new_child)
             population.append(new_child)
 
-        evals = population_size
+        evals = self.mu
 
-        while evals <= max_evals:
+        while evals <= self.max_evals:
             children = list()
             parents_used = list()
-            for i in range(offspring_size):
+            for i in range(self.lam):
                 self.set_fitness_stats(population)
                 self.set_selection_chances(population, eppsea_selection_function)
                 parent1 = self.parent_selection_eppsea_function(population, parents_used, eppsea_selection_function)
@@ -188,7 +216,7 @@ class basicEA:
                 if random.random() < mutation_rate:
                     new_child.mutate_all()
 
-                self.evaluate_child(new_child, fitness_function, fitness_function_offset)
+                self.evaluate_child(new_child)
 
                 children.append(new_child)
 
@@ -196,7 +224,7 @@ class basicEA:
 
             population.extend(children)
             population.sort(key=lambda p: p.fitness, reverse=True)
-            population = random.sample(population, population_size)
+            population = random.sample(population, self.mu)
 
         results = dict()
         results['average_fitness'] = statistics.mean(p.fitness for p in population)
@@ -205,6 +233,15 @@ class basicEA:
         return results
 
 if __name__ == '__main__':
-    evaluator = basicEA()
+    fitness_function = 'rosenbrock'
+
+    mu = 50
+    lam = 20
+    mutation_rate = 0.1
+
+    max_evals = 5000
+    runs = 30
+
+    evaluator = basicEA(fitness_function, mu, lam, mutation_rate, max_evals, runs)
     eppsea_base.eppsea(evaluator, 'config/base_config/test.cfg')
 
