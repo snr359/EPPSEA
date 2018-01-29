@@ -8,22 +8,28 @@ class basicEA:
 
     genome_lengths = {
         'rosenbrock': 20,
-        'rastrigin': 20
+        'rastrigin': 20,
+        'dtrap': 400
     }
 
     fitness_function_as = {
         'rosenbrock': 100,
-        'rastrigin': 10
+        'rastrigin': 10,
     }
 
     genome_types = {
         'rastrigin': 'float',
-        'rosenbrock': 'float'
+        'rosenbrock': 'float',
+        'dtrap': 'bool'
     }
 
     max_ranges = {
         'rosenbrock': 5,
         'rastrigin': 5
+    }
+
+    trap_sizes = {
+        'dtrap': 4
     }
 
     def __init__(self, fitness_function, mu, lam, mutation_rate, max_evals, runs):
@@ -45,6 +51,7 @@ class basicEA:
         self.genome_length = self.genome_lengths.get(fitness_function, None)
         self.fitness_function_a = self.fitness_function_as.get(fitness_function, None)
         self.max_range = self.max_ranges.get(fitness_function, None)
+        self.trap_size = self.trap_sizes.get(fitness_function, None)
 
     def evaluate(self, eppsea_selection_function):
         results = list()
@@ -108,6 +115,8 @@ class basicEA:
             popi.fitness = self.rosenbrock(popi.genome, self.fitness_function_a)
         elif self.fitness_function == 'rastrigin':
             popi.fitness = self.offset_rastrigin(popi.genome, self.fitness_function_a, self.fitness_function_offset)
+        elif self.fitness_function == 'dtrap':
+            popi.fitness = self.dtrap(popi.genome, self.trap_size)
 
     def rosenbrock(self, x, a):
         result = 0
@@ -126,6 +135,17 @@ class basicEA:
             result += x[i]**2 - a*math.cos(2*math.pi*x[i])
 
         result = -1 * result
+        return result
+
+    def dtrap(self, x, trap_size):
+        result = 0
+        for i in range(0, self.genome_length, trap_size):
+            trap = x[i:i+trap_size]
+            if all(trap):
+                result += trap_size
+            else:
+                result += trap.count(False)
+
         return result
 
     def offset_rastrigin(self, x, a, offset):
@@ -213,7 +233,7 @@ class basicEA:
                 parents_used.append(parent2)
 
                 new_child = parent1.recombine(parent2)
-                if random.random() < mutation_rate:
+                if random.random() < self.mutation_rate:
                     new_child.mutate_all()
 
                 self.evaluate_child(new_child)
@@ -233,14 +253,14 @@ class basicEA:
         return results
 
 if __name__ == '__main__':
-    fitness_function = 'rosenbrock'
+    fitness_function = 'dtrap'
 
     mu = 50
     lam = 20
     mutation_rate = 0.1
 
     max_evals = 5000
-    runs = 30
+    runs = 2
 
     evaluator = basicEA(fitness_function, mu, lam, mutation_rate, max_evals, runs)
     eppsea_base.eppsea(evaluator, 'config/base_config/test.cfg')
