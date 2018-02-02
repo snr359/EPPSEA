@@ -307,7 +307,7 @@ def evaluateGPPopulation(config, population, evaluator):
         p.fitness = r
 
 def checkGPPopulationUniqueness(population, warningThreshold, logFile):
-    populationStrings = list(p.getString for p in population)
+    populationStrings = list(p.getString() for p in population)
     uniqueStrings = set(populationStrings)
     uniqueness = len(uniqueStrings) / len(populationStrings)
     if uniqueness <= warningThreshold:
