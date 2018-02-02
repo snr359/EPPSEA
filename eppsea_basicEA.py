@@ -2,23 +2,12 @@ import math
 import random
 import statistics
 import itertools
+import sys
+import configparser
 
 import eppsea_base
 
 class basicEA:
-
-    genome_lengths = {
-        'rosenbrock': 20,
-        'rastrigin': 20,
-        'dtrap': 400,
-        'nk_landscape': 10
-    }
-
-    fitness_function_as = {
-        'rosenbrock': 100,
-        'rastrigin': 10,
-    }
-
     genome_types = {
         'rastrigin': 'float',
         'rosenbrock': 'float',
@@ -26,30 +15,23 @@ class basicEA:
         'nk_landscape': 'bool'
     }
 
-    max_ranges = {
-        'rosenbrock': 5,
-        'rastrigin': 5
-    }
+    def __init__(self, config):
+        self.mu = config.getint('EA', 'population size')
+        self.lam = config.getint('EA', 'offspring size')
 
-    trap_sizes = {
-        'dtrap': 4
-    }
+        self.mutation_rate = config.getfloat('EA', 'mutation rate')
+        self.max_evals = config.getint('EA', 'maximum evaluations')
 
-    def __init__(self, fitness_function, mu, lam, mutation_rate, max_evals, runs):
-        self.fitness_function = fitness_function
-        self.mu = mu
-        self.lam = lam
+        self.runs = config.getint('EA', 'runs')
 
-        self.mutation_rate = mutation_rate
-        self.max_evals = max_evals
+        self.fitness_function = config.get('EA', 'fitness function')
+        self.genome_type = self.genome_types.get(self.fitness_function, None)
 
-        self.runs = runs
-
-        self.genome_type = self.genome_types.get(fitness_function, None)
-        self.genome_length = self.genome_lengths.get(fitness_function, None)
-        self.fitness_function_a = self.fitness_function_as.get(fitness_function, None)
-        self.max_range = self.max_ranges.get(fitness_function, None)
-        self.trap_size = self.trap_sizes.get(fitness_function, None)
+        self.genome_length = config.getint('fitness function', 'genome length')
+        self.fitness_function_a = config.getfloat('fitness function', 'a')
+        self.max_initial_range = config.getfloat('fitness function', 'max initial range')
+        self.trap_size = config.getint('fitness function', 'trap size')
+        self.epistasis_k = config.getint('fitness function', 'epistasis k')
 
         if self.fitness_function == 'rastrigin':
             self.fitness_function_offset = self.generate_offset(self.genome_length)
@@ -57,7 +39,7 @@ class basicEA:
             self.fitness_function_offset = None
 
         if self.fitness_function == 'nk_landscape':
-            self.loci_values, self.epistasis = self.generate_epistatis(self.genome_length, 4)
+            self.loci_values, self.epistasis = self.generate_epistatis(self.genome_length, self.epistasis_k)
         else:
             self.loci_values, self.epistasis = None, None
 
@@ -248,7 +230,7 @@ class basicEA:
         population = list()
         for i in range(self.mu):
             new_child = self.popi()
-            new_child.randomize(self.genome_length, self.max_range, self.genome_type)
+            new_child.randomize(self.genome_length, self.max_initial_range, self.genome_type)
             self.evaluate_child(new_child)
             population.append(new_child)
 
@@ -286,15 +268,16 @@ class basicEA:
         return results
 
 if __name__ == '__main__':
-    fitness_function = 'nk_landscape'
 
-    mu = 50
-    lam = 20
-    mutation_rate = 0.1
+    if len(sys.argv) < 2:
+        print('Please provide config file')
+        exit(1)
 
-    max_evals = 5000
-    runs = 2
+    config_path = sys.argv[1]
 
-    evaluator = basicEA(fitness_function, mu, lam, mutation_rate, max_evals, runs)
-    eppsea_base.eppsea(evaluator, 'config/base_config/test.cfg')
+    config = configparser.ConfigParser()
+    config.read(config_path)
+
+    evaluator = basicEA(config)
+    eppsea_base.eppsea(evaluator, 'config/base_config/basicEA.cfg')
 
