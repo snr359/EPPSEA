@@ -295,6 +295,8 @@ def evaluateGPPopulation(config, population, evaluator):
             pool = multiprocessing.Pool(processes=numProcesses)
 
         results = pool.map(evaluator.evaluate, population)
+        pool.close()
+
     else:
         results = []
         for p in population:
