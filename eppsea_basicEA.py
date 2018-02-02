@@ -4,6 +4,8 @@ import statistics
 import itertools
 import sys
 import configparser
+import os
+import shutil
 
 import eppsea_base
 
@@ -53,7 +55,7 @@ class basicEA:
         return average_best
 
     def test_basic_selection(self):
-        with open('basicEA_{0}_basic_selection.log'.format(self.fitness_function), 'w') as log_file:
+        with open('basicEA_results/basicEA_{0}_basic_selection.log'.format(self.fitness_function), 'w') as log_file:
             for parent_selection_function in ['truncation',
                                               'fitness_proportional',
                                               'fitness_rank',
@@ -352,6 +354,9 @@ if __name__ == '__main__':
 
     config = configparser.ConfigParser()
     config.read(config_path)
+
+    os.makedirs('basicEA_results', exist_ok=True)
+    shutil.copy(config_path, 'basicEA_results/config.cfg')
 
     evaluator = basicEA(config)
     print('First, testing basic selection functions')
