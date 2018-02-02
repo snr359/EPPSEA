@@ -59,7 +59,8 @@ class basicEA:
                                               'fitness_rank',
                                               'k_tournament3',
                                               'k_tournament5',
-                                              'k_tournament10']:
+                                              'k_tournament10',
+                                              'random']:
                 best_fitnesses = []
                 for r in range(self.runs):
                     results = self.one_run(parent_selection_function)
@@ -280,6 +281,9 @@ class basicEA:
             tournament = random.sample(population, 10)
             winner = max(tournament, key=lambda p: p.fitness)
             return winner
+
+        elif selection_function == 'random':
+            return random.choice(population)
 
     def one_run(self, parent_selection_function, eppsea_selection_function=None):
 
