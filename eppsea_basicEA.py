@@ -1,6 +1,7 @@
 import math
 import random
 import statistics
+import itertools
 
 import eppsea_base
 
@@ -9,7 +10,8 @@ class basicEA:
     genome_lengths = {
         'rosenbrock': 20,
         'rastrigin': 20,
-        'dtrap': 400
+        'dtrap': 400,
+        'nk_landscape': 10
     }
 
     fitness_function_as = {
@@ -20,7 +22,8 @@ class basicEA:
     genome_types = {
         'rastrigin': 'float',
         'rosenbrock': 'float',
-        'dtrap': 'bool'
+        'dtrap': 'bool',
+        'nk_landscape': 'bool'
     }
 
     max_ranges = {
@@ -42,16 +45,21 @@ class basicEA:
 
         self.runs = runs
 
-        if self.fitness_function == 'rastrigin':
-            self.fitness_function_offset = self.generate_offset(20)
-        else:
-            self.fitness_function_offset = None
-
         self.genome_type = self.genome_types.get(fitness_function, None)
         self.genome_length = self.genome_lengths.get(fitness_function, None)
         self.fitness_function_a = self.fitness_function_as.get(fitness_function, None)
         self.max_range = self.max_ranges.get(fitness_function, None)
         self.trap_size = self.trap_sizes.get(fitness_function, None)
+
+        if self.fitness_function == 'rastrigin':
+            self.fitness_function_offset = self.generate_offset(self.genome_length)
+        else:
+            self.fitness_function_offset = None
+
+        if self.fitness_function == 'nk_landscape':
+            self.loci_values, self.epistasis = self.generate_epistatis(self.genome_length, 4)
+        else:
+            self.loci_values, self.epistasis = None, None
 
     def evaluate(self, eppsea_selection_function):
         results = list()
@@ -117,6 +125,8 @@ class basicEA:
             popi.fitness = self.offset_rastrigin(popi.genome, self.fitness_function_a, self.fitness_function_offset)
         elif self.fitness_function == 'dtrap':
             popi.fitness = self.dtrap(popi.genome, self.trap_size)
+        elif self.fitness_function == 'nk_landscape':
+            popi.fitness = self.nk_landscape(popi.genome)
 
     def rosenbrock(self, x, a):
         result = 0
@@ -148,6 +158,18 @@ class basicEA:
 
         return result
 
+    def nk_landscape(self, x):
+        result = 0
+
+        for i in range(self.genome_length):
+            locus = [x[i]]
+            locus.extend(list(x[j] for j in self.epistasis[i]))
+            locus_fitness = self.loci_values[tuple(locus)]
+            result += locus_fitness
+
+        return result
+
+
     def offset_rastrigin(self, x, a, offset):
         offset_x = list(x)
         for i in range(len(x)):
@@ -159,6 +181,17 @@ class basicEA:
         for _ in range(n):
             result.append(random.choice([-2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5]))
         return result
+
+    def generate_epistatis(self, n, k):
+        loci_values = dict()
+        for locus in itertools.product([True, False], repeat=k+1):
+            loci_values[locus] = random.randrange(0, n)
+
+        epistasis = dict()
+        for i in range(n):
+            epistasis[i] = sorted(random.sample(list(j for j in range(n) if j != i), k))
+
+        return loci_values, epistasis
 
     def set_fitness_stats(self, population):
         sortedPopulation = sorted(population, key=lambda p:p.fitness)
@@ -253,7 +286,7 @@ class basicEA:
         return results
 
 if __name__ == '__main__':
-    fitness_function = 'dtrap'
+    fitness_function = 'nk_landscape'
 
     mu = 50
     lam = 20
