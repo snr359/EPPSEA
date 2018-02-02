@@ -200,12 +200,12 @@ class basicEA:
             p.fitness_rank = i
 
     def set_selection_chances(self, population, eppsea_selection_function):
+        terminals = dict()
+        terminals['populationSize'] = len(population)
+        terminals['sumFitness'] = sum(p.fitness for p in population)
         for p in population:
-            terminals = dict()
             terminals['fitness'] = p.fitness
             terminals['fitnessRank'] = p.fitness_rank
-            terminals['populationSize'] = len(population)
-            terminals['sumFitness'] = sum(p.fitness for p in population)
             p.selection_chance = eppsea_selection_function.get(terminals)
 
         min_chance = min(p.selection_chance for p in population)
@@ -213,14 +213,11 @@ class basicEA:
             for p in population:
                 p.selection_chance -= min_chance
 
-    def parent_selection_eppsea_function(self, population, parents_used, eppsea_selection_function):
-        candidates = list(population)
+    def parent_selection_eppsea_function(self, population, unique_parents, eppsea_selection_function):
         if not eppsea_selection_function.reusingParents:
-            for p in parents_used:
-                try:
-                    candidates.remove(p)
-                except ValueError:
-                    pass
+            candidates = list(unique_parents)
+        else:
+            candidates = list(population)
 
         if len(candidates) == 0:
             raise Exception('Trying to select candidate for parent selection from empty pool!')
@@ -228,7 +225,7 @@ class basicEA:
         total_chance = sum(p.selection_chance for p in candidates)
         selection_num = random.uniform(0, total_chance)
         selected = None
-        for p in population:
+        for p in candidates:
             if selection_num <= p.selection_chance:
                 selected = p
                 break
@@ -240,10 +237,9 @@ class basicEA:
 
         return selected
 
-    def parent_selection_basic(self, population, parents_used, selection_function):
+    def parent_selection_basic(self, population, unique_parents, selection_function):
         if selection_function == 'truncation':
-            population.sort(key=lambda x: x.fitness, reverse=True)
-            return next(p for p in population if p not in parents_used)
+            return max(unique_parents, key=lambda x: x.fitness)
         elif selection_function == 'fitness_rank':
             population.sort(key=lambda x: x.fitness, reverse=True)
             ranks = list(range(len(population), 0, -1))
@@ -298,20 +294,33 @@ class basicEA:
 
         while evals <= self.max_evals:
             children = list()
-            parents_used = list()
+            unique_parents = list(population)
+            if parent_selection_function == 'eppsea_selection_function':
+                self.set_fitness_stats(population)
+                self.set_selection_chances(population, eppsea_selection_function)
             for i in range(self.lam):
                 if parent_selection_function == 'eppsea_selection_function':
-                    self.set_fitness_stats(population)
-                    self.set_selection_chances(population, eppsea_selection_function)
-                    parent1 = self.parent_selection_eppsea_function(population, parents_used, eppsea_selection_function)
-                    parents_used.append(parent1)
-                    parent2 = self.parent_selection_eppsea_function(population, parents_used, eppsea_selection_function)
-                    parents_used.append(parent2)
+                    parent1 = self.parent_selection_eppsea_function(population, unique_parents, eppsea_selection_function)
+                    try:
+                        unique_parents.remove(parent1)
+                    except ValueError:
+                        pass
+                    parent2 = self.parent_selection_eppsea_function(population, unique_parents, eppsea_selection_function)
+                    try:
+                        unique_parents.remove(parent2)
+                    except ValueError:
+                        pass
                 else:
-                    parent1 = self.parent_selection_basic(population, parents_used, parent_selection_function)
-                    parents_used.append(parent1)
-                    parent2 = self.parent_selection_basic(population, parents_used, parent_selection_function)
-                    parents_used.append(parent2)
+                    parent1 = self.parent_selection_basic(population, unique_parents, parent_selection_function)
+                    try:
+                        unique_parents.remove(parent1)
+                    except ValueError:
+                        pass
+                    parent2 = self.parent_selection_basic(population, unique_parents, parent_selection_function)
+                    try:
+                        unique_parents.remove(parent2)
+                    except ValueError:
+                        pass
 
                 new_child = parent1.recombine(parent2)
                 if random.random() < self.mutation_rate:
