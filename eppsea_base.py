@@ -16,7 +16,7 @@ import numpy as np
 
 class GPNode:
     numericTerminals = ['constant'] #TODO: include random later?
-    dataTerminals = ['fitness', 'fitnessProportion', 'fitnessRank', 'populationSize']
+    dataTerminals = ['fitness', 'fitnessRank', 'populationSize', 'sumFitness']
     nonTerminals = ['+', '-', '*', '/', 'step']
     childCount = {'+': 2, '-': 2, '*': 2, '/': 2, 'step': 2}
 

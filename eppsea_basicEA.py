@@ -198,17 +198,13 @@ class basicEA:
         for i, p in enumerate(sortedPopulation):
             p.fitness_rank = i
 
-        totalFitness = float(sum(p.fitness for p in population))
-        for p in population:
-            p.fitness_proportion = p.fitness / totalFitness
-
     def set_selection_chances(self, population, eppsea_selection_function):
         for p in population:
             terminals = dict()
             terminals['fitness'] = p.fitness
-            terminals['fitnessProportion'] = p.fitness_proportion
             terminals['fitnessRank'] = p.fitness_rank
             terminals['populationSize'] = len(population)
+            terminals['sumFitness'] = sum(p.fitness for p in population)
             p.selection_chance = eppsea_selection_function.get(terminals)
 
         min_chance = min(p.selection_chance for p in population)
