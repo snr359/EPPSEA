@@ -306,6 +306,13 @@ def evaluateGPPopulation(config, population, evaluator):
     for p, r in zip(population, results):
         p.fitness = r
 
+def checkGPPopulationUniqueness(population, warningThreshold, logFile):
+    populationStrings = list(p.getString for p in population)
+    uniqueStrings = set(populationStrings)
+    uniqueness = len(uniqueStrings) / len(populationStrings)
+    if uniqueness <= warningThreshold:
+        log('GP population uniqueness is at {0}%. Consider increasing mutation rate.'.format(uniqueness), 'WARNING', logFile)
+
 def eppseaOneRun(config, evaluator, resultsDirectory, logFile):
     # runs the meta EA for one run
 
@@ -365,6 +372,9 @@ def eppseaOneRun(config, evaluator, resultsDirectory, logFile):
         os.makedirs(pickleDirectory, exist_ok=True)
         with open(pickleFilePath, 'wb') as pickleFile:
             pickle.dump(GPPopulation, pickleFile)
+
+    # check population uniqueness
+    checkGPPopulationUniqueness(GPPopulation, 0.75, logFile)
 
     # GP EA loop
     genNumber = 1
@@ -463,6 +473,9 @@ def eppseaOneRun(config, evaluator, resultsDirectory, logFile):
             highestAverageFitness = -1 * float('inf')
             highestBestFitness = -1 * float('inf')
             restarting = False
+
+        # check population uniqueness
+        checkGPPopulationUniqueness(GPPopulation, 0.75, logFile)
 
         genNumber += 1
 
