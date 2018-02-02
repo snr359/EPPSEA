@@ -8,4 +8,4 @@ class example_evaluator:
 
 if __name__ == '__main__':
     new_evaluator = example_evaluator()
-    eppsea_base.eppsea(new_evaluator, 'config/test.cfg')
+    eppsea_base.eppsea(new_evaluator, 'config/base_config/test.cfg')
