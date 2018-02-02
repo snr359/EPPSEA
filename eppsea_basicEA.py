@@ -325,7 +325,7 @@ class basicEA:
 
             population.extend(children)
             population.sort(key=lambda p: p.fitness, reverse=True)
-            population = population[:self.mu]
+            population = random.sample(population, self.mu)
 
         results = dict()
         results['average_fitness'] = statistics.mean(p.fitness for p in population)
