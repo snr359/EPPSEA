@@ -312,7 +312,13 @@ def evaluateGPPopulation(config, population, evaluator):
 
 
     for p, r in zip(population, results):
-        p.fitness = r
+        if 'fitness' not in r.keys():
+            log('Dict returned by evaluator does not contain "fitness"', 'ERROR')
+        p.fitness = r.get('fitness')
+        if p.fitness is None:
+            log('Fitness of GP Population member {0} is None'.format(str(p)), 'ERROR')
+
+        p.std_dev = r.get('std_dev', None)
 
 def checkGPPopulationUniqueness(population, warningThreshold, logFile):
     populationStrings = list(p.getString() for p in population)
@@ -501,7 +507,6 @@ def eppseaOneRun(config, evaluator, resultsDirectory, logFile):
 
     # log final fitness stats
     finalAverageFitness = averageFitness
-
     finalBestFitness = bestFitness
 
     log('Final Average Fitness: {0}'.format(finalAverageFitness), 'INFO', logFile)
@@ -511,6 +516,16 @@ def eppseaOneRun(config, evaluator, resultsDirectory, logFile):
     bestGPPopi = max(GPPopulation, key=lambda p: p.fitness)
     bestGPPopiString = bestGPPopi.getString()
     log('String form of best Popi: {0}'.format(bestGPPopiString), 'INFO', logFile)
+
+    # re-run best popi
+    log('Running best Popi...', 'INFO', logFile)
+    result = evaluator.evaluate(bestGPPopi)
+    lastEvalFitness = result['fitness']
+    log('Final fitness of last evaluation: {0}'.format(lastEvalFitness), 'INFO', logFile)
+    lastEvalStdDev = result.get('std_dev', None)
+    if lastEvalStdDev is not None:
+        log('Final standard deviation of last evaluation: {0}'.format(lastEvalStdDev), 'INFO', logFile)
+
 
     # pickle the final population, if configured to
     if pickleFinalPopulation:
