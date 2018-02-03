@@ -362,5 +362,6 @@ if __name__ == '__main__':
     print('First, testing basic selection functions')
     evaluator.test_basic_selection()
     print('Now starting EPPSEA')
-    eppsea_base.eppsea(evaluator, 'config/base_config/basicEA.cfg')
+    base_eppsea_config_path = config.get('EA', 'base eppsea config path')
+    eppsea_base.eppsea(evaluator, base_eppsea_config_path)
 
