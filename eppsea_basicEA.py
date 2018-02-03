@@ -46,6 +46,8 @@ class basicEA:
             self.loci_values, self.epistasis = None, None
 
     def evaluate(self, eppsea_selection_function):
+        if self.lam > self.mu / 2:
+            eppsea_selection_function.reusingParents = True
         results = list()
         for _ in range(self.runs):
             results.append(self.one_run('eppsea_selection_function', eppsea_selection_function))
@@ -64,6 +66,8 @@ class basicEA:
                                               'k_tournament3',
                                               'k_tournament5',
                                               'k_tournament10']:
+                if parent_selection_function == 'truncation' and self.lam > self.mu / 2:
+                    continue
                 average_fitnesses = []
                 standard_deviations = []
                 for r in range(self.runs):
