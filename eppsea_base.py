@@ -264,6 +264,14 @@ class GPTree:
             d = pickle.load(pickleFile)
             self.buildFromDict(d)
 
+    def isClone(self, population):
+        # returns true if this GPTree is a clone of any members of the given population
+        # uses the getString() function of the GPTree, so there may be some false negatives, but no false positives
+        for p in population:
+            if self is not p and self.getString() == p.getString():
+                return True
+        return False
+
 def log(message, messageType, logFile=None):
     # Builds a log message out of a timestamp, the passed message, and a message type, then prints the message and
     # writes it in the logFile
@@ -333,6 +341,7 @@ def eppseaOneRun(config, evaluator, resultsDirectory, logFile):
     noChangeRestartGenerations = config.getint('metaEA', 'generations to restart for no improvement')
 
     GPmutationRate = config.getfloat('metaEA', 'metaEA mutation rate')
+    forceMutationOfClones = config.getboolean('metaEA', 'force mutation of clones')
 
     pickleEveryPopulation = config.getboolean('experiment', 'pickle every population')
     pickleFinalPopulation = config.getboolean('experiment', 'pickle final population')
@@ -396,7 +405,7 @@ def eppseaOneRun(config, evaluator, resultsDirectory, logFile):
             parent2 = max(random.sample(GPPopulation, GPKTournamentK), key=lambda p: p.fitness)
             # recombination/mutation
             newChild = parent1.recombine(parent2)
-            if random.random() < GPmutationRate:
+            if random.random() < GPmutationRate or (forceMutationOfClones and newChild.isClone(GPPopulation + children)):
                 newChild.mutate()
             # add to the population
             children.append(newChild)
@@ -533,6 +542,7 @@ def generateDefaultConfig(filePath):
             'metaEA k-tournament size: 8\n',
             'metaEA GP tree initialization depth limit: 3\n',
             'metaEA mutation rate: 0.01\n',
+            'force mutation of clones: True\n'
             'terminate on maximum evals: True\n',
             'terminate on no improvement in average fitness: False\n',
             'terminate on no improvement in best fitness: False\n',
