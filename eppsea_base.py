@@ -311,7 +311,7 @@ def checkGPPopulationUniqueness(population, warningThreshold, logFile):
     uniqueStrings = set(populationStrings)
     uniqueness = len(uniqueStrings) / len(populationStrings)
     if uniqueness <= warningThreshold:
-        log('GP population uniqueness is at {0}%. Consider increasing mutation rate.'.format(uniqueness), 'WARNING', logFile)
+        log('GP population uniqueness is at {0}%. Consider increasing mutation rate.'.format(round(uniqueness*100)), 'WARNING', logFile)
 
 def eppseaOneRun(config, evaluator, resultsDirectory, logFile):
     # runs the meta EA for one run
@@ -408,9 +408,10 @@ def eppseaOneRun(config, evaluator, resultsDirectory, logFile):
         # population merging
         GPPopulation.extend(children)
 
-        # survival selection (truncation)
+        # survival selection (random)
         GPPopulation.sort(key=lambda p: p.fitness, reverse=True)
-        GPPopulation = GPPopulation[:GPMu]
+        #GPPopulation = GPPopulation[:GPMu]
+        GPPopulation = random.sample(GPPopulation, GPMu)
 
         # pickle the population, if configured to
         if pickleEveryPopulation:
