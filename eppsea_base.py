@@ -336,6 +336,7 @@ def eppseaOneRun(config, evaluator, resultsDirectory, logFile):
     maxGPEvals = config.getint('metaEA', 'metaEA maximum fitness evaluations')
     initialGPDepthLimit = config.getint('metaEA', 'metaEA GP tree initialization depth limit')
     GPKTournamentK = config.getint('metaEA', 'metaEA k-tournament size')
+    GPSurvivalSelection = config.get('metaEA', 'metaEA survival selection')
 
     terminateMaxEvals = config.getboolean('metaEA', 'terminate on maximum evals')
     terminateNoAvgFitnessChange = config.getboolean('metaEA', 'terminate on no improvement in average fitness')
@@ -423,10 +424,13 @@ def eppseaOneRun(config, evaluator, resultsDirectory, logFile):
         # population merging
         GPPopulation.extend(children)
 
-        # survival selection (random)
-        GPPopulation.sort(key=lambda p: p.fitness, reverse=True)
-        #GPPopulation = GPPopulation[:GPMu]
-        GPPopulation = random.sample(GPPopulation, GPMu)
+        # survival selection
+        if GPSurvivalSelection == 'random':
+            GPPopulation = random.sample(GPPopulation, GPMu)
+        elif GPSurvivalSelection == 'truncation':
+            GPPopulation.sort(key=lambda p: p.fitness, reverse=True)
+            GPPopulation = GPPopulation[:GPMu]
+
 
         # pickle the population, if configured to
         if pickleEveryPopulation:
@@ -443,6 +447,7 @@ def eppseaOneRun(config, evaluator, resultsDirectory, logFile):
         results['evalCounts'].append(GPEvals)
         results['averageFitness'].append(averageFitness)
         results['bestFitness'].append(bestFitness)
+
 
         # check termination conditions
         if averageFitness > highestAverageFitness:
