@@ -52,11 +52,11 @@ class basicEA:
         for _ in range(self.runs):
             results.append(self.one_run('eppsea_selection_function', eppsea_selection_function))
 
-        average_average = statistics.mean(r['average_fitness'] for r in results)
-        average_std_dev = statistics.mean(r['fitness_std_dev'] for r in results)
+        average_best = statistics.mean(r['best_fitness'] for r in results)
+        std_dev_best = statistics.stdev(r['best_fitness'] for r in results)
 
-        return {'fitness': average_average,
-                'std_dev': average_std_dev}
+        return {'fitness': average_best,
+                'std_dev': std_dev_best}
 
     def test_basic_selection(self):
         with open('basicEA_results/basicEA_{0}_basic_selection.log'.format(self.fitness_function), 'w') as log_file:
@@ -68,16 +68,14 @@ class basicEA:
                                               'k_tournament10']:
                 if parent_selection_function == 'truncation' and self.lam > self.mu / 2:
                     continue
-                average_fitnesses = []
-                standard_deviations = []
+                best_fitnesses = []
                 for r in range(self.runs):
                     results = self.one_run(parent_selection_function)
-                    average_fitnesses.append(results['average_fitness'])
-                    standard_deviations.append(results['fitness_std_dev'])
-                average_average = statistics.mean(average_fitnesses)
-                average_std_dev = statistics.mean(standard_deviations)
+                    best_fitnesses.append(results['average_fitness'])
+                average_best = statistics.mean(best_fitnesses)
+                std_dev_best = statistics.stdev(best_fitnesses)
                 log_file.write('Average average fitness and standard deviation for fitness function {0} using selection function {1}: {2}, {3}\n'.format(
-                    self.fitness_function, parent_selection_function, average_average, average_std_dev))
+                    self.fitness_function, parent_selection_function, average_best, std_dev_best))
 
 
     class popi:
