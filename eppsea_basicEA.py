@@ -332,7 +332,7 @@ class basicEA:
                         pass
 
                 new_child = parent1.recombine(parent2)
-                for i in self.genome_length:
+                for i in range(self.genome_length):
                     if random.random() < self.mutation_rate:
                         new_child.mutate_gene(i)
 
