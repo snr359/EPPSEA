@@ -68,12 +68,13 @@ class basicEA:
                                               'k_tournament10']:
                 if parent_selection_function == 'truncation' and self.lam > self.mu / 2:
                     continue
-                best_fitnesses = []
-                for r in range(self.runs):
-                    results = self.one_run(parent_selection_function)
-                    best_fitnesses.append(results['best_fitness'])
-                average_best = statistics.mean(best_fitnesses)
-                std_dev_best = statistics.stdev(best_fitnesses)
+                results = list()
+                for _ in range(self.runs):
+                    results.append(self.one_run(parent_selection_function))
+
+                average_best = statistics.mean(r['best_fitness'] for r in results)
+                std_dev_best = statistics.stdev(r['best_fitness'] for r in results)
+
                 log_file.write('Average average fitness and standard deviation for fitness function {0} using selection function {1}: {2}, {3}\n'.format(
                     self.fitness_function, parent_selection_function, average_best, std_dev_best))
 
