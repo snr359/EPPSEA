@@ -25,6 +25,7 @@ class GPNode:
         self.data = None
         self.children = None
         self.parent = None
+        self.final = False
 
     def grow(self, depthLimit, parent):
         if depthLimit == 0:
@@ -524,6 +525,7 @@ def eppseaOneRun(config, evaluator, resultsDirectory, logFile):
 
     # re-run best popi
     log('Running best Popi...', 'INFO', logFile)
+    bestGPPopi.final = True
     result = evaluator.evaluate(bestGPPopi)
     lastEvalFitness = result['fitness']
     log('Final fitness of last evaluation: {0}'.format(lastEvalFitness), 'INFO', logFile)
