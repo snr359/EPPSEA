@@ -110,7 +110,7 @@ class basicEA:
                 self.genome[gene] = not self.genome[gene]
 
             elif self.genome_type == 'float':
-                self.genome[gene] += random.triangular(-1, 1, 0)
+                self.genome[gene] += random.uniform(-1, 1)
 
         def mutate_one(self):
             gene = random.randrange(self.genome_length)
@@ -332,8 +332,9 @@ class basicEA:
                         pass
 
                 new_child = parent1.recombine(parent2)
-                if random.random() < self.mutation_rate:
-                    new_child.mutate_all()
+                for i in self.genome_length:
+                    if random.random() < self.mutation_rate:
+                        new_child.mutate_gene(i)
 
                 self.evaluate_child(new_child)
 
