@@ -546,8 +546,7 @@ def generateDefaultConfig(filePath):
     # generates a default configuration file and writes it to filePath
     with open(filePath, 'w') as file:
         file.writelines([
-            '[experiment]\n', 
-            'GP initialization depth limit: 3\n',
+            '[experiment]\n',
             'seed: time\n',
             'use multiprocessing: True\n',
             'processes: -1\n',
