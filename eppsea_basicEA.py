@@ -71,7 +71,7 @@ class basicEA:
                 best_fitnesses = []
                 for r in range(self.runs):
                     results = self.one_run(parent_selection_function)
-                    best_fitnesses.append(results['average_fitness'])
+                    best_fitnesses.append(results['best_fitness'])
                 average_best = statistics.mean(best_fitnesses)
                 std_dev_best = statistics.stdev(best_fitnesses)
                 log_file.write('Average average fitness and standard deviation for fitness function {0} using selection function {1}: {2}, {3}\n'.format(
