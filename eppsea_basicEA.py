@@ -6,6 +6,7 @@ import sys
 import configparser
 import os
 import shutil
+import scipy.stats
 
 import eppsea_base
 
@@ -45,6 +46,8 @@ class basicEA:
         else:
             self.loci_values, self.epistasis = None, None
 
+        self.basic_results = None
+
     def evaluate(self, eppsea_selection_function):
         if self.lam > self.mu / 2:
             eppsea_selection_function.reusingParents = True
@@ -55,10 +58,17 @@ class basicEA:
         average_best = statistics.mean(r['best_fitness'] for r in results)
         std_dev_best = statistics.stdev(r['best_fitness'] for r in results)
 
+        if eppsea_selection_function.final:
+            for basic_selection, basic_selection_results in self.basic_results.items():
+                average_best_difference = average_best - statistics.mean(r['best_fitness'] for r in basic_selection_results)
+                t, p_value = scipy.stats.ttest_rel(list(r['best_fitness'] for r in results), list(bsr['best_fitness'] for bsr in basic_selection_results))
+                print('Compared to selection function {0}, difference in average fitness is {1}. P-value: {2}'.format(basic_selection, average_best_difference, p_value))
+
         return {'fitness': average_best,
                 'std_dev': std_dev_best}
 
     def test_basic_selection(self):
+        self.basic_results = dict()
         with open('basicEA_results/basicEA_{0}_basic_selection.log'.format(self.fitness_function), 'w') as log_file:
             for parent_selection_function in ['truncation',
                                               'fitness_proportional',
@@ -77,6 +87,8 @@ class basicEA:
 
                 log_file.write('Average average fitness and standard deviation for fitness function {0} using selection function {1}: {2}, {3}\n'.format(
                     self.fitness_function, parent_selection_function, average_best, std_dev_best))
+
+                self.basic_results[parent_selection_function] = results
 
 
     class popi:

@@ -25,7 +25,6 @@ class GPNode:
         self.data = None
         self.children = None
         self.parent = None
-        self.final = False
 
     def grow(self, depthLimit, parent):
         if depthLimit == 0:
@@ -162,6 +161,7 @@ class GPTree:
         self.root = None
         self.fitness = None
         self.reusingParents = None
+        self.final = False
 
     def recombine(self, parent2):
         # recombines two GPTrees and returns a new child
