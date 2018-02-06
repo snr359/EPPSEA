@@ -35,6 +35,7 @@ class basicEA:
         self.max_initial_range = config.getfloat('fitness function', 'max initial range')
         self.trap_size = config.getint('fitness function', 'trap size')
         self.epistasis_k = config.getint('fitness function', 'epistasis k')
+        self.tournament_k = config.getint('EA', 'tournament k')
 
         if self.fitness_function == 'rastrigin':
             self.fitness_function_offset = self.generate_offset(self.genome_length)
@@ -73,9 +74,7 @@ class basicEA:
             for parent_selection_function in ['truncation',
                                               'fitness_proportional',
                                               'fitness_rank',
-                                              'k_tournament3',
-                                              'k_tournament5',
-                                              'k_tournament10']:
+                                              'k_tournament']:
                 if parent_selection_function == 'truncation' and self.lam > self.mu / 2:
                     continue
                 results = list()
@@ -289,18 +288,8 @@ class basicEA:
                 i += 1
             return population[i]
 
-        elif selection_function == 'k_tournament3':
-            tournament = random.sample(population, 3)
-            winner = max(tournament, key=lambda p: p.fitness)
-            return winner
-
-        elif selection_function == 'k_tournament5':
-            tournament = random.sample(population, 5)
-            winner = max(tournament, key=lambda p: p.fitness)
-            return winner
-
-        elif selection_function == 'k_tournament10':
-            tournament = random.sample(population, 10)
+        elif selection_function == 'k_tournament':
+            tournament = random.sample(population, self.tournament_k)
             winner = max(tournament, key=lambda p: p.fitness)
             return winner
 

@@ -592,7 +592,7 @@ def eppsea(evaluator, configPath=None):
         log('Evaluator object has no evaluation function. Define the "evaluate(selection_function)" method for the evaluator', 'ERROR', logFile)
         exit(1)
 
-    # read sys.argv[1] as the config file path
+    # try to read a config file from the config file path
     # if we do not have a config file, generate and use a default config
     if configPath is None:
         log('No config file path provided. Generating and using default config.', 'INFO', logFile)
