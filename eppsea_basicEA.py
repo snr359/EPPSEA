@@ -132,13 +132,12 @@ class basicEA:
 
         def recombine(self, parent2):
             new_child = basicEA.popi(self)
-            for i in range(self.genome_length):
-                if self.genome_type == 'bool':
+            if self.genome_type == 'bool':
+                for i in range(self.genome_length):
                     if random.random() > 0.5:
                         new_child.genome[i] = parent2.genome[i]
-                    else:
-                        new_child.genome[i] = self.genome[i]
-                elif self.genome_type == 'float':
+            elif self.genome_type == 'float':
+                for i in range(self.genome_length):
                     a = random.random()
                     new_child.genome[i] = a*self.genome[i] + (1-a)*parent2.genome[i]
 
