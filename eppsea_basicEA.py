@@ -6,7 +6,8 @@ import sys
 import configparser
 import os
 import shutil
-import scipy.stats
+import csv
+import subprocess
 
 import eppsea_base
 
@@ -62,7 +63,13 @@ class basicEA:
         if eppsea_selection_function.final:
             for basic_selection, basic_selection_results in self.basic_results.items():
                 average_best_difference = average_best - statistics.mean(r['best_fitness'] for r in basic_selection_results)
-                t, p_value = scipy.stats.ttest_rel(list(r['best_fitness'] for r in results), list(bsr['best_fitness'] for bsr in basic_selection_results))
+                with open('temp.csv', 'w') as csvFile:
+                    writer = csv.writer(csvFile)
+                    writer.writerow(list(r['best_fitness'] for r in results))
+                    writer.writerow(list(r['best_fitness'] for r in basic_selection_results))
+
+                t_test_results = subprocess.check_output(['python3', 't_test.py', 'temp.csv'])
+                _, _, t, p_value = list(float(r) for r in t_test_results.split())
                 print('Compared to selection function {0}, difference in average fitness is {1}. P-value: {2}'.format(basic_selection, average_best_difference, p_value))
 
         return {'fitness': average_best,
