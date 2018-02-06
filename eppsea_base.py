@@ -12,7 +12,6 @@ import shutil
 import pickle
 import statistics
 
-import numpy as np
 
 class GPNode:
     numericTerminals = ['constant'] #TODO: include random later?
@@ -620,7 +619,6 @@ def eppsea(evaluator, configPath=None):
     except ValueError:
         seed = int(time.time())
     random.seed(seed)
-    np.random.seed(seed)
     log('Using random seed {0}'.format(seed), 'INFO', logFile)
 
     # record start time
