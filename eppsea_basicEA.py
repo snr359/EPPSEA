@@ -313,6 +313,12 @@ class basicEA:
 
         evals = self.mu
 
+        average_fitnesses = dict()
+        average_fitnesses[self.mu] = statistics.mean(p.fitness for p in population)
+
+        best_fitnesses = dict()
+        best_fitnesses[self.mu] = max(p.fitness for p in population)
+
         while evals <= self.max_evals:
             children = list()
             unique_parents = list(population)
@@ -361,10 +367,16 @@ class basicEA:
             newPopulation.extend(random.sample(population, self.mu-1))
             population = newPopulation
 
+            average_fitnesses[self.mu] = statistics.mean(p.fitness for p in population)
+
+            best_fitnesses[self.mu] = max(p.fitness for p in population)
+
         results = dict()
         results['average_fitness'] = statistics.mean(p.fitness for p in population)
         results['best_fitness'] = max(p.fitness for p in population)
         results['fitness_std_dev'] = statistics.stdev(p.fitness for p in population)
+        results['average_fitnesses'] = average_fitnesses
+        results['best_fitnesses'] = best_fitnesses
 
         return results
 
