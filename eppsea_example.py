@@ -2,10 +2,12 @@ import random
 
 import eppsea_base
 
-class example_evaluator:
-    def evaluate(self, selection_function):
-        return {'fitness':random.random()}
-
 if __name__ == '__main__':
-    new_evaluator = example_evaluator()
-    eppsea_base.eppsea(new_evaluator, 'config/base_config/basicEA.cfg')
+    eppsea = eppsea_base.Eppsea('config/base_config/test.cfg')
+
+    eppsea.startEvolution()
+
+    while not eppsea.evolutionFinished:
+        for p in eppsea.new_population:
+            p.fitness = random.random()
+        eppsea.nextGeneration()

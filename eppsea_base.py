@@ -69,16 +69,9 @@ class GPNode:
         elif self.operation == 'random':
             return random.expovariate(0.07)
 
-        else:
-            log('operation {0} not found in value getter'.format(str(self.operation)), 'ERROR')
-
     def getString(self):
         if self.operation in GPNode.nonTerminals:
-            if len(self.children) == 2:
-                result = "(" + self.children[0].getString() + " " + self.operation + " " + self.children[1].getString() + ")"
-            else:
-                log('Nonterminal GP node with {0} children'.format(len(self.children)), 'WARNING')
-                result = ''
+            result = "(" + self.children[0].getString() + " " + self.operation + " " + self.children[1].getString() + ")"
         elif self.operation == 'constant':
             result = str(self.data)
         else:
@@ -97,9 +90,6 @@ class GPNode:
                 elif self.operation == 'step':
                     result = '(int(' + self.children[0].getCode() + '>=' + self.children[1].getCode() + '))'
 
-            else:
-                log('Nonterminal GP node with {0} children'.format(len(self.children)), 'WARNING')
-
         elif self.operation in GPNode.dataTerminals:
             result = '(p.' + self.operation + ')'
 
@@ -107,8 +97,6 @@ class GPNode:
             result = '(' + str(self.data) + ')'
         elif self.operation == 'random':
             result = '(random.expovariate(0.07))'
-        else:
-            log('Operation {0} not found in code string generation'.format(str(self.operation)), 'ERROR')
         return result
 
     def getAllNodes(self):
@@ -213,8 +201,6 @@ class GPTree:
     
     def replaceNode(self, nodeToReplace, replacementNode):
         # replaces node in GPTree. Uses the replacementNode directly, not a copy of it
-        if nodeToReplace not in self.getAllNodes():
-            log('Attempting to replace node not in own tree', 'ERROR')
         if nodeToReplace is self.root:
             self.root = replacementNode
             self.root.parent = None
@@ -272,362 +258,292 @@ class GPTree:
                 return True
         return False
 
-def log(message, messageType, logFile=None):
-    # Builds a log message out of a timestamp, the passed message, and a message type, then prints the message and
-    # writes it in the logFile
+class Eppsea:
+    def __init__(self, configPath=None):
 
-    # Get the timestamp
-    timestamp = datetime.datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+        # set up the results directory
+        presentTime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        experimentName = "eppsea_" + str(presentTime)
+        resultsDirectory = "./results/eppsea/" + experimentName
+        os.makedirs(resultsDirectory)
+        self.resultsDirectory = resultsDirectory
 
-    # Put together the full message
-    fullMessage = '{0}| {1}: {2}'.format(timestamp, messageType, message)
+        # setup logging file
+        self.logFile = open(self.resultsDirectory + '/log.txt', 'w')
 
-    # Print and log the message
-    print(fullMessage)
-    if logFile is not None:
-        logFile.write(fullMessage)
-        logFile.write('\n')
-
-def evaluateGPPopulation(config, population, evaluator):
-    usingMultiprocessing = config.getboolean('experiment', 'use multiprocessing')
-    leaveOneCore = config.getboolean('experiment', 'leave one core idle')
-
-    if usingMultiprocessing:
-        numProcesses = config.getint('experiment', 'processes')
-        if numProcesses <= 0:
-            if leaveOneCore:
-                pool = multiprocessing.Pool(os.cpu_count() - 1)
-            else:
-                pool = multiprocessing.Pool()
+        # try to read a config file from the config file path
+        # if we do not have a config file, generate and use a default config
+        if configPath is None:
+            self.log('No config file path provided. Generating and using default config.', 'INFO')
+            configPath = 'config/base_config/default.cfg'
+            self.generateDefaultConfig(configPath)
+        # if the provided file path does not exist, generate and use a default config
+        elif not os.path.isfile(str(configPath)):
+            self.log('No config file found at {0}. Generating and using default config.'.format(configPath), 'INFO')
+            configPath = 'config/base_config/default.cfg'
+            self.generateDefaultConfig(configPath)
         else:
-            pool = multiprocessing.Pool(processes=numProcesses)
+            self.log('Using config file {0}'.format(configPath), 'INFO')
 
-        results = pool.map(evaluator.evaluate, population)
-        pool.close()
+        # copy the used config file to the results path
+        shutil.copyfile(configPath, resultsDirectory + '/config_used.cfg')
 
-    else:
-        results = []
-        for p in population:
-            results.append(evaluator.evaluate(p))
+        # set up the configuration object
+        config = configparser.ConfigParser()
+        config.read(configPath)
 
+        # get the parameters from the configuration file
+        self.GPMu = config.getint('metaEA', 'metaEA mu')
+        self.GPLambda = config.getint('metaEA', 'metaEA lambda')
+        self.maxGPEvals = config.getint('metaEA', 'metaEA maximum fitness evaluations')
+        self.initialGPDepthLimit = config.getint('metaEA', 'metaEA GP tree initialization depth limit')
+        self.GPKTournamentK = config.getint('metaEA', 'metaEA k-tournament size')
+        self.GPSurvivalSelection = config.get('metaEA', 'metaEA survival selection')
 
-    for p, r in zip(population, results):
-        if 'fitness' not in r.keys():
-            log('Dict returned by evaluator does not contain "fitness"', 'ERROR')
-        p.fitness = r.get('fitness')
-        if p.fitness is None:
-            log('Fitness of GP Population member {0} is None'.format(str(p)), 'ERROR')
+        self.terminateMaxEvals = config.getboolean('metaEA', 'terminate on maximum evals')
+        self.terminateNoAvgFitnessChange = config.getboolean('metaEA', 'terminate on no improvement in average fitness')
+        self.terminateNoBestFitnessChange = config.getboolean('metaEA', 'terminate on no improvement in best fitness')
+        self.noChangeTerminationGenerations = config.get('metaEA', 'generations to termination for no improvement')
 
-        p.std_dev = r.get('std_dev', None)
+        self.restartNoAvgFitnessChange = config.getboolean('metaEA', 'restart on no improvement in average fitness')
+        self.restartNoBestFitnessChange = config.getboolean('metaEA', 'restart on no improvement in best fitness')
+        self.noChangeRestartGenerations = config.getint('metaEA', 'generations to restart for no improvement')
 
-def checkGPPopulationUniqueness(population, warningThreshold, logFile):
-    populationStrings = list(p.getString() for p in population)
-    uniqueStrings = set(populationStrings)
-    uniqueness = len(uniqueStrings) / len(populationStrings)
-    if uniqueness <= warningThreshold:
-        log('GP population uniqueness is at {0}%. Consider increasing mutation rate.'.format(round(uniqueness*100)), 'WARNING', logFile)
+        self.GPmutationRate = config.getfloat('metaEA', 'metaEA mutation rate')
+        self.forceMutationOfClones = config.getboolean('metaEA', 'force mutation of clones')
 
-def eppseaOneRun(config, evaluator, resultsDirectory, logFile):
-    # runs the meta EA for one run
+        self.pickleEveryPopulation = config.getboolean('experiment', 'pickle every population')
+        self.pickleFinalPopulation = config.getboolean('experiment', 'pickle final population')
 
-    # get the parameters from the configuration file
-    GPMu = config.getint('metaEA', 'metaEA mu')
-    GPLambda = config.getint('metaEA', 'metaEA lambda')
-    maxGPEvals = config.getint('metaEA', 'metaEA maximum fitness evaluations')
-    initialGPDepthLimit = config.getint('metaEA', 'metaEA GP tree initialization depth limit')
-    GPKTournamentK = config.getint('metaEA', 'metaEA k-tournament size')
-    GPSurvivalSelection = config.get('metaEA', 'metaEA survival selection')
+        # create a dictionary for the results
+        self.results = dict()
+        self.results['evalCounts'] = []
+        self.results['averageFitness'] = []
+        self.results['bestFitness'] = []
 
-    terminateMaxEvals = config.getboolean('metaEA', 'terminate on maximum evals')
-    terminateNoAvgFitnessChange = config.getboolean('metaEA', 'terminate on no improvement in average fitness')
-    terminateNoBestFitnessChange = config.getboolean('metaEA', 'terminate on no improvement in best fitness')
-    noChangeTerminationGenerations = config.get('metaEA', 'generations to termination for no improvement')
+        # setup evolution data structures
+        self.population = None
+        self.new_population = None
+        self.genNumber = None
+        self.evolutionFinished = None
+        self.gensSinceAvgFitnessImprovement = None
+        self.gensSinceBestFitnessImprovement = None
+        self.highestAverageFitness = None
+        self.highestBestFitness = None
+        self.GPEvals = None
+        self.restarting = None
+        self.finalBestMember = None
 
-    restartNoAvgFitnessChange = config.getboolean('metaEA', 'restart on no improvement in average fitness')
-    restartNoBestFitnessChange = config.getboolean('metaEA', 'restart on no improvement in best fitness')
-    noChangeRestartGenerations = config.getint('metaEA', 'generations to restart for no improvement')
-
-    GPmutationRate = config.getfloat('metaEA', 'metaEA mutation rate')
-    forceMutationOfClones = config.getboolean('metaEA', 'force mutation of clones')
-
-    pickleEveryPopulation = config.getboolean('experiment', 'pickle every population')
-    pickleFinalPopulation = config.getboolean('experiment', 'pickle final population')
-
-    # create a dictionary for the results
-    results = dict()
-    results['evalCounts'] = []
-    results['averageFitness'] = []
-    results['bestFitness'] = []
-
-    # initialize the trees
-    GPPopulation = []
-    for i in range(GPMu):
-        newTree = GPTree()
-        newTree.randomize(initialGPDepthLimit)
-        GPPopulation.append(newTree)
-
-    # Evaluate the initial population
-    log('Evaluating initial population', 'INFO', logFile)
-    evaluateGPPopulation(config, GPPopulation, evaluator)
-
-    # initialize eval counter
-    GPEvals = GPMu
-
-    # Update results
-    averageFitness = statistics.mean(p.fitness for p in GPPopulation)
-    bestFitness = max(p.fitness for p in GPPopulation)
-
-    results['evalCounts'].append(GPEvals)
-    results['averageFitness'].append(averageFitness)
-    results['bestFitness'].append(bestFitness)
-
-    # pickle the initial population, if configured to
-    if pickleEveryPopulation:
-        pickleDirectory = resultsDirectory + '/pickledPopulations'
-        pickleFilePath = pickleDirectory + '/initial'
-        os.makedirs(pickleDirectory, exist_ok=True)
-        with open(pickleFilePath, 'wb') as pickleFile:
-            pickle.dump(GPPopulation, pickleFile)
-
-    # check population uniqueness
-    checkGPPopulationUniqueness(GPPopulation, 0.75, logFile)
-
-    # GP EA loop
-    genNumber = 1
-    evolutionFinished = False
-    gensSinceAvgFitnessImprovement = 0
-    gensSinceBestFitnessImprovement = 0
-    highestAverageFitness = -1 * float('inf')
-    highestBestFitness = -1 * float('inf')
-    restarting = False
-
-    while not evolutionFinished:
-
-        log('Starting generation {0}'.format(genNumber), 'INFO', logFile)
-
-        children = []
-        while len(children) < GPLambda:
-            # parent selection (k tournament)
-            parent1 = max(random.sample(GPPopulation, GPKTournamentK), key=lambda p: p.fitness)
-            parent2 = max(random.sample(GPPopulation, GPKTournamentK), key=lambda p: p.fitness)
-            # recombination/mutation
-            newChild = parent1.recombine(parent2)
-            if random.random() < GPmutationRate or (forceMutationOfClones and newChild.isClone(GPPopulation + children)):
-                newChild.mutate()
-            # add to the population
-            children.append(newChild)
-
-        # Evaluate children
-        evaluateGPPopulation(config, children, evaluator)
-        GPEvals += GPLambda
-
-        # population merging
-        GPPopulation.extend(children)
-
-        # survival selection
-        if GPSurvivalSelection == 'random':
-            GPPopulation = random.sample(GPPopulation, GPMu)
-        elif GPSurvivalSelection == 'truncation':
-            GPPopulation.sort(key=lambda p: p.fitness, reverse=True)
-            GPPopulation = GPPopulation[:GPMu]
-
-
-        # pickle the population, if configured to
-        if pickleEveryPopulation:
-            pickleDirectory = resultsDirectory + '/pickledPopulations'
-            pickleFilePath = pickleDirectory + '/gen{0}'.format(genNumber)
-            os.makedirs(pickleDirectory, exist_ok=True)
-            with open(pickleFilePath, 'wb') as pickleFile:
-                pickle.dump(GPPopulation, pickleFile)
-
-        # Update results
-        averageFitness = statistics.mean(p.fitness for p in GPPopulation)
-        bestFitness = max(p.fitness for p in GPPopulation)
-
-        results['evalCounts'].append(GPEvals)
-        results['averageFitness'].append(averageFitness)
-        results['bestFitness'].append(bestFitness)
-
-
-        # check termination conditions
-        if averageFitness > highestAverageFitness:
-            highestAverageFitness = averageFitness
-            gensSinceAvgFitnessImprovement = 0
-        else:
-            gensSinceAvgFitnessImprovement += 1
-            if terminateNoAvgFitnessChange and gensSinceAvgFitnessImprovement >= noChangeTerminationGenerations:
-                log('Terminating evolution due to no improvement in average fitness', 'INFO', logFile)
-                evolutionFinished = True
-            elif restartNoAvgFitnessChange and gensSinceAvgFitnessImprovement >= noChangeRestartGenerations:
-                log('Restarting evolution due to no improvement in average fitness', 'INFO', logFile)
-                restarting = True
-
-        if bestFitness > highestBestFitness:
-            highestBestFitness = bestFitness
-            gensSinceBestFitnessImprovement = 0
-        else:
-            gensSinceBestFitnessImprovement += 1
-            if terminateNoBestFitnessChange and gensSinceBestFitnessImprovement >= noChangeTerminationGenerations:
-                log('Terminating evolution due to no improvement in best fitness', 'INFO', logFile)
-                evolutionFinished = True
-            elif restartNoBestFitnessChange and gensSinceBestFitnessImprovement >= noChangeRestartGenerations:
-                log('Restarting evolution due to no improvement in best fitness', 'INFO', logFile)
-                restarting = True
-
-        if terminateMaxEvals and GPEvals >= maxGPEvals:
-            log('Terminating evolution due to max evaluations reached', 'INFO', logFile)
-            evolutionFinished = True
-
-        # if we are restarting, regenerate and reevaluate the population
-        if restarting:
-            GPPopulation = []
-            for i in range(GPMu):
-                newTree = GPTree()
-                newTree.randomize(initialGPDepthLimit)
-                GPPopulation.append(newTree)
-            log('Evaluating restarted population', 'INFO', logFile)
-            evaluateGPPopulation(config, GPPopulation, evaluator)
-            GPEvals += GPMu
-
-            gensSinceAvgFitnessImprovement = 0
-            gensSinceBestFitnessImprovement = 0
-            highestAverageFitness = -1 * float('inf')
-            highestBestFitness = -1 * float('inf')
-            restarting = False
-
-        # check population uniqueness
-        checkGPPopulationUniqueness(GPPopulation, 0.75, logFile)
-
-        genNumber += 1
-
-    # write the results
-    with open(resultsDirectory + '/results.csv', 'w') as resultFile:
-
-        resultWriter = csv.writer(resultFile)
-
-        resultWriter.writerow(['evals', 'average fitness', 'best fitness'])
-        resultWriter.writerow(results['evalCounts'])
-        resultWriter.writerow(results['averageFitness'])
-        resultWriter.writerow(results['bestFitness'])
-
-    # log final fitness stats
-    finalAverageFitness = averageFitness
-    finalBestFitness = bestFitness
-
-    log('Final Average Fitness: {0}'.format(finalAverageFitness), 'INFO', logFile)
-    log('Final Best Fitness: {0}'.format(finalBestFitness), 'INFO', logFile)
-
-    # calculate and log string for final best GP popi
-    bestGPPopi = max(GPPopulation, key=lambda p: p.fitness)
-    bestGPPopiString = bestGPPopi.getString()
-    log('String form of best Popi: {0}'.format(bestGPPopiString), 'INFO', logFile)
-
-    # re-run best popi
-    log('Running best Popi...', 'INFO', logFile)
-    bestGPPopi.final = True
-    result = evaluator.evaluate(bestGPPopi)
-    lastEvalFitness = result['fitness']
-    log('Final fitness of last evaluation: {0}'.format(lastEvalFitness), 'INFO', logFile)
-    lastEvalStdDev = result.get('std_dev', None)
-    if lastEvalStdDev is not None:
-        log('Final standard deviation of last evaluation: {0}'.format(lastEvalStdDev), 'INFO', logFile)
-
-
-    # pickle the final population, if configured to
-    if pickleFinalPopulation:
-        pickleDirectory = resultsDirectory + '/pickledPopulations'
-        pickleFilePath = pickleDirectory + '/final'
-        os.makedirs(pickleDirectory, exist_ok=True)
-        with open(pickleFilePath, 'wb') as pickleFile:
-            pickle.dump(GPPopulation, pickleFile)
-
-    return
-
-def generateDefaultConfig(filePath):
-    # generates a default configuration file and writes it to filePath
-    with open(filePath, 'w') as file:
-        file.writelines([
-            '[experiment]\n',
-            'seed: time\n',
-            'use multiprocessing: True\n',
-            'processes: -1\n',
-            'leave one core idle: False\n',
-            'pickle every population: True\n',
-            'pickle final population: True\n',
-            '\n',
-            '[metaEA]\n',
-            'metaEA mu: 20\n',
-            'metaEA lambda: 10\n',
-            'metaEA maximum fitness evaluations: 200\n',
-            'metaEA k-tournament size: 8\n',
-            'metaEA survival selection: truncation\n',
-            'metaEA GP tree initialization depth limit: 3\n',
-            'metaEA mutation rate: 0.01\n',
-            'force mutation of clones: True\n'
-            'terminate on maximum evals: True\n',
-            'terminate on no improvement in average fitness: False\n',
-            'terminate on no improvement in best fitness: False\n',
-            'generations to termination for no improvement: 25\n',
-            'restart on no improvement in average fitness: False\n',
-            'restart on no improvement in best fitness: False\n',
-            'generations to restart for no improvement: 5\n',
-            '\n'
-        ])
-
-def eppsea(evaluator, configPath=None):
-    # set up the results directory
-    presentTime = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-    experimentName = "eppsea_" + str(presentTime)
-    resultsDirectory = "./results/" + experimentName
-    os.makedirs(resultsDirectory)
-
-    # Set up the logging file
-    logFile = open(resultsDirectory + '/log.txt', 'w')
-
-    # log start
-    log('Starting EPPSEA!', 'INFO', logFile)
-
-    # check to make sure the evaluator has an evaluation function
-    if not callable(getattr(evaluator, 'evaluate', None)):
-        log('Evaluator object has no evaluation function. Define the "evaluate(selection_function)" method for the evaluator', 'ERROR', logFile)
-        exit(1)
-
-    # try to read a config file from the config file path
-    # if we do not have a config file, generate and use a default config
-    if configPath is None:
-        log('No config file path provided. Generating and using default config.', 'INFO', logFile)
-        configPath = 'config/base_config/default.cfg'
-        generateDefaultConfig(configPath)
-    # if the provided file path does not exist, generate and use a default config
-    elif not os.path.isfile(str(configPath)):
-        log('No config file found at {0}. Generating and using default config.'.format(configPath), 'INFO', logFile)
-        configPath = 'config/base_config/default.cfg'
-        generateDefaultConfig(configPath)
-    else:
-        log('Using config file {0}'.format(configPath), 'INFO', logFile)
-
-    # copy the used config file to the results path
-    shutil.copyfile(configPath, resultsDirectory + '/config_used.cfg')
-
-    # set up the configuration object. This will be referenced by multiple functions and classes within this module
-    config = configparser.ConfigParser()
-    config.read(configPath)
-
-    # seed RNGs and record seed
-    seed = config.get('experiment', 'seed')
-    try:
-        seed = int(seed)
-    except ValueError:
-        seed = int(time.time())
-    random.seed(seed)
-    log('Using random seed {0}'.format(seed), 'INFO', logFile)
+        # seed RNG and record seed
+        seed = config.get('experiment', 'seed')
+        try:
+            seed = int(seed)
+        except ValueError:
+            seed = int(time.time())
+        random.seed(seed)
+        self.log('Using random seed {0}'.format(seed), 'INFO')
 
     # record start time
     startTime = time.time()
 
-    # run experiment
-    eppseaOneRun(config, evaluator, resultsDirectory, logFile)
+    def log(self, message, messageType):
+        # Builds a log message out of a timestamp, the passed message, and a message type, then prints the message and
+        # writes it in the logFile
 
-    # log time elapsed
-    timeElapsed = time.time() - startTime
-    log("Time elapsed: {0}".format(timeElapsed), 'INFO', logFile)
+        # Get the timestamp
+        timestamp = datetime.datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+
+        # Put together the full message
+        fullMessage = '{0}| {1}: {2}'.format(timestamp, messageType, message)
+
+        # Print and log the message
+        print(fullMessage)
+        self.logFile.write(fullMessage)
+        self.logFile.write('\n')
+
+    def startEvolution(self):
+        self.log('Starting evolution', 'INFO')
+        # initialize the population
+        self.population = []
+        for i in range(self.GPMu):
+            newTree = GPTree()
+            newTree.randomize(self.initialGPDepthLimit)
+            self.population.append(newTree)
+
+        # mark the entire population as new
+        self.new_population = list(self.population)
+
+        # check population uniqueness
+        self.checkGPPopulationUniqueness(self.population, 0.75)
+
+        # start evolution variables
+        self.GPEvals = 0
+        self.genNumber = 0
+        self.evolutionFinished = False
+        self.gensSinceAvgFitnessImprovement = 0
+        self.gensSinceBestFitnessImprovement = 0
+        self.highestAverageFitness = -math.inf
+        self.highestBestFitness = -math.inf
+        self.restarting = False
+
+    def nextGeneration(self):
+        # make sure all population members have been assigned fitness values
+        if not all(p.fitness is not None for p in self.population):
+            self.log('Attempting to advance to next generation before assigning fitness to all members', 'ERROR')
+            return
+
+        # log and increment generation
+        self.log('Finished generation {0}'.format(self.genNumber), 'INFO')
+        self.genNumber += 1
+
+        # increment evaluation counter
+        self.GPEvals += len(self.new_population)
+
+        # Update results
+        averageFitness = statistics.mean(p.fitness for p in self.population)
+        bestFitness = max(p.fitness for p in self.population)
+
+        self.results['evalCounts'].append(self.GPEvals)
+        self.results['averageFitness'].append(averageFitness)
+        self.results['bestFitness'].append(bestFitness)
+
+        # pickle the population, if configured to
+        if self.pickleEveryPopulation:
+            pickleDirectory = self.resultsDirectory + '/pickledPopulations'
+            pickleFilePath = pickleDirectory + '/gen{0}'.format(self.genNumber)
+            os.makedirs(pickleDirectory, exist_ok=True)
+            with open(pickleFilePath, 'wb') as pickleFile:
+                pickle.dump(self.population, pickleFile)
+
+        # check termination and restart conditions
+        if averageFitness > self.highestAverageFitness:
+            self.highestAverageFitness = averageFitness
+            self.gensSinceAvgFitnessImprovement = 0
+        else:
+            self.gensSinceAvgFitnessImprovement += 1
+            if self.terminateNoAvgFitnessChange and self.gensSinceAvgFitnessImprovement >= self.noChangeTerminationGenerations:
+                self.log('Terminating evolution due to no improvement in average fitness', 'INFO')
+                self.evolutionFinished = True
+            elif self.restartNoAvgFitnessChange and self.gensSinceAvgFitnessImprovement >= self.noChangeRestartGenerations:
+                self.log('Restarting evolution due to no improvement in average fitness', 'INFO')
+                self.restarting = True
+        if bestFitness > self.highestBestFitness:
+            self.highestBestFitness = bestFitness
+            self.gensSinceBestFitnessImprovement = 0
+        else:
+            self.gensSinceBestFitnessImprovement += 1
+            if self.terminateNoBestFitnessChange and self.gensSinceBestFitnessImprovement >= self.noChangeTerminationGenerations:
+                self.log('Terminating evolution due to no improvement in best fitness', 'INFO')
+                self.evolutionFinished = True
+            elif self.restartNoBestFitnessChange and self.gensSinceBestFitnessImprovement >= self.noChangeRestartGenerations:
+                self.log('Restarting evolution due to no improvement in best fitness', 'INFO')
+                self.restarting = True
+        if self.terminateMaxEvals and self.GPEvals >= self.maxGPEvals:
+            self.log('Terminating evolution due to max evaluations reached', 'INFO')
+            self.evolutionFinished = True
+
+        if not self.evolutionFinished:
+
+            # if we are restarting, regenerate the population
+            if self.restarting:
+                self.population = []
+                for i in range(self.GPMu):
+                    newTree = GPTree()
+                    newTree.randomize(self.initialGPDepthLimit)
+                    self.population.append(newTree)
+                self.new_population = list(self.population)
+
+                self.gensSinceAvgFitnessImprovement = 0
+                self.gensSinceBestFitnessImprovement = 0
+                self.highestAverageFitness = -math.inf
+                self.highestBestFitness = -math.inf
+                self.restarting = False
+
+            # otherwise, do survival selection and generate the next generation
+            else:
+                # survival selection
+                if self.GPSurvivalSelection == 'random':
+                    self.population = random.sample(self.population, self.GPMu)
+                elif self.GPSurvivalSelection == 'truncation':
+                    self.population.sort(key=lambda p: p.fitness, reverse=True)
+                    self.population = self.population[:self.GPMu]
+
+                # parent selection and new child generation
+                self.new_population = []
+                while len(self.new_population) < self.GPLambda:
+                    # parent selection (k tournament)
+                    parent1 = max(random.sample(self.population, self.GPKTournamentK), key=lambda p: p.fitness)
+                    parent2 = max(random.sample(self.population, self.GPKTournamentK), key=lambda p: p.fitness)
+                    # recombination/mutation
+                    newChild = parent1.recombine(parent2)
+                    if random.random() < self.GPmutationRate or (
+                            self.forceMutationOfClones and newChild.isClone(self.population + self.new_population)):
+                        newChild.mutate()
+                    self.new_population.append(newChild)
+
+                # extend population with new members
+                self.population.extend(self.new_population)
+
+        else:
+            # pickle the final population, if configured to
+            if self.pickleFinalPopulation:
+                pickleDirectory = self.resultsDirectory + '/pickledPopulations'
+                pickleFilePath = pickleDirectory + '/final'
+                os.makedirs(pickleDirectory, exist_ok=True)
+                with open(pickleFilePath, 'wb') as pickleFile:
+                    pickle.dump(self.population, pickleFile)
+
+            # write the results
+            with open(self.resultsDirectory + '/results.csv', 'w') as resultFile:
+
+                resultWriter = csv.writer(resultFile)
+
+                resultWriter.writerow(['evals', 'average fitness', 'best fitness'])
+                resultWriter.writerow(self.results['evalCounts'])
+                resultWriter.writerow(self.results['averageFitness'])
+                resultWriter.writerow(self.results['bestFitness'])
+
+            # find the best population member, log its string, and expose it
+            self.finalBestMember = max(self.population, key=lambda p: p.fitness)
+            finalBestMemberString = self.finalBestMember.getString()
+            self.log('String form of best Popi: {0}'.format(finalBestMemberString), 'INFO')
+
+        return
+
+    def checkGPPopulationUniqueness(self, population, warningThreshold):
+        populationStrings = list(p.getString() for p in population)
+        uniqueStrings = set(populationStrings)
+        uniqueness = len(uniqueStrings) / len(populationStrings)
+        if uniqueness <= warningThreshold:
+            self.log('GP population uniqueness is at {0}%. Consider increasing mutation rate.'.format(round(uniqueness*100)), 'WARNING')
+
+    def generateDefaultConfig(self, filePath):
+        # generates a default configuration file and writes it to filePath
+        with open(filePath, 'w') as file:
+            file.writelines([
+                '[experiment]\n',
+                'seed: time\n',
+                'use multiprocessing: True\n',
+                'processes: -1\n',
+                'leave one core idle: False\n',
+                'pickle every population: True\n',
+                'pickle final population: True\n',
+                '\n',
+                '[metaEA]\n',
+                'metaEA mu: 20\n',
+                'metaEA lambda: 10\n',
+                'metaEA maximum fitness evaluations: 200\n',
+                'metaEA k-tournament size: 8\n',
+                'metaEA survival selection: truncation\n',
+                'metaEA GP tree initialization depth limit: 3\n',
+                'metaEA mutation rate: 0.01\n',
+                'force mutation of clones: True\n'
+                'terminate on maximum evals: True\n',
+                'terminate on no improvement in average fitness: False\n',
+                'terminate on no improvement in best fitness: False\n',
+                'generations to termination for no improvement: 25\n',
+                'restart on no improvement in average fitness: False\n',
+                'restart on no improvement in best fitness: False\n',
+                'generations to restart for no improvement: 5\n',
+                '\n'
+            ])
