@@ -523,9 +523,6 @@ class Eppsea:
             file.writelines([
                 '[experiment]\n',
                 'seed: time\n',
-                'use multiprocessing: True\n',
-                'processes: -1\n',
-                'leave one core idle: False\n',
                 'pickle every population: True\n',
                 'pickle final population: True\n',
                 '\n',
