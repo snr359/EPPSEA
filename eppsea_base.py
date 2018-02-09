@@ -560,6 +560,7 @@ def generateDefaultConfig(filePath):
             'metaEA lambda: 10\n',
             'metaEA maximum fitness evaluations: 200\n',
             'metaEA k-tournament size: 8\n',
+            'metaEA survival selection: truncation\n',
             'metaEA GP tree initialization depth limit: 3\n',
             'metaEA mutation rate: 0.01\n',
             'force mutation of clones: True\n'
