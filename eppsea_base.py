@@ -334,6 +334,9 @@ class Eppsea:
         self.restarting = None
         self.finalBestMember = None
 
+        self.startTime = None
+        self.timeElapsed = None
+
         # seed RNG and record seed
         seed = config.get('experiment', 'seed')
         try:
@@ -363,6 +366,9 @@ class Eppsea:
 
     def startEvolution(self):
         self.log('Starting evolution', 'INFO')
+        # record start time
+        self.startTime = time.time()
+
         # initialize the population
         self.population = []
         for i in range(self.GPMu):
@@ -507,6 +513,10 @@ class Eppsea:
             self.finalBestMember = max(self.population, key=lambda p: p.fitness)
             finalBestMemberString = self.finalBestMember.getString()
             self.log('String form of best Popi: {0}'.format(finalBestMemberString), 'INFO')
+
+            # log time elapsed
+            self.timeElapsed = time.time() - self.startTime
+            self.log('Time elapsed: {0}'.format(self.timeElapsed), 'INFO')
 
         return
 
