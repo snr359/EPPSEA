@@ -11,6 +11,48 @@ import subprocess
 
 import eppsea_base
 
+def t_test(a, b):
+    # does a t-test between data sets a and b. effectively just calls another script, but does so in a separate
+    # process instead of importing that script, to keep this one compatible with pypy
+    with open('temp.csv', 'w') as csvFile:
+        writer = csv.writer(csvFile)
+        writer.writerow(a)
+        writer.writerow(b)
+    t_test_results = subprocess.check_output(['python3', 't_test.py', 'temp.csv'])
+    _, _, t, p_value = list(float(r) for r in t_test_results.split())
+    os.remove('temp.csv')
+    return t, p_value
+
+def test_basic_selection(basic_ea):
+    basic_results = dict()
+    parent_selection_functions = ['truncation', 'fitness_proportional', 'fitness_rank', 'k_tournament']
+    if basic_ea.lam > basic_ea.mu * 2:
+        parent_selection_functions.remove('truncation')
+
+    # set up parameters for multiprocessing
+    params = []
+    for parent_selection_function in parent_selection_functions:
+        params.extend([parent_selection_function]*basic_ea.runs)
+
+    with open('basicEA_results/basicEA_{0}_basic_selection.log'.format(basic_ea.fitness_function), 'w') as log_file:
+        for parent_selection_function in ['truncation',
+                                          'fitness_proportional',
+                                          'fitness_rank',
+                                          'k_tournament']:
+            if parent_selection_function == 'truncation' and basic_ea.lam > basic_ea.mu / 2:
+                continue
+            results = list()
+            for _ in range(self.runs):
+                results.append(self.one_run(parent_selection_function))
+
+            average_best = statistics.mean(r['best_fitness'] for r in results)
+            std_dev_best = statistics.stdev(r['best_fitness'] for r in results)
+
+            log_file.write('Average average fitness and standard deviation for fitness function {0} using selection function {1}: {2}, {3}\n'.format(
+                self.fitness_function, parent_selection_function, average_best, std_dev_best))
+
+            self.basic_results[parent_selection_function] = results
+
 class basicEA:
     genome_types = {
         'rastrigin': 'float',
