@@ -8,6 +8,7 @@ import os
 import shutil
 import csv
 import subprocess
+import multiprocessing
 
 import eppsea_base
 
@@ -23,35 +24,46 @@ def t_test(a, b):
     os.remove('temp.csv')
     return t, p_value
 
-def test_basic_selection(basic_ea):
-    basic_results = dict()
+def evaluate_eppsea_population(basic_ea, eppsea_population):
+    # evaluates a population of eppsea individuals and assigns fitness values to them
+    # setup parameters for multiprocessing
+    params = []
+    for p in eppsea_population:
+        params.extend([('eppsea_selection_function', p)]*basic_ea.runs)
+
+    pool = multiprocessing.Pool()
+    results_all_runs = pool.starmap(basic_ea.one_run, params)
+
+    for i, p in enumerate(eppsea_population):
+        start = i*basic_ea.runs
+        stop = (i+1)*basic_ea.runs
+        run_results = results_all_runs[start:stop]
+        p.fitness = statistics.mean(r['final_best_fitness'] for r in run_results)
+
+def test_against_basic_selection(basic_ea, eppsea_selection_function):
     parent_selection_functions = ['truncation', 'fitness_proportional', 'fitness_rank', 'k_tournament']
+    results_all_selections = dict()
     if basic_ea.lam > basic_ea.mu * 2:
         parent_selection_functions.remove('truncation')
 
     # set up parameters for multiprocessing
     params = []
     for parent_selection_function in parent_selection_functions:
-        params.extend([parent_selection_function]*basic_ea.runs)
+        params.extend([(parent_selection_function, None)]*basic_ea.runs)
 
-    with open('basicEA_results/basicEA_{0}_basic_selection.log'.format(basic_ea.fitness_function), 'w') as log_file:
-        for parent_selection_function in ['truncation',
-                                          'fitness_proportional',
-                                          'fitness_rank',
-                                          'k_tournament']:
-            if parent_selection_function == 'truncation' and basic_ea.lam > basic_ea.mu / 2:
-                continue
-            results = list()
-            for _ in range(self.runs):
-                results.append(self.one_run(parent_selection_function))
+    params.extend([('eppsea_selection_function', eppsea_selection_function)]*basic_ea.runs)
 
-            average_best = statistics.mean(r['best_fitness'] for r in results)
-            std_dev_best = statistics.stdev(r['best_fitness'] for r in results)
+    pool = multiprocessing.Pool()
+    results_all_runs = pool.starmap(basic_ea.one_run, params)
 
-            log_file.write('Average average fitness and standard deviation for fitness function {0} using selection function {1}: {2}, {3}\n'.format(
-                self.fitness_function, parent_selection_function, average_best, std_dev_best))
+    for i, parent_selection_function in enumerate(parent_selection_functions):
+        start = i*basic_ea.runs
+        stop = (i+1)*basic_ea.runs
+        results_all_selections[parent_selection_function] = results_all_runs[start:stop]
 
-            self.basic_results[parent_selection_function] = results
+    results_all_selections['eppsea_selection_function'] = results_all_runs[-basic_ea.runs:]
+
+    return results_all_selections
 
 class basicEA:
     genome_types = {
@@ -344,7 +356,10 @@ class basicEA:
         elif selection_function == 'random':
             return random.choice(population)
 
-    def one_run(self, parent_selection_function, eppsea_selection_function=None):
+        else:
+            print('PARENT SELECTION {0} NOT FOUND'.format(selection_function))
+
+    def one_run(self, parent_selection_function, eppsea_selection_function):
 
         population = list()
         for i in range(self.mu):
@@ -414,13 +429,43 @@ class basicEA:
             best_fitnesses[evals] = max(p.fitness for p in population)
 
         results = dict()
-        results['average_fitness'] = statistics.mean(p.fitness for p in population)
-        results['best_fitness'] = max(p.fitness for p in population)
-        results['fitness_std_dev'] = statistics.stdev(p.fitness for p in population)
+        results['final_average_fitness'] = statistics.mean(p.fitness for p in population)
+        results['final_best_fitness'] = max(p.fitness for p in population)
+        results['final_fitness_std_dev'] = statistics.stdev(p.fitness for p in population)
         results['average_fitnesses'] = average_fitnesses
         results['best_fitnesses'] = best_fitnesses
 
         return results
+
+def main(config_path):
+
+    config = configparser.ConfigParser()
+    config.read(config_path)
+
+    os.makedirs('basicEA_results', exist_ok=True)
+    shutil.copy(config_path, 'basicEA_results/config.cfg')
+
+    evaluator = basicEA(config)
+    print('Now starting EPPSEA')
+
+    eppsea = eppsea_base.Eppsea('config/base_config/test.cfg')
+
+    eppsea.startEvolution()
+
+    while not eppsea.evolutionFinished:
+        evaluate_eppsea_population(evaluator, eppsea.new_population)
+        eppsea.nextGeneration()
+
+    best_selection_function = eppsea.finalBestMember
+    final_results = test_against_basic_selection(evaluator, best_selection_function)
+
+    for parent_selection_function in final_results.keys():
+        if parent_selection_function != 'eppsea_selection_function':
+            eppsea_selection_best_fitness = list(r['final_best_fitness'] for r in final_results['eppsea_selection_function'])
+            basic_selection_best_fitness = list(r['final_best_fitness'] for r in final_results[parent_selection_function])
+            t, p_value = t_test(eppsea_selection_best_fitness, basic_selection_best_fitness)
+            fitness_difference = statistics.mean(eppsea_selection_best_fitness) - statistics.mean(basic_selection_best_fitness)
+            print('Difference in average best final fitness for {0}: {1}. P-value: {2}'.format(parent_selection_function, fitness_difference, p_value))
 
 if __name__ == '__main__':
 
@@ -430,16 +475,5 @@ if __name__ == '__main__':
 
     config_path = sys.argv[1]
 
-    config = configparser.ConfigParser()
-    config.read(config_path)
-
-    os.makedirs('basicEA_results', exist_ok=True)
-    shutil.copy(config_path, 'basicEA_results/config.cfg')
-
-    evaluator = basicEA(config)
-    print('First, testing basic selection functions')
-    evaluator.test_basic_selection()
-    print('Now starting EPPSEA')
-    base_eppsea_config_path = config.get('EA', 'base eppsea config path')
-    eppsea_base.eppsea(evaluator, base_eppsea_config_path)
+    main(config_path)
 
