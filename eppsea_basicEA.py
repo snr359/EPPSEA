@@ -9,19 +9,22 @@ import shutil
 import csv
 import subprocess
 import multiprocessing
+import time
+import uuid
 
 import eppsea_base
 
 def t_test(a, b):
     # does a t-test between data sets a and b. effectively just calls another script, but does so in a separate
     # process instead of importing that script, to keep this one compatible with pypy
-    with open('temp.csv', 'w') as csvFile:
+    filename = 'temp_{0}.csv'.format(str(uuid.uuid4()))
+    with open(filename, 'w') as csvFile:
         writer = csv.writer(csvFile)
         writer.writerow(a)
         writer.writerow(b)
-    t_test_results = subprocess.check_output(['python3', 't_test.py', 'temp.csv'])
+    t_test_results = subprocess.check_output(['python3', 't_test.py', filename])
     _, _, t, p_value = list(float(r) for r in t_test_results.split())
-    os.remove('temp.csv')
+    os.remove(filename)
     return t, p_value
 
 def evaluate_eppsea_population(basic_ea, eppsea_population):
