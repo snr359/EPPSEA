@@ -11,6 +11,8 @@ import subprocess
 import multiprocessing
 import time
 import uuid
+import datetime
+import matplotlib.pyplot as plt
 
 import eppsea_base
 
@@ -107,51 +109,44 @@ class basicEA:
 
         self.basic_results = None
 
-    def evaluate(self, eppsea_selection_function):
-        if self.lam > self.mu / 2:
-            eppsea_selection_function.reusingParents = True
-        results = list()
-        for _ in range(self.runs):
-            results.append(self.one_run('eppsea_selection_function', eppsea_selection_function))
+        present_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        experiment_name = "eppsea_basicEA_" + str(present_time)
 
-        average_best = statistics.mean(r['best_fitness'] for r in results)
-        std_dev_best = statistics.stdev(r['best_fitness'] for r in results)
+        self.results_directory = 'results/eppsea_basicEA/{0}'.format(experiment_name)
+        os.makedirs(self.results_directory, exist_ok=True)
 
-        if eppsea_selection_function.final:
-            for basic_selection, basic_selection_results in self.basic_results.items():
-                average_best_difference = average_best - statistics.mean(r['best_fitness'] for r in basic_selection_results)
-                with open('temp.csv', 'w') as csvFile:
-                    writer = csv.writer(csvFile)
-                    writer.writerow(list(r['best_fitness'] for r in results))
-                    writer.writerow(list(r['best_fitness'] for r in basic_selection_results))
+        self.log_file_location = '{0}/log.txt'.format(self.results_directory)
 
-                t_test_results = subprocess.check_output(['python3', 't_test.py', 'temp.csv'])
-                _, _, t, p_value = list(float(r) for r in t_test_results.split())
-                print('Compared to selection function {0}, difference in average fitness is {1}. P-value: {2}'.format(basic_selection, average_best_difference, p_value))
+    def log(self, message):
+        print(message)
+        with open(self.log_file_location, 'a') as log_file:
+            log_file.write(message + '\n')
 
-        return {'fitness': average_best,
-                'std_dev': std_dev_best}
+    def plot_results(self, results):
 
-    def test_basic_selection(self):
-        self.basic_results = dict()
-        with open('basicEA_results/basicEA_{0}_basic_selection.log'.format(self.fitness_function), 'w') as log_file:
-            for parent_selection_function in ['truncation',
-                                              'fitness_proportional',
-                                              'fitness_rank',
-                                              'k_tournament']:
-                if parent_selection_function == 'truncation' and self.lam > self.mu / 2:
-                    continue
-                results = list()
-                for _ in range(self.runs):
-                    results.append(self.one_run(parent_selection_function))
+        if self.fitness_function in [
+            'rosenbrock',
+            'rastrigin'
+            ]:
+            plt.yscale('symlog')
 
-                average_best = statistics.mean(r['best_fitness'] for r in results)
-                std_dev_best = statistics.stdev(r['best_fitness'] for r in results)
+        for selection_function, selection_function_result in results.items():
 
-                log_file.write('Average average fitness and standard deviation for fitness function {0} using selection function {1}: {2}, {3}\n'.format(
-                    self.fitness_function, parent_selection_function, average_best, std_dev_best))
+            mu = []
+            fitnesses = []
 
-                self.basic_results[parent_selection_function] = results
+            # get mu from the best fitness recording of the first run
+            for m in selection_function_result[0]['best_fitnesses'].keys():
+                mu.append(m)
+                fitnesses.append(statistics.mean(r['best_fitnesses'][m] for r in selection_function_result))
+
+            plt.plot(mu, fitnesses, label=selection_function)
+
+        plt.xlabel('Evaluations')
+        plt.ylabel('Best Fitness')
+
+        plt.legend()
+        plt.savefig('{0}/figure.png'.format(self.results_directory))
 
 
     class popi:
@@ -445,11 +440,13 @@ def main(config_path):
     config = configparser.ConfigParser()
     config.read(config_path)
 
-    os.makedirs('basicEA_results', exist_ok=True)
-    shutil.copy(config_path, 'basicEA_results/config.cfg')
+
 
     evaluator = basicEA(config)
+    shutil.copy(config_path, '{0}/config.cfg'.format(evaluator.results_directory))
+
     print('Now starting EPPSEA')
+    start_time = time.time()
 
     eppsea = eppsea_base.Eppsea('config/base_config/test.cfg')
 
@@ -461,6 +458,9 @@ def main(config_path):
 
     best_selection_function = eppsea.finalBestMember
     final_results = test_against_basic_selection(evaluator, best_selection_function)
+    end_time = time.time() - start_time
+    evaluator.plot_results(final_results)
+    evaluator.log('Time elapsed: {0}'.format(end_time))
 
     for parent_selection_function in final_results.keys():
         if parent_selection_function != 'eppsea_selection_function':
@@ -468,7 +468,7 @@ def main(config_path):
             basic_selection_best_fitness = list(r['final_best_fitness'] for r in final_results[parent_selection_function])
             t, p_value = t_test(eppsea_selection_best_fitness, basic_selection_best_fitness)
             fitness_difference = statistics.mean(eppsea_selection_best_fitness) - statistics.mean(basic_selection_best_fitness)
-            print('Difference in average best final fitness for {0}: {1}. P-value: {2}'.format(parent_selection_function, fitness_difference, p_value))
+            evaluator.log('Difference in average best final fitness for {0}: {1}. P-value: {2}'.format(parent_selection_function, fitness_difference, p_value))
 
 if __name__ == '__main__':
 
