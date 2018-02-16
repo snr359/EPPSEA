@@ -12,7 +12,6 @@ import multiprocessing
 import time
 import uuid
 import datetime
-import matplotlib.pyplot as plt
 
 import eppsea_base
 
@@ -20,7 +19,7 @@ def t_test(a, b):
     # does a t-test between data sets a and b. effectively just calls another script, but does so in a separate
     # process instead of importing that script, to keep this one compatible with pypy
     filename = 'temp_{0}.csv'.format(str(uuid.uuid4()))
-    with open(filename, 'w') as csvFile:
+    with open(filename, 'w', newline='') as csvFile:
         writer = csv.writer(csvFile)
         writer.writerow(a)
         writer.writerow(b)
@@ -123,30 +122,41 @@ class basicEA:
             log_file.write(message + '\n')
 
     def plot_results(self, results):
+        filename = 'temp{0}'.format(str(uuid.uuid4()))
+        with open(filename, 'w', newline='') as csv_file:
+            writer = csv.writer(csv_file)
 
-        if self.fitness_function in [
-            'rosenbrock',
-            'rastrigin'
-            ]:
-            plt.yscale('symlog')
+            if self.fitness_function in [
+                'rosenbrock',
+                'rastrigin'
+                ]:
+                symlog = '1'
+            else:
+                symlog = '0'
 
-        for selection_function, selection_function_result in results.items():
+            selection_functions = []
 
-            mu = []
-            fitnesses = []
+            for selection_function, selection_function_result in results.items():
 
-            # get mu from the best fitness recording of the first run
-            for m in selection_function_result[0]['best_fitnesses'].keys():
-                mu.append(m)
-                fitnesses.append(statistics.mean(r['best_fitnesses'][m] for r in selection_function_result))
+                mu = []
+                fitnesses = []
 
-            plt.plot(mu, fitnesses, label=selection_function)
+                # get mu from the best fitness recording of the first run
+                for m in selection_function_result[0]['best_fitnesses'].keys():
+                    mu.append(m)
+                    fitnesses.append(statistics.mean(r['best_fitnesses'][m] for r in selection_function_result))
 
-        plt.xlabel('Evaluations')
-        plt.ylabel('Best Fitness')
+                writer.writerow(mu)
+                writer.writerow(fitnesses)
 
-        plt.legend()
-        plt.savefig('{0}/figure.png'.format(self.results_directory))
+                selection_functions.append(selection_function)
+
+            params = ['python3', 'plot_results.py', filename, self.results_directory, symlog]
+            params.extend(selection_functions)
+            print(params)
+            subprocess.run(params)
+
+
 
 
     class popi:

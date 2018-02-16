@@ -6,7 +6,7 @@ import statistics
 import sys
 
 def main(csvFilePath):
-    with open(csvFilePath) as csvFile:
+    with open(csvFilePath, newline='') as csvFile:
         reader = csv.reader(csvFile)
         readerLines = list(reader)
         sample1 = list(float(s) for s in readerLines[0])
