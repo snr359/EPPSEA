@@ -12,8 +12,16 @@ import multiprocessing
 import time
 import uuid
 import datetime
+import pickle
 
 import eppsea_base
+
+def postprocess(final_results, results_directory):
+    final_results_pickle_path = '{0}/final_results'.format(results_directory)
+    with open(final_results_pickle_path, 'wb') as pickle_file:
+        pickle.dump(final_results, pickle_file)
+    params = ['python3', final_results_pickle_path, results_directory]
+    subprocess.call(params)
 
 def t_test(a, b):
     # does a t-test between data sets a and b. effectively just calls another script, but does so in a separate
@@ -37,6 +45,7 @@ def evaluate_eppsea_population(basic_ea, eppsea_population):
 
     pool = multiprocessing.Pool()
     results_all_runs = pool.starmap(basic_ea.one_run, params)
+    pool.close()
 
     for i, p in enumerate(eppsea_population):
         start = i*basic_ea.runs
@@ -59,15 +68,48 @@ def test_against_basic_selection(basic_ea, eppsea_selection_function):
 
     pool = multiprocessing.Pool()
     results_all_runs = pool.starmap(basic_ea.one_run, params)
+    pool.close()
 
     for i, parent_selection_function in enumerate(parent_selection_functions):
         start = i*basic_ea.runs
         stop = (i+1)*basic_ea.runs
-        results_all_selections[parent_selection_function] = results_all_runs[start:stop]
+        new_result_holder = ResultHolder()
+        new_result_holder.run_results = results_all_runs[start:stop]
+        results_all_selections[parent_selection_function] = new_result_holder
 
-    results_all_selections['eppsea_selection_function'] = results_all_runs[-basic_ea.runs:]
+    new_result_holder = ResultHolder()
+    new_result_holder.run_results = results_all_runs[-basic_ea.runs:]
+    results_all_selections['eppsea_selection_function'] = new_result_holder
 
     return results_all_selections
+
+class ResultHolder:
+    # a class for holding the results of eppsea runs
+    def __init__(self):
+        self.selection_function = None
+        self.run_results = []
+
+    def get_eval_counts(self):
+        return sorted(self.run_results[0]['best_fitnesses'].keys())
+
+    def get_average_average_fitness(self):
+        average_average_fitnesses = []
+        for m in self.get_eval_counts():
+            average_average_fitnesses.append(statistics.mean(r['average_fitnesses'][m] for r in self.run_results))
+
+    def get_average_best_fitness(self):
+        average_average_fitnesses = []
+        for m in self.get_eval_counts():
+            average_average_fitnesses.append(statistics.mean(r['best_fitnesses'][m] for r in self.run_results))
+
+    def get_final_average_fitness_all_runs(self):
+        average_fitnesses_all_runs = list(r['final_average_fitness'] for r in self.run_results)
+        return average_fitnesses_all_runs
+
+    def get_final_best_fitness_all_runs(self):
+        best_fitnesses_all_runs = list(r['final_best_fitness'] for r in self.run_results)
+        return best_fitnesses_all_runs
+
 
 class basicEA:
     genome_types = {
@@ -452,8 +494,6 @@ def main(config_path):
     config = configparser.ConfigParser()
     config.read(config_path)
 
-
-
     evaluator = basicEA(config)
     shutil.copy(config_path, '{0}/config.cfg'.format(evaluator.results_directory))
 
@@ -471,16 +511,8 @@ def main(config_path):
     best_selection_function = eppsea.finalBestMember
     final_results = test_against_basic_selection(evaluator, best_selection_function)
     end_time = time.time() - start_time
-    evaluator.plot_results(final_results)
+    postprocess(final_results, evaluator.results_directory)
     evaluator.log('Time elapsed: {0}'.format(end_time))
-
-    for parent_selection_function in final_results.keys():
-        if parent_selection_function != 'eppsea_selection_function':
-            eppsea_selection_best_fitness = list(r['final_best_fitness'] for r in final_results['eppsea_selection_function'])
-            basic_selection_best_fitness = list(r['final_best_fitness'] for r in final_results[parent_selection_function])
-            t, p_value = t_test(eppsea_selection_best_fitness, basic_selection_best_fitness)
-            fitness_difference = statistics.mean(eppsea_selection_best_fitness) - statistics.mean(basic_selection_best_fitness)
-            evaluator.log('Difference in average best final fitness for {0}: {1}. P-value: {2}'.format(parent_selection_function, fitness_difference, p_value))
 
 if __name__ == '__main__':
 
