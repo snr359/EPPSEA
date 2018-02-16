@@ -151,10 +151,12 @@ class basicEA:
 
                 selection_functions.append(selection_function)
 
-            params = ['python3', 'plot_results.py', filename, self.results_directory, symlog]
-            params.extend(selection_functions)
-            print(params)
-            subprocess.run(params)
+        params = ['python3', 'plot_results.py', filename, self.results_directory, symlog]
+        params.extend(selection_functions)
+        print(params)
+        subprocess.run(params)
+
+        os.remove(filename)
 
 
 

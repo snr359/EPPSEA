@@ -11,7 +11,7 @@ if __name__ == '__main__':
     symlog = sys.argv[3]
     functions = sys.argv[4:]
 
-    if bool(symlog):
+    if symlog == '1':
         plt.yscale('symlog')
     with open(csv_file_path, newline='') as csv_file:
         reader = csv.reader(csv_file)
