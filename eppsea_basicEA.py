@@ -16,12 +16,12 @@ import pickle
 
 import eppsea_base
 
-def postprocess(final_results, results_directory):
-    final_results_pickle_path = '{0}/final_results'.format(results_directory)
-    with open(final_results_pickle_path, 'wb') as pickle_file:
-        pickle.dump(final_results, pickle_file)
-    params = ['python3', final_results_pickle_path, results_directory]
-    subprocess.call(params)
+def postprocess(final_results_path, results_directory):
+
+    params = ['python', 'post_process.py', final_results_path, results_directory]
+    result = subprocess.run(params, stdout=subprocess.PIPE, universal_newlines=True)
+
+    return result.stdout
 
 def t_test(a, b):
     # does a t-test between data sets a and b. effectively just calls another script, but does so in a separate
@@ -74,10 +74,14 @@ def test_against_basic_selection(basic_ea, eppsea_selection_function):
         start = i*basic_ea.runs
         stop = (i+1)*basic_ea.runs
         new_result_holder = ResultHolder()
+        new_result_holder.selection_function = parent_selection_function
+        new_result_holder.fitness_function = basic_ea.fitness_function
         new_result_holder.run_results = results_all_runs[start:stop]
         results_all_selections[parent_selection_function] = new_result_holder
 
     new_result_holder = ResultHolder()
+    new_result_holder.selection_function = 'eppsea_selection_function'
+    new_result_holder.fitness_function = basic_ea.fitness_function
     new_result_holder.run_results = results_all_runs[-basic_ea.runs:]
     results_all_selections['eppsea_selection_function'] = new_result_holder
 
@@ -87,6 +91,7 @@ class ResultHolder:
     # a class for holding the results of eppsea runs
     def __init__(self):
         self.selection_function = None
+        self.fitness_function = None
         self.run_results = []
 
     def get_eval_counts(self):
@@ -96,11 +101,14 @@ class ResultHolder:
         average_average_fitnesses = []
         for m in self.get_eval_counts():
             average_average_fitnesses.append(statistics.mean(r['average_fitnesses'][m] for r in self.run_results))
+        return average_average_fitnesses
 
     def get_average_best_fitness(self):
-        average_average_fitnesses = []
+        average_best_fitnesses = []
         for m in self.get_eval_counts():
-            average_average_fitnesses.append(statistics.mean(r['best_fitnesses'][m] for r in self.run_results))
+            average_best_fitnesses.append(statistics.mean(r['best_fitnesses'][m] for r in self.run_results))
+
+        return average_best_fitnesses
 
     def get_final_average_fitness_all_runs(self):
         average_fitnesses_all_runs = list(r['final_average_fitness'] for r in self.run_results)
@@ -109,6 +117,12 @@ class ResultHolder:
     def get_final_best_fitness_all_runs(self):
         best_fitnesses_all_runs = list(r['final_best_fitness'] for r in self.run_results)
         return best_fitnesses_all_runs
+
+    def get_average_final_best_fitness(self):
+        return statistics.mean(self.get_final_best_fitness_all_runs())
+
+    def get_average_final_average_fitness(self):
+        return statistics.mean(self.get_final_average_fitness_all_runs())
 
 
 class basicEA:
@@ -511,7 +525,11 @@ def main(config_path):
     best_selection_function = eppsea.finalBestMember
     final_results = test_against_basic_selection(evaluator, best_selection_function)
     end_time = time.time() - start_time
-    postprocess(final_results, evaluator.results_directory)
+
+    final_results_path = '{0}/final_results'.format(evaluator.results_directory)
+    with open(final_results_path, 'wb') as pickle_file:
+        pickle.dump(final_results, pickle_file)
+    postprocess(final_results_path, evaluator.results_directory)
     evaluator.log('Time elapsed: {0}'.format(end_time))
 
 if __name__ == '__main__':
