@@ -18,7 +18,7 @@ import eppsea_base
 
 def postprocess(final_results_path, results_directory):
 
-    params = ['python', 'post_process.py', final_results_path, results_directory]
+    params = ['python3', 'post_process.py', final_results_path, results_directory]
     result = subprocess.run(params, stdout=subprocess.PIPE, universal_newlines=True)
 
     return result.stdout
@@ -529,8 +529,10 @@ def main(config_path):
     final_results_path = '{0}/final_results'.format(evaluator.results_directory)
     with open(final_results_path, 'wb') as pickle_file:
         pickle.dump(final_results, pickle_file)
-    postprocess(final_results_path, evaluator.results_directory)
+    postprocess_results = postprocess(final_results_path, evaluator.results_directory)
     evaluator.log('Time elapsed: {0}'.format(end_time))
+    evaluator.log('Postprocess results:')
+    evaluator.log(postprocess_results)
 
 if __name__ == '__main__':
 
