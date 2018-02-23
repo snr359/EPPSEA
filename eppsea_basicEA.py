@@ -514,7 +514,8 @@ def main(config_path):
     print('Now starting EPPSEA')
     start_time = time.time()
 
-    eppsea = eppsea_base.Eppsea('config/base_config/test.cfg')
+    eppsea_config = config.get('EA', 'base eppsea config path')
+    eppsea = eppsea_base.Eppsea(eppsea_config)
 
     eppsea.startEvolution()
 
