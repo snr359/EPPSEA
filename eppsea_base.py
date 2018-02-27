@@ -149,6 +149,7 @@ class GPTree:
         self.fitness = None
         self.reusingParents = None
         self.final = False
+        self.selected_in_generation = dict()
 
     def roulette_selection(self, population, weights):
         # makes a random weighted selection from the population
@@ -177,6 +178,75 @@ class GPTree:
 
         return population[i]
 
+    def maximum_selection(self, population, weights):
+        # returns the member of the population for which the corresponding entry in weights is maximum
+
+        # raise an error if the lengths of the population and weights are different
+        if len(population) != len(weights):
+            raise IndexError
+
+        # find the index of the weight with the maximum value
+        index_of_max = weights.index(max(weights))
+
+        # return the population member at that index
+        return population[index_of_max]
+
+    def select(self, population, generation_num=None):
+        # probabilistically selects a member of the population according to the selectability tree
+        # raise an error if the population members do not have a fitness attribute
+        if not all(hasattr(p, 'fitness') for p in population):
+            raise Exception('EPPSEA ERROR: Trying to use an EEPSEA selector to select from a population'
+                            'when one of the members does not have "fitness" defined.')
+
+        # create a list of selected individuals for the current generation if one does not exist
+        if generation_num is not None and generation_num not in self.selected_in_generation.keys():
+            self.selected_in_generation[generation_num] = list()
+
+        # determine the list of candidates for selection
+        candidates = list(population)
+
+        if not self.reusingParents and generation_num is not None:
+            for p in self.selected_in_generation[generation_num]:
+                try:
+                    candidates.remove(p)
+                except ValueError:
+                    pass
+
+
+        # raise an error if there are no candidates for selection
+        if len(candidates) == 0:
+            raise Exception('EPPSEA ERROR: There are no candidates available for selection. '
+                            'If mu > 2*lambda in your EA, make sure select_with_replacement is set to True'
+                            'in your EPPSEA configuration.')
+
+        # get the fitnesses from the population members
+        fitnesses = list(p.fitness for p in population)
+
+        # determine the fitness rankings for each population member, and the sum fitness of the population (normalized, if negative)
+        fitness_rankings = sorted(range(len(fitnesses)), key=lambda x: fitnesses[x])
+        for i in range(len(fitness_rankings)):
+            fitness_rankings[i] += 1
+
+        fitness_proportions = []
+        min_fitness = min(fitnesses)
+        if min_fitness < 0:
+            sum_fitness = sum(f-min_fitness for f in fitnesses)
+        else:
+            sum_fitness = sum(fitnesses)
+
+        # determine the selectability for each population member
+        selectaiblities = []
+        for i in range(len(population)):
+            terminal_values = dict()
+            terminal_values['fitness'] = fitnesses[i]
+            terminal_values['fitnessRank'] = fitness_rankings[i]
+            terminal_values['sumFitness'] = sum_fitness
+            terminal_values['populationSize'] = len(population)
+            selectaiblities.append(self.get(terminal_values))
+
+        # select and return a population member
+        selected_member = self.roulette_selection(population, selectaiblities)
+        return selected_member
 
     def recombine(self, parent2):
         # recombines two GPTrees and returns a new child

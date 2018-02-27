@@ -17,7 +17,7 @@ import pickle
 import eppsea_base
 
 def postprocess(final_results_path, results_directory):
-
+    # calls the postprocessing script on a pickled dictionary mapping fitness functions to ResultHolder objects
     params = ['python3', 'post_process.py', final_results_path, results_directory]
     result = subprocess.run(params, stdout=subprocess.PIPE, universal_newlines=True)
 
@@ -342,48 +342,8 @@ class basicEA:
 
         return loci_values, epistasis
 
-    def set_fitness_stats(self, population):
-        sortedPopulation = sorted(population, key=lambda p:p.fitness)
-        for i, p in enumerate(sortedPopulation):
-            p.fitness_rank = i
-
-    def set_selection_chances(self, population, eppsea_selection_function):
-        terminals = dict()
-        terminals['populationSize'] = len(population)
-        terminals['sumFitness'] = sum(p.fitness for p in population)
-        for p in population:
-            terminals['fitness'] = p.fitness
-            terminals['fitnessRank'] = p.fitness_rank
-            p.selection_chance = eppsea_selection_function.get(terminals)
-
-        min_chance = min(p.selection_chance for p in population)
-        if min_chance < 0:
-            for p in population:
-                p.selection_chance -= min_chance
-
-    def parent_selection_eppsea_function(self, population, unique_parents, eppsea_selection_function):
-        if not eppsea_selection_function.reusingParents:
-            candidates = list(unique_parents)
-        else:
-            candidates = list(population)
-
-        if len(candidates) == 0:
-            raise Exception('Trying to select candidate for parent selection from empty pool!')
-
-        total_chance = sum(p.selection_chance for p in candidates)
-        selection_num = random.uniform(0, total_chance)
-        selected = None
-        for p in candidates:
-            if selection_num <= p.selection_chance:
-                selected = p
-                break
-            else:
-                selection_num -= p.selection_chance
-
-        if selected is None:
-            raise Exception('Overran selection function with {0} remaining'.format(selection_num))
-
-        return selected
+    def parent_selection_eppsea_function(self, population, eppsea_selection_function, generation_number):
+        return eppsea_selection_function.select(population, generation_number)
 
     def parent_selection_basic(self, population, unique_parents, selection_function):
         if selection_function == 'truncation':
@@ -439,24 +399,15 @@ class basicEA:
         best_fitnesses = dict()
         best_fitnesses[evals] = max(p.fitness for p in population)
 
+        generation_number = 0
+
         while evals <= self.max_evals:
             children = list()
             unique_parents = list(population)
-            if parent_selection_function == 'eppsea_selection_function':
-                self.set_fitness_stats(population)
-                self.set_selection_chances(population, eppsea_selection_function)
             for i in range(self.lam):
                 if parent_selection_function == 'eppsea_selection_function':
-                    parent1 = self.parent_selection_eppsea_function(population, unique_parents, eppsea_selection_function)
-                    try:
-                        unique_parents.remove(parent1)
-                    except ValueError:
-                        pass
-                    parent2 = self.parent_selection_eppsea_function(population, unique_parents, eppsea_selection_function)
-                    try:
-                        unique_parents.remove(parent2)
-                    except ValueError:
-                        pass
+                    parent1 = self.parent_selection_eppsea_function(population, eppsea_selection_function, generation_number)
+                    parent2 = self.parent_selection_eppsea_function(population, eppsea_selection_function, generation_number)
                 else:
                     parent1 = self.parent_selection_basic(population, unique_parents, parent_selection_function)
                     try:
@@ -491,12 +442,15 @@ class basicEA:
 
             best_fitnesses[evals] = max(p.fitness for p in population)
 
+            generation_number += 1
+
         results = dict()
         results['final_average_fitness'] = statistics.mean(p.fitness for p in population)
         results['final_best_fitness'] = max(p.fitness for p in population)
         results['final_fitness_std_dev'] = statistics.stdev(p.fitness for p in population)
         results['average_fitnesses'] = average_fitnesses
         results['best_fitnesses'] = best_fitnesses
+
 
         return results
 
@@ -541,4 +495,3 @@ if __name__ == '__main__':
     config_path = sys.argv[1]
 
     main(config_path)
-
