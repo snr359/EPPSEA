@@ -1,4 +1,3 @@
-import sys
 import time
 import copy
 import random
@@ -6,7 +5,6 @@ import datetime
 import os
 import csv
 import math
-import multiprocessing
 import configparser
 import shutil
 import pickle
@@ -191,6 +189,20 @@ class GPTree:
         # return the population member at that index
         return population[index_of_max]
 
+    def get_fitness_stats(self, fitnesses):
+        # determine the fitness rankings for each population member, and the sum fitness of the population (normalized, if negative)
+        fitness_rankings = sorted(range(len(fitnesses)), key=lambda x: fitnesses[x])
+        for i in range(len(fitness_rankings)):
+            fitness_rankings[i] += 1
+
+        min_fitness = min(fitnesses)
+        if min_fitness < 0:
+            sum_fitness = sum(f - min_fitness for f in fitnesses)
+        else:
+            sum_fitness = sum(fitnesses)
+
+        return fitness_rankings, sum_fitness
+
     def select(self, population, generation_num=None):
         # probabilistically selects a member of the population according to the selectability tree
         # raise an error if the population members do not have a fitness attribute
@@ -222,17 +234,8 @@ class GPTree:
         # get the fitnesses from the population members
         fitnesses = list(p.fitness for p in population)
 
-        # determine the fitness rankings for each population member, and the sum fitness of the population (normalized, if negative)
-        fitness_rankings = sorted(range(len(fitnesses)), key=lambda x: fitnesses[x])
-        for i in range(len(fitness_rankings)):
-            fitness_rankings[i] += 1
-
-        fitness_proportions = []
-        min_fitness = min(fitnesses)
-        if min_fitness < 0:
-            sum_fitness = sum(f-min_fitness for f in fitnesses)
-        else:
-            sum_fitness = sum(fitnesses)
+        # get the fitness rankings and the (normalized) sum of fitnesses
+        fitness_rankings, sum_fitness = self.get_fitness_stats(tuple(fitnesses))
 
         # determine the selectability for each population member
         selectaiblities = []
@@ -244,8 +247,10 @@ class GPTree:
             terminal_values['populationSize'] = len(population)
             selectaiblities.append(self.get(terminal_values))
 
-        # select and return a population member
+        # select, record, and return a population member
         selected_member = self.roulette_selection(population, selectaiblities)
+        if generation_num is not None:
+            self.selected_in_generation[generation_num].append(selected_member)
         return selected_member
 
     def recombine(self, parent2):
