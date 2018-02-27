@@ -214,9 +214,6 @@ class basicEA:
 
         os.remove(filename)
 
-
-
-
     class popi:
         def __init__(self, other=None):
             if other is None:

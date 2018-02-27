@@ -150,6 +150,34 @@ class GPTree:
         self.reusingParents = None
         self.final = False
 
+    def roulette_selection(self, population, weights):
+        # makes a random weighted selection from the population
+
+        # raise an error if the lengths of the population and weights are different
+        if len(population) != len(weights):
+            raise IndexError
+
+        # normalize the weights, if necessary
+        normalized_weights = weights
+        min_weight = min(weights)
+        if min_weight < 0:
+            for i in range(len(weights)):
+                normalized_weights[i] -= min_weight
+
+        # calculate the sum weight and select a number between 0 and the sum weight
+        sum_weight = sum(normalized_weights)
+        selection_number = random.uniform(0, sum_weight)
+
+        # iterate through the items in the population until weights up to the selection number have passed, then return
+        # the current item
+        i = 0
+        while selection_number > normalized_weights[i]:
+            selection_number -= normalized_weights[i]
+            i += 1
+
+        return population[i]
+
+
     def recombine(self, parent2):
         # recombines two GPTrees and returns a new child
 
