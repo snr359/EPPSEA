@@ -146,6 +146,8 @@ class GPTree:
         self.root = None
         self.fitness = None
         self.reusingParents = None
+        self.select_from_subset = None
+        self.selection_subset_size = None
         self.final = False
         self.selected_in_generation = dict()
 
@@ -224,12 +226,15 @@ class GPTree:
                 except ValueError:
                     pass
 
+        if self.select_from_subset and self.selection_subset_size < len(candidates):
+            candidates = random.sample(candidates, self.selection_subset_size)
 
         # raise an error if there are no candidates for selection
         if len(candidates) == 0:
             raise Exception('EPPSEA ERROR: There are no candidates available for selection. '
-                            'If mu > 2*lambda in your EA, make sure select_with_replacement is set to True'
-                            'in your EPPSEA configuration.')
+                            'If mu > 2*lambda in your EA, make sure "select with replacement" is set to True'
+                            'in your EPPSEA configuration, or handle this special case in your evaluation'
+                            'of EPPSEA functions.')
 
         # get the fitnesses from the population members
         fitnesses = list(p.fitness for p in population)
@@ -271,6 +276,12 @@ class GPTree:
         
         # recombine misc options
         newChild.reusingParents = random.choice([self.reusingParents, parent2.reusingParents])
+        newChild.select_from_subset = random.choice(([self.select_from_subset, parent2.select_from_subset]))
+
+        if self.selection_subset_size > parent2.selection_subset_size:
+            newChild.selection_subset_size = random.randint(parent2.selection_subset_size, self.selection_subset_size)
+        else:
+            newChild.selection_subset_size = random.randint(self.selection_subset_size, parent2.selection_subset_size)
 
         return newChild
 
@@ -290,6 +301,10 @@ class GPTree:
         # 50/50 chance to flip misc option
         if random.random() < 0.5:
             self.reusingParents = not self.reusingParents
+        if random.random() < 0.5:
+            self.select_from_subset = not self.select_from_subset
+
+        self.selection_subset_size = round((self.selection_subset_size + random.randint(-5,5)) * random.uniform(0.9, 1.1))
         
     def get(self, terminalValues):
         return self.root.get(terminalValues)
@@ -315,12 +330,14 @@ class GPTree:
                     break
             replacementNode.parent = parentOfReplacement
 
-    def randomize(self, initialDepthLimit):
+    def randomize(self, initialDepthLimit, initialSelectionSubsetSize):
         if self.root is None:
             self.root = GPNode()
         self.root.grow(initialDepthLimit, None)
         
         self.reusingParents = bool(random.random() < 0.5)
+        self.select_from_subset = bool(random.random() < 0.5)
+        self.selection_subset_size = initialSelectionSubsetSize
 
     def verifyParents(self):
         for n in self.getAllNodes():
@@ -418,6 +435,17 @@ class Eppsea:
         self.pickleEveryPopulation = config.getboolean('experiment', 'pickle every population')
         self.pickleFinalPopulation = config.getboolean('experiment', 'pickle final population')
 
+        try:
+            self.forceReusingParents = config.getboolean('evolved selection', 'select with replacement')
+        except ValueError:
+            self.forceReusingParents = None
+
+        try:
+            self.force_select_from_subset = config.getboolean('evolved selection', 'select from subset')
+        except ValueError:
+            self.force_select_from_subset = None
+        self.initial_selection_subset_size = config.getint('evolved selection', 'initial selection subset size')
+
         # create a dictionary for the results
         self.results = dict()
         self.results['evalCounts'] = []
@@ -476,7 +504,7 @@ class Eppsea:
         self.population = []
         for i in range(self.GPMu):
             newTree = GPTree()
-            newTree.randomize(self.initialGPDepthLimit)
+            newTree.randomize(self.initialGPDepthLimit, self.initial_selection_subset_size)
             self.population.append(newTree)
 
         # mark the entire population as new
@@ -558,7 +586,7 @@ class Eppsea:
                 self.population = []
                 for i in range(self.GPMu):
                     newTree = GPTree()
-                    newTree.randomize(self.initialGPDepthLimit)
+                    newTree.randomize(self.initialGPDepthLimit, self.initial_selection_subset_size)
                     self.population.append(newTree)
                 self.new_population = list(self.population)
 
@@ -592,6 +620,15 @@ class Eppsea:
 
                 # extend population with new members
                 self.population.extend(self.new_population)
+
+            # force selection function settings, if configured to
+            if self.forceReusingParents is not None:
+                for p in self.population:
+                    p.reusingParents = self.forceReusingParents
+
+            if self.force_select_from_subset is not None:
+                for p in self.population:
+                    p.select_from_subset = self.force_select_from_subset
 
         else:
             # pickle the final population, if configured to
@@ -655,5 +692,9 @@ class Eppsea:
                 'restart on no improvement in average fitness: False\n',
                 'restart on no improvement in best fitness: False\n',
                 'generations to restart for no improvement: 5\n',
-                '\n'
+                '\n',
+                '[evolved selection]',
+                'select with replacement: evolved',
+                'select from subset: evolved',
+                'initial selection subset size: 10'
             ])
