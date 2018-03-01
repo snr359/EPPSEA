@@ -468,13 +468,13 @@ def main(config_path):
     eppsea_config = config.get('EA', 'base eppsea config path')
     eppsea = eppsea_base.Eppsea(eppsea_config)
 
-    eppsea.startEvolution()
+    eppsea.start_evolution()
 
-    while not eppsea.evolutionFinished:
+    while not eppsea.evolution_finished:
         evaluate_eppsea_population(evaluator, eppsea.new_population)
         eppsea.nextGeneration()
 
-    best_selection_function = eppsea.finalBestMember
+    best_selection_function = eppsea.final_best_member
     final_results = test_against_basic_selection(evaluator, best_selection_function)
     end_time = time.time() - start_time
 
