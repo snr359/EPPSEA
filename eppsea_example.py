@@ -10,4 +10,4 @@ if __name__ == '__main__':
     while not eppsea.evolution_finished:
         for p in eppsea.new_population:
             p.fitness = random.random()
-        eppsea.nextGeneration()
+        eppsea.next_generation()

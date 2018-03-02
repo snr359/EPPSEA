@@ -343,7 +343,7 @@ class basicEA:
         return loci_values, epistasis
 
     def parent_selection_eppsea_function(self, population, eppsea_selection_function, generation_number):
-        return eppsea_selection_function.select(population, generation_number)
+        return eppsea_selection_function.select(population, 2, generation_number)
 
     def parent_selection_basic(self, population, unique_parents, selection_function):
         if selection_function == 'truncation':
@@ -406,8 +406,7 @@ class basicEA:
             unique_parents = list(population)
             for i in range(self.lam):
                 if parent_selection_function == 'eppsea_selection_function':
-                    parent1 = self.parent_selection_eppsea_function(population, eppsea_selection_function, generation_number)
-                    parent2 = self.parent_selection_eppsea_function(population, eppsea_selection_function, generation_number)
+                    parent1, parent2 = self.parent_selection_eppsea_function(population, eppsea_selection_function, generation_number)
                 else:
                     parent1 = self.parent_selection_basic(population, unique_parents, parent_selection_function)
                     try:
@@ -472,7 +471,7 @@ def main(config_path):
 
     while not eppsea.evolution_finished:
         evaluate_eppsea_population(evaluator, eppsea.new_population)
-        eppsea.nextGeneration()
+        eppsea.next_generation()
 
     best_selection_function = eppsea.final_best_member
     final_results = test_against_basic_selection(evaluator, best_selection_function)

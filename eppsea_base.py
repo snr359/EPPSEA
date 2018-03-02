@@ -179,7 +179,7 @@ class GPTree:
             selection_number -= normalized_weights[i]
             i += 1
 
-        return population[i]
+        return population[i], i
 
     def maximum_selection(self, population, weights):
         # returns the member of the population for which the corresponding entry in weights is maximum
@@ -192,7 +192,7 @@ class GPTree:
         index_of_max = weights.index(max(weights))
 
         # return the population member at that index
-        return population[index_of_max]
+        return population[index_of_max], index_of_max
 
     def get_fitness_stats(self, fitnesses):
         # determine the fitness rankings for each population member, and the sum fitness of the population (normalized, if negative)
@@ -208,8 +208,9 @@ class GPTree:
 
         return fitness_rankings, sum_fitness
 
-    def select(self, population, generation_num=None):
-        # probabilistically selects a member of the population according to the selectability tree
+    def select(self, population, n=1, generation_num=None):
+        # probabilistically selects n members of the population according to the selectability tree
+
         # raise an error if the population members do not have a fitness attribute
         if not all(hasattr(p, 'fitness') for p in population):
             raise Exception('EPPSEA ERROR: Trying to use an EEPSEA selector to select from a population'
@@ -247,7 +248,7 @@ class GPTree:
 
         # determine the selectability for each population member
         selectabilities = []
-        for i in range(len(population)):
+        for i in range(len(candidates)):
             terminal_values = dict()
             terminal_values['fitness'] = fitnesses[i]
             terminal_values['fitnessRank'] = fitness_rankings[i]
@@ -255,18 +256,32 @@ class GPTree:
             terminal_values['populationSize'] = len(population)
             selectabilities.append(self.get(terminal_values))
 
-        # select, record, and return a population member
-        if self.selection_type == 'proportional':
-            selected_member = self.proportional_selection(population, selectabilities)
-        elif self.selection_type == 'maximum':
-            selected_member = self.maximum_selection(population, selectabilities)
-        else:
-            raise Exception('EPPSEA ERROR: selection type {0} not found'.format(self.selection_type))
+        # select, record, and return population members
+        selected_members = []
+        for i in range(n):
+            if len(candidates) == 0:
+                raise Exception('EPPSEA ERROR: There are no candidates available for selection. '
+                                'If mu > 2*lambda in your EA, make sure "select with replacement" is set to True'
+                                'in your EPPSEA configuration, or handle this special case in your evaluation'
+                                'of EPPSEA functions.')
 
-        if generation_num is not None:
-            self.selected_in_generation[generation_num].append(selected_member)
+            if self.selection_type == 'proportional':
+                selected_member, selected_index = self.proportional_selection(candidates, selectabilities)
+            elif self.selection_type == 'maximum':
+                selected_member, selected_index = self.maximum_selection(candidates, selectabilities)
+            else:
+                raise Exception('EPPSEA ERROR: selection type {0} not found'.format(self.selection_type))
 
-        return selected_member
+            if generation_num is not None:
+                self.selected_in_generation[generation_num].append(selected_member)
+
+            if not self.reusing_parents:
+                candidates.pop(selected_index)
+                selectabilities.pop(selected_index)
+
+            selected_members.append(selected_member)
+
+        return selected_members
 
     def recombine(self, parent2):
         # recombines two GPTrees and returns a new child
@@ -554,7 +569,7 @@ class Eppsea:
         self.highest_best_fitness = -math.inf
         self.restarting = False
 
-    def nextGeneration(self):
+    def next_generation(self):
         # make sure all population members have been assigned fitness values
         if not all(p.fitness is not None for p in self.population):
             self.log('Attempting to advance to next generation before assigning fitness to all members', 'ERROR')
