@@ -241,11 +241,6 @@ class GPTree:
         else:
             candidates = list(population)
 
-        if self.select_from_subset and self.selection_subset_size < len(candidates):
-            subset_size = self.selection_subset_size
-        else:
-            subset_size = None
-
         # get the fitnesses from the candidates
         fitnesses = list(p.fitness for p in candidates)
 
@@ -270,6 +265,11 @@ class GPTree:
                                 ' If mu < 2*lambda in your EA, make sure "select with replacement" is set to True'
                                 ' in your EPPSEA configuration, or handle this special case in your evaluation'
                                 ' of EPPSEA functions.')
+
+            if self.select_from_subset and self.selection_subset_size < len(candidates):
+                subset_size = self.selection_subset_size
+            else:
+                subset_size = None
 
             if self.selection_type == 'proportional':
                 selected_member, selected_index = self.proportional_selection(candidates, selectabilities, subset_size)
