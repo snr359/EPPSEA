@@ -36,16 +36,25 @@ def t_test(a, b):
     os.remove(filename)
     return t, p_value
 
-def evaluate_eppsea_population(basic_ea, eppsea_population):
+def evaluate_eppsea_population(basic_ea, eppsea_population, using_multiprocessing):
     # evaluates a population of eppsea individuals and assigns fitness values to them
-    # setup parameters for multiprocessing
-    params = []
-    for p in eppsea_population:
-        params.extend([('eppsea_selection_function', p)]*basic_ea.runs)
 
-    pool = multiprocessing.Pool()
-    results_all_runs = pool.starmap(basic_ea.one_run, params)
-    pool.close()
+    if using_multiprocessing:
+        # setup parameters for multiprocessing
+        params = []
+        for p in eppsea_population:
+            params.extend([('eppsea_selection_function', p)]*basic_ea.runs)
+
+        # run all runs
+        pool = multiprocessing.Pool()
+        results_all_runs = pool.starmap(basic_ea.one_run, params)
+        pool.close()
+
+    else:
+        results_all_runs = []
+        for p in eppsea_population:
+            for r in range(basic_ea.runs):
+                results_all_runs.append(basic_ea.one_run('eppsea_selection_function', p))
 
     for i, p in enumerate(eppsea_population):
         start = i*basic_ea.runs
@@ -342,8 +351,8 @@ class basicEA:
 
         return loci_values, epistasis
 
-    def parent_selection_eppsea_function(self, population, eppsea_selection_function, generation_number):
-        return eppsea_selection_function.select(population, 2, generation_number)
+    def parent_selection_eppsea_function(self, population, eppsea_selection_function, n, generation_number):
+        return eppsea_selection_function.select(population, n, generation_number)
 
     def parent_selection_basic(self, population, unique_parents, selection_function):
         if selection_function == 'truncation':
@@ -402,12 +411,28 @@ class basicEA:
         generation_number = 0
 
         while evals <= self.max_evals:
-            children = list()
-            unique_parents = list(population)
-            for i in range(self.lam):
-                if parent_selection_function == 'eppsea_selection_function':
-                    parent1, parent2 = self.parent_selection_eppsea_function(population, eppsea_selection_function, generation_number)
-                else:
+            if parent_selection_function == 'eppsea_selection_function':
+                children = []
+                all_parents = self.parent_selection_eppsea_function(population, eppsea_selection_function, self.lam*2, generation_number)
+                for i in range(0, len(all_parents), 2):
+                    parent1 = all_parents[i]
+                    parent2 = all_parents[i+1]
+
+                    new_child = parent1.recombine(parent2)
+                    for i in range(self.genome_length):
+                        if random.random() < self.mutation_rate:
+                            new_child.mutate_gene(i)
+
+                    self.evaluate_child(new_child)
+
+                    children.append(new_child)
+
+                    evals += 1
+
+            else:
+                children = list()
+                unique_parents = list(population)
+                for i in range(self.lam):
                     parent1 = self.parent_selection_basic(population, unique_parents, parent_selection_function)
                     try:
                         unique_parents.remove(parent1)
@@ -419,16 +444,16 @@ class basicEA:
                     except ValueError:
                         pass
 
-                new_child = parent1.recombine(parent2)
-                for i in range(self.genome_length):
-                    if random.random() < self.mutation_rate:
-                        new_child.mutate_gene(i)
+                    new_child = parent1.recombine(parent2)
+                    for i in range(self.genome_length):
+                        if random.random() < self.mutation_rate:
+                            new_child.mutate_gene(i)
 
-                self.evaluate_child(new_child)
+                    self.evaluate_child(new_child)
 
-                children.append(new_child)
+                    children.append(new_child)
 
-                evals += 1
+                    evals += 1
 
             population.extend(children)
             population.sort(key=lambda p: p.fitness)
@@ -469,8 +494,10 @@ def main(config_path):
 
     eppsea.start_evolution()
 
+    using_multiprocessing = config.getboolean('EA', 'use multiprocessing')
+
     while not eppsea.evolution_finished:
-        evaluate_eppsea_population(evaluator, eppsea.new_population)
+        evaluate_eppsea_population(evaluator, eppsea.new_population, using_multiprocessing)
         eppsea.next_generation()
 
     best_selection_function = eppsea.final_best_member

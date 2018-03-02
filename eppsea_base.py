@@ -154,7 +154,7 @@ class GPTree:
         self.final = False
         self.selected_in_generation = dict()
 
-    def proportional_selection(self, population, weights):
+    def proportional_selection(self, population, weights, subset_size):
         # makes a random weighted selection from the population
 
         # raise an error if the lengths of the population and weights are different
@@ -162,39 +162,54 @@ class GPTree:
             raise IndexError
 
         # normalize the weights, if necessary
-        normalized_weights = weights
         min_weight = min(weights)
         if min_weight < 0:
             for i in range(len(weights)):
-                normalized_weights[i] -= min_weight
+                weights[i] -= min_weight
+
+        # determine the indeces of selectable candidates
+        if subset_size is not None:
+            selectable_indices = list(random.sample(range(len(population)), subset_size))
+        else:
+            selectable_indices = list(range(len(population)))
 
         # calculate the sum weight and select a number between 0 and the sum weight
-        sum_weight = sum(normalized_weights)
+        sum_weight = sum(weights[i] for i in selectable_indices)
         selection_number = random.uniform(0, sum_weight)
 
         # iterate through the items in the population until weights up to the selection number have passed, then return
         # the current item
-        i = 0
-        while selection_number > normalized_weights[i]:
-            selection_number -= normalized_weights[i]
-            i += 1
+        for i in selectable_indices:
+            if selection_number <= weights[i]:
+                return population[i], i
+            else:
+                selection_number -= weights[i]
 
-        return population[i], i
 
-    def maximum_selection(self, population, weights):
+    def maximum_selection(self, population, weights, subset_size):
         # returns the member of the population for which the corresponding entry in weights is maximum
 
         # raise an error if the lengths of the population and weights are different
         if len(population) != len(weights):
             raise IndexError
 
+        # determine the indeces of selectable candidates
+        if subset_size is not None:
+            selectable_indices = list(random.sample(range(len(population)), subset_size))
+        else:
+            selectable_indices = list(range(len(population)))
+
         # find the index of the weight with the maximum value
-        index_of_max = weights.index(max(weights))
+        index_of_max = max(selectable_indices, key=lambda i: weights[i])
 
         # return the population member at that index
         return population[index_of_max], index_of_max
 
     def get_fitness_stats(self, fitnesses):
+        # return [],0 if no fitnesses
+        if len(fitnesses) == 0:
+            return [], 0
+
         # determine the fitness rankings for each population member, and the sum fitness of the population (normalized, if negative)
         fitness_rankings = sorted(range(len(fitnesses)), key=lambda x: fitnesses[x])
         for i in range(len(fitness_rankings)):
@@ -221,27 +236,18 @@ class GPTree:
             self.selected_in_generation[generation_num] = list()
 
         # determine the list of candidates for selection
-        candidates = list(population)
-
         if not self.reusing_parents and generation_num is not None:
-            for p in self.selected_in_generation[generation_num]:
-                try:
-                    candidates.remove(p)
-                except ValueError:
-                    pass
+            candidates = list(p for p in population if p not in self.selected_in_generation[generation_num])
+        else:
+            candidates = list(population)
 
         if self.select_from_subset and self.selection_subset_size < len(candidates):
-            candidates = random.sample(candidates, self.selection_subset_size)
+            subset_size = self.selection_subset_size
+        else:
+            subset_size = None
 
-        # raise an error if there are no candidates for selection
-        if len(candidates) == 0:
-            raise Exception('EPPSEA ERROR: There are no candidates available for selection. '
-                            'If mu > 2*lambda in your EA, make sure "select with replacement" is set to True'
-                            'in your EPPSEA configuration, or handle this special case in your evaluation'
-                            'of EPPSEA functions.')
-
-        # get the fitnesses from the population members
-        fitnesses = list(p.fitness for p in population)
+        # get the fitnesses from the candidates
+        fitnesses = list(p.fitness for p in candidates)
 
         # get the fitness rankings and the (normalized) sum of fitnesses
         fitness_rankings, sum_fitness = self.get_fitness_stats(tuple(fitnesses))
@@ -261,14 +267,14 @@ class GPTree:
         for i in range(n):
             if len(candidates) == 0:
                 raise Exception('EPPSEA ERROR: There are no candidates available for selection. '
-                                'If mu > 2*lambda in your EA, make sure "select with replacement" is set to True'
-                                'in your EPPSEA configuration, or handle this special case in your evaluation'
-                                'of EPPSEA functions.')
+                                ' If mu < 2*lambda in your EA, make sure "select with replacement" is set to True'
+                                ' in your EPPSEA configuration, or handle this special case in your evaluation'
+                                ' of EPPSEA functions.')
 
             if self.selection_type == 'proportional':
-                selected_member, selected_index = self.proportional_selection(candidates, selectabilities)
+                selected_member, selected_index = self.proportional_selection(candidates, selectabilities, subset_size)
             elif self.selection_type == 'maximum':
-                selected_member, selected_index = self.maximum_selection(candidates, selectabilities)
+                selected_member, selected_index = self.maximum_selection(candidates, selectabilities, subset_size)
             else:
                 raise Exception('EPPSEA ERROR: selection type {0} not found'.format(self.selection_type))
 
