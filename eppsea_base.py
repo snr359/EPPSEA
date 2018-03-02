@@ -142,16 +142,19 @@ class GPNode:
 class GPTree:
     # encapsulates a tree made of GPNodes that determine probability of selection, as well as other options relating
     # to parent selection
+    selection_types = ['proportional', 'maximum']
+
     def __init__(self):
         self.root = None
         self.fitness = None
         self.reusing_parents = None
         self.select_from_subset = None
+        self.selection_type = None
         self.selection_subset_size = None
         self.final = False
         self.selected_in_generation = dict()
 
-    def roulette_selection(self, population, weights):
+    def proportional_selection(self, population, weights):
         # makes a random weighted selection from the population
 
         # raise an error if the lengths of the population and weights are different
@@ -253,9 +256,16 @@ class GPTree:
             selectabilities.append(self.get(terminal_values))
 
         # select, record, and return a population member
-        selected_member = self.roulette_selection(population, selectabilities)
+        if self.selection_type == 'proportional':
+            selected_member = self.proportional_selection(population, selectabilities)
+        elif self.selection_type == 'maximum':
+            selected_member = self.maximum_selection(population, selectabilities)
+        else:
+            raise Exception('EPPSEA ERROR: selection type {0} not found'.format(self.selection_type))
+
         if generation_num is not None:
             self.selected_in_generation[generation_num].append(selected_member)
+
         return selected_member
 
     def recombine(self, parent2):
@@ -275,6 +285,7 @@ class GPTree:
         new_child.replace_node(insertion_point, replacement_tree)
         
         # recombine misc options
+        new_child.selection_type = random.choice([self.selection_type, parent2.selection_type])
         new_child.reusing_parents = random.choice([self.reusing_parents, parent2.reusing_parents])
         new_child.select_from_subset = random.choice(([self.select_from_subset, parent2.select_from_subset]))
 
@@ -298,7 +309,9 @@ class GPTree:
         # insert the new subtree
         self.replace_node(insertion_point, new_subtree)
         
-        # 50/50 chance to flip misc option
+        # 50/50 chance to flip misc options
+        if random.random() < 0.5:
+            self.selection_type = random.choice(self.selection_types)
         if random.random() < 0.5:
             self.reusing_parents = not self.reusing_parents
         if random.random() < 0.5:
@@ -334,12 +347,13 @@ class GPTree:
         if self.root is None:
             self.root = GPNode()
         self.root.grow(initial_depth_limit, None)
-        
+
+        self.selection_type = random.choice(self.selection_types)
         self.reusing_parents = bool(random.random() < 0.5)
         self.select_from_subset = bool(random.random() < 0.5)
         self.selection_subset_size = initial_selection_subset_size
 
-    def verifyParents(self):
+    def verify_parents(self):
         for n in self.get_all_nodes():
             if n is self.root:
                 assert(n.parent is None)
@@ -348,7 +362,7 @@ class GPTree:
                 assert(n in n.parent.children)
 
     def get_string(self):
-        return self.root.get_string() + ' | reusing parents: {0}'.format(self.reusing_parents)
+        return self.root.get_string() + ' selection type: {0} | reusing parents: {1} | select from subset: {2} | selection_subset_size: {3}'.format(self.selection_type, self.reusing_parents, self.select_from_subset, self.selection_subset_size)
 
     def getCode(self):
         return self.root.get_code()
@@ -446,6 +460,15 @@ class Eppsea:
             self.force_select_from_subset = None
         self.initial_selection_subset_size = config.getint('evolved selection', 'initial selection subset size')
 
+        selection_type = config.get('evolved selection', 'selection type')
+        if selection_type not in GPTree.selection_types and selection_type != 'evolved':
+            self.log('Evolved selection type {0} not found in available selection types. Use one of {1} or "evolved" for selection type'.format(selection_type, str(GPTree.selection_types)), 'ERROR')
+            raise Exception('EPPSEA ERROR: See log file')
+        elif selection_type != 'evolved':
+            self.force_selection_type = selection_type
+        else:
+            self.force_selection_type = None
+
         # create a dictionary for the results
         self.results = dict()
         self.results['eval_counts'] = []
@@ -503,9 +526,17 @@ class Eppsea:
         # initialize the population
         self.population = []
         for i in range(self.gp_mu):
-            newTree = GPTree()
-            newTree.randomize(self.initial_gp_depth_limit, self.initial_selection_subset_size)
-            self.population.append(newTree)
+            new_tree = GPTree()
+            new_tree.randomize(self.initial_gp_depth_limit, self.initial_selection_subset_size)
+            self.population.append(new_tree)
+
+            # force selection function settings, if configured to
+            if self.force_selection_type is not None:
+                new_tree.selection_type = self.force_selection_type
+            if self.force_reusing_parents is not None:
+                new_tree.reusing_parents = self.force_reusing_parents
+            if self.force_select_from_subset is not None:
+                new_tree.select_from_subset = self.force_select_from_subset
 
         # mark the entire population as new
         self.new_population = list(self.population)
@@ -588,6 +619,15 @@ class Eppsea:
                     new_tree = GPTree()
                     new_tree.randomize(self.initial_gp_depth_limit, self.initial_selection_subset_size)
                     self.population.append(new_tree)
+
+                    # force selection function settings, if configured to
+                    if self.force_selection_type is not None:
+                        new_tree.selection_type = self.force_selection_type
+                    if self.force_reusing_parents is not None:
+                        new_tree.reusing_parents = self.force_reusing_parents
+                    if self.force_select_from_subset is not None:
+                        new_tree.select_from_subset = self.force_select_from_subset
+
                 self.new_population = list(self.population)
 
                 self.gens_since_avg_fitness_improvement = 0
@@ -622,12 +662,12 @@ class Eppsea:
                 self.population.extend(self.new_population)
 
             # force selection function settings, if configured to
-            if self.force_reusing_parents is not None:
-                for p in self.population:
+            for p in self.population:
+                if self.force_selection_type is not None:
+                    p.selection_type = self.force_selection_type
+                if self.force_reusing_parents is not None:
                     p.reusing_parents = self.force_reusing_parents
-
-            if self.force_select_from_subset is not None:
-                for p in self.population:
+                if self.force_select_from_subset is not None:
                     p.select_from_subset = self.force_select_from_subset
 
         else:
@@ -693,8 +733,9 @@ class Eppsea:
                 'restart on no improvement in best fitness: False\n',
                 'generations to restart for no improvement: 5\n',
                 '\n',
-                '[evolved selection]',
-                'select with replacement: evolved',
-                'select from subset: evolved',
-                'initial selection subset size: 10'
+                '[evolved selection]\n',
+                'selection type: evolved\n',
+                'select with replacement: evolved\n',
+                'select from subset: evolved\n',
+                'initial selection subset size: 10\n'
             ])
