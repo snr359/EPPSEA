@@ -383,7 +383,7 @@ class GPTree:
                 assert(n in n.parent.children)
 
     def get_string(self):
-        return self.root.get_string() + ' selection type: {0} | reusing parents: {1} | select from subset: {2} | selection_subset_size: {3}'.format(self.selection_type, self.reusing_parents, self.select_from_subset, self.selection_subset_size)
+        return self.root.get_string() + ' | selection type: {0} | reusing parents: {1} | select from subset: {2} | selection_subset_size: {3}'.format(self.selection_type, self.reusing_parents, self.select_from_subset, self.selection_subset_size)
 
     def getCode(self):
         return self.root.get_code()
