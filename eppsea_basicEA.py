@@ -23,19 +23,6 @@ def postprocess(final_results_path, results_directory):
 
     return result.stdout
 
-def t_test(a, b):
-    # does a t-test between data sets a and b. effectively just calls another script, but does so in a separate
-    # process instead of importing that script, to keep this one compatible with pypy
-    filename = 'temp_{0}.csv'.format(str(uuid.uuid4()))
-    with open(filename, 'w', newline='') as csvFile:
-        writer = csv.writer(csvFile)
-        writer.writerow(a)
-        writer.writerow(b)
-    t_test_results = subprocess.check_output(['python3', 't_test.py', filename])
-    _, _, t, p_value = list(float(r) for r in t_test_results.split())
-    os.remove(filename)
-    return t, p_value
-
 def evaluate_eppsea_population(basic_ea, eppsea_population, using_multiprocessing):
     # evaluates a population of eppsea individuals and assigns fitness values to them
 
@@ -185,43 +172,6 @@ class basicEA:
         print(message)
         with open(self.log_file_location, 'a') as log_file:
             log_file.write(message + '\n')
-
-    def plot_results(self, results):
-        filename = 'temp{0}'.format(str(uuid.uuid4()))
-        with open(filename, 'w', newline='') as csv_file:
-            writer = csv.writer(csv_file)
-
-            if self.fitness_function in [
-                'rosenbrock',
-                'rastrigin'
-                ]:
-                symlog = '1'
-            else:
-                symlog = '0'
-
-            selection_functions = []
-
-            for selection_function, selection_function_result in results.items():
-
-                mu = []
-                fitnesses = []
-
-                # get mu from the best fitness recording of the first run
-                for m in selection_function_result[0]['best_fitnesses'].keys():
-                    mu.append(m)
-                    fitnesses.append(statistics.mean(r['best_fitnesses'][m] for r in selection_function_result))
-
-                writer.writerow(mu)
-                writer.writerow(fitnesses)
-
-                selection_functions.append(selection_function)
-
-        params = ['python3', 'plot_results.py', filename, self.results_directory, symlog]
-        params.extend(selection_functions)
-        print(params)
-        subprocess.run(params)
-
-        os.remove(filename)
 
     class popi:
         def __init__(self, other=None):
