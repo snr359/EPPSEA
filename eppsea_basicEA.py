@@ -503,14 +503,18 @@ def main(config_path):
     best_selection_function = eppsea.final_best_member
     final_results = test_against_basic_selection(evaluator, best_selection_function)
     end_time = time.time() - start_time
+    evaluator.log('Time elapsed: {0}'.format(end_time))
 
     final_results_path = '{0}/final_results'.format(evaluator.results_directory)
     with open(final_results_path, 'wb') as pickle_file:
         pickle.dump(final_results, pickle_file)
-    postprocess_results = postprocess(final_results_path, evaluator.results_directory)
-    evaluator.log('Time elapsed: {0}'.format(end_time))
-    evaluator.log('Postprocess results:')
-    evaluator.log(postprocess_results)
+
+    try:
+        postprocess_results = postprocess(final_results_path, evaluator.results_directory)
+        evaluator.log('Postprocess results:')
+        evaluator.log(postprocess_results)
+    except Exception as e:
+        evaluator.log('Postprocessing failed. Run postprocessing directly on {0}'.format(final_results_path))
 
 if __name__ == '__main__':
 
