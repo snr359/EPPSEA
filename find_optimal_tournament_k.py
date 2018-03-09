@@ -19,7 +19,7 @@ def test_k_tournament(basic_ea, k):
 
 if __name__ == '__main__':
 
-    num_processes = sys.argv[2]
+    num_processes = int(sys.argv[2])
 
     if len(sys.argv) < 2:
         print('Please provide config file')
