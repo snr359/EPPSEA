@@ -1,4 +1,4 @@
-# this script finds the best k value for k-tournament selection given a configuration for the eppsea_basicEA script
+# this script finds the best k value for k-tournament selection given a configuration for the eppsea_basicEA script, and a number of processes to run
 import sys
 import configparser
 import multiprocessing
@@ -13,13 +13,13 @@ def test_k_tournament(basic_ea, k):
     for _ in range(basic_ea.runs):
         results.append(basic_ea.one_run('k_tournament', None))
 
-    average_best = statistics.mean(r['best_fitness'] for r in results)
+    average_best = statistics.mean(r['final_best_fitness'] for r in results)
 
     return average_best
 
 if __name__ == '__main__':
 
-    num_processes = 8
+    num_processes = sys.argv[2]
 
     if len(sys.argv) < 2:
         print('Please provide config file')
