@@ -91,18 +91,22 @@ class ResultHolder:
         self.run_results = []
 
     def get_eval_counts(self):
-        return sorted(self.run_results[0]['best_fitnesses'].keys())
+        all_counts = set()
+        for r in self.run_results:
+            counts = r['best_fitnesses'].keys()
+            all_counts.update(counts)
+        return sorted(list(all_counts))
 
     def get_average_average_fitness(self):
         average_average_fitnesses = []
         for m in self.get_eval_counts():
-            average_average_fitnesses.append(statistics.mean(r['average_fitnesses'][m] for r in self.run_results))
+            average_average_fitnesses.append(statistics.mean(r['average_fitnesses'][m] for r in self.run_results if m in r['average_fitnesses']))
         return average_average_fitnesses
 
     def get_average_best_fitness(self):
         average_best_fitnesses = []
         for m in self.get_eval_counts():
-            average_best_fitnesses.append(statistics.mean(r['best_fitnesses'][m] for r in self.run_results))
+            average_best_fitnesses.append(statistics.mean(r['best_fitnesses'][m] for r in self.run_results if m in r['best_fitnesses']))
 
         return average_best_fitnesses
 
@@ -120,7 +124,6 @@ class ResultHolder:
     def get_average_final_average_fitness(self):
         return statistics.mean(self.get_final_average_fitness_all_runs())
 
-
 class basicEA:
     genome_types = {
         'rastrigin': 'float',
@@ -135,6 +138,8 @@ class basicEA:
 
         self.mutation_rate = config.getfloat('EA', 'mutation rate')
         self.max_evals = config.getint('EA', 'maximum evaluations')
+        self.convergence_termination = config.getboolean('EA', 'terminate on convergence')
+        self.convergence_generations = config.getint('EA', 'generations to convergence')
 
         self.runs = config.getint('EA', 'runs')
 
@@ -277,7 +282,6 @@ class basicEA:
 
         return result
 
-
     def offset_rastrigin(self, x, a, offset):
         offset_x = list(x)
         for i in range(len(x)):
@@ -360,6 +364,9 @@ class basicEA:
 
         generation_number = 0
 
+        generations_since_best_fitness_improvement = 0
+        previous_best_fitness = -math.inf
+
         while evals <= self.max_evals:
             if parent_selection_function == 'eppsea_selection_function':
                 children = []
@@ -412,11 +419,21 @@ class basicEA:
             newPopulation.extend(random.sample(population, self.mu-1))
             population = newPopulation
 
-            average_fitnesses[evals] = statistics.mean(p.fitness for p in population)
+            average_fitness = statistics.mean(p.fitness for p in population)
+            average_fitnesses[evals] = average_fitness
 
-            best_fitnesses[evals] = max(p.fitness for p in population)
+            best_fitness = max(p.fitness for p in population)
+            best_fitnesses[evals] = best_fitness
 
             generation_number += 1
+
+            if best_fitness > previous_best_fitness:
+                previous_best_fitness = best_fitness
+                generations_since_best_fitness_improvement = 0
+            else:
+                generations_since_best_fitness_improvement += 1
+                if self.convergence_termination and generations_since_best_fitness_improvement >= self.convergence_generations:
+                    break
 
         results = dict()
         results['final_average_fitness'] = statistics.mean(p.fitness for p in population)
