@@ -338,7 +338,7 @@ class GPTree:
         if random.random() < 0.5:
             self.select_from_subset = not self.select_from_subset
 
-        self.selection_subset_size = round((self.selection_subset_size + random.randint(-5,5)) * random.uniform(0.9, 1.1))
+        self.selection_subset_size = max(1, round((self.selection_subset_size + random.randint(-5,5)) * random.uniform(0.9, 1.1)))
         
     def get(self, terminal_values):
         return self.root.get(terminal_values)
