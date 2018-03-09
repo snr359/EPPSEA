@@ -11,7 +11,7 @@ def test_k_tournament(basic_ea, k):
     results = []
     basic_ea.tournament_k = k
     for _ in range(basic_ea.runs):
-        results.append(basic_ea.one_run('k_tournament'))
+        results.append(basic_ea.one_run('k_tournament', None))
 
     average_best = statistics.mean(r['best_fitness'] for r in results)
 
