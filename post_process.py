@@ -22,7 +22,7 @@ def main():
     fitness_function = all_final_results['eppsea_selection_function'].fitness_function
     if fitness_function in ['rosenbrock', 'rastrigin']:
         plt.yscale('symlog')
-    for parent_selection_function, final_result in all_final_results.items():
+    for parent_selection_function, final_result in sorted(all_final_results.items()):
         mu = final_result.get_eval_counts()
         fitness = final_result.get_average_best_fitness()
         plt.plot(mu, fitness, label=parent_selection_function)
