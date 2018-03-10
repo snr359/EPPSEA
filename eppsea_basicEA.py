@@ -100,13 +100,30 @@ class ResultHolder:
     def get_average_average_fitness(self):
         average_average_fitnesses = []
         for m in self.get_eval_counts():
-            average_average_fitnesses.append(statistics.mean(r['average_fitnesses'][m] for r in self.run_results if m in r['average_fitnesses']))
+            average_fitnesses = []
+            for r in self.run_results:
+                if m in r['average_fitnesses']:
+                    average_fitnesses.append(r['average_fitnesses'][m])
+                # if this run terminated early, use the final average fitness
+                elif all(m > rm for rm in r['average_fitnesses'].keys()):
+                    average_fitnesses.append(r['final_average_fitness'])
+            average_average_fitness = statistics.mean(average_fitnesses)
+            average_average_fitnesses.append(average_average_fitness)
+
         return average_average_fitnesses
 
     def get_average_best_fitness(self):
         average_best_fitnesses = []
         for m in self.get_eval_counts():
-            average_best_fitnesses.append(statistics.mean(r['best_fitnesses'][m] for r in self.run_results if m in r['best_fitnesses']))
+            best_fitnesses = []
+            for r in self.run_results:
+                if m in r['best_fitnesses']:
+                    best_fitnesses.append(r['best_fitnesses'][m])
+                # if this run terminated early, use the final best fitness
+                elif all(m > rm for rm in r['best_fitnesses'].keys()):
+                    best_fitnesses.append(r['final_best_fitness'])
+            average_best_fitness = statistics.mean(best_fitnesses)
+            average_best_fitnesses.append(average_best_fitness)
 
         return average_best_fitnesses
 
