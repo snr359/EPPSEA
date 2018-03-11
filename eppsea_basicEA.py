@@ -157,6 +157,7 @@ class basicEA:
         self.max_evals = config.getint('EA', 'maximum evaluations')
         self.convergence_termination = config.getboolean('EA', 'terminate on convergence')
         self.convergence_generations = config.getint('EA', 'generations to convergence')
+        self.survival_selection = config.get('EA', 'survival selection')
 
         self.runs = config.getint('EA', 'runs')
 
@@ -430,11 +431,19 @@ class basicEA:
                     evals += 1
 
             population.extend(children)
-            population.sort(key=lambda p: p.fitness)
-            newPopulation = []
-            newPopulation.append(population.pop())
-            newPopulation.extend(random.sample(population, self.mu-1))
-            population = newPopulation
+            if self.survival_selection == 'random':
+                population = random.sample(population, self.mu)
+            elif self.survival_selection == 'elitist_random':
+                population.sort(key=lambda p: p.fitness, reverse=True)
+                new_population = []
+                new_population.append(population.pop(0))
+                new_population.extend(random.sample(population, self.mu-1))
+                population = new_population
+            elif self.survival_selection == 'truncation':
+                population.sort(key=lambda p: p.fitness, reverse=True)
+                population = population[:self.mu]
+            else:
+                raise Exception('ERROR: Configuration parameter for survival selection {0} not recognized'.format(self.survival_selection))
 
             average_fitness = statistics.mean(p.fitness for p in population)
             average_fitnesses[evals] = average_fitness
