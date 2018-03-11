@@ -241,6 +241,9 @@ class GPTree:
         else:
             candidates = list(population)
 
+        # shuffle candidates (to avoid positional bias)
+        random.shuffle(candidates)
+
         # get the fitnesses from the candidates
         fitnesses = list(p.fitness for p in candidates)
 
