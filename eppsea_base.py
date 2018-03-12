@@ -353,6 +353,9 @@ class GPTree:
     def get_all_nodes_depth_limited(self, depth_limit):
         result = self.root.get_all_nodes_depth_limited(depth_limit)
         return result
+
+    def size(self):
+        return len(self.get_all_nodes())
     
     def replace_node(self, node_to_replace, replacement_node):
         # replaces node in GPTree. Uses the replacement_node directly, not a copy of it
@@ -457,6 +460,7 @@ class Eppsea:
         self.initial_gp_depth_limit = config.getint('metaEA', 'metaEA GP tree initialization depth limit')
         self.gp_k_tournament_k = config.getint('metaEA', 'metaEA k-tournament size')
         self.gp_survival_selection = config.get('metaEA', 'metaEA survival selection')
+        self.gp_parsimony_pressure = config.getfloat('metaEA', 'parsimony pressure')
 
         self.terminate_max_evals = config.getboolean('metaEA', 'terminate on maximum evals')
         self.terminate_no_avg_fitness_change = config.getboolean('metaEA', 'terminate on no improvement in average fitness')
@@ -590,6 +594,10 @@ class Eppsea:
 
         # increment evaluation counter
         self.gp_evals += len(self.new_population)
+
+        # apply parsimony pressure
+        for p in self.new_population:
+            p.fitness -= self.gp_parsimony_pressure * p.size()
 
         # Update results
         average_fitness = statistics.mean(p.fitness for p in self.population)
@@ -756,6 +764,7 @@ class Eppsea:
                 'restart on no improvement in average fitness: False\n',
                 'restart on no improvement in best fitness: False\n',
                 'generations to restart for no improvement: 5\n',
+                'parsimony pressure: 1\n',
                 '\n',
                 '[evolved selection]\n',
                 'selection type: evolved\n',
