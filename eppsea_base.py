@@ -105,13 +105,13 @@ class GPNode:
                 nodes.extend(c.get_all_nodes())
         return nodes
 
-    def get_all_nodes_depth_limited(self, depthLimit):
+    def get_all_nodes_depth_limited(self, depth_limit):
         # returns all nodes down to a certain depth limit
         nodes = []
         nodes.append(self)
-        if self.children is not None and depthLimit > 0:
+        if self.children is not None and depth_limit > 0:
             for c in self.children:
-                nodes.extend(c.get_all_nodes_depth_limited(depthLimit - 1))
+                nodes.extend(c.get_all_nodes_depth_limited(depth_limit - 1))
         return nodes
 
     def get_dict(self):
@@ -138,6 +138,7 @@ class GPNode:
                 self.children.append(new_node)
         else:
             self.children = None
+
 
 class GPTree:
     # encapsulates a tree made of GPNodes that determine probability of selection, as well as other options relating
@@ -184,7 +185,6 @@ class GPTree:
                 return population[i], i
             else:
                 selection_number -= weights[i]
-
 
     def maximum_selection(self, population, weights, subset_size):
         # returns the member of the population for which the corresponding entry in weights is maximum
@@ -341,7 +341,7 @@ class GPTree:
         if random.random() < 0.5:
             self.select_from_subset = not self.select_from_subset
 
-        self.selection_subset_size = max(1, round((self.selection_subset_size + random.randint(-5,5)) * random.uniform(0.9, 1.1)))
+        self.selection_subset_size = max(1, round((self.selection_subset_size + random.randint(-5, 5)) * random.uniform(0.9, 1.1)))
         
     def get(self, terminal_values):
         return self.root.get(terminal_values)
@@ -391,7 +391,7 @@ class GPTree:
     def get_string(self):
         return self.root.get_string() + ' | selection type: {0} | reusing parents: {1} | select from subset: {2} | selection_subset_size: {3}'.format(self.selection_type, self.reusing_parents, self.select_from_subset, self.selection_subset_size)
 
-    def getCode(self):
+    def get_code(self):
         return self.root.get_code()
 
     def get_dict(self):
@@ -418,6 +418,7 @@ class GPTree:
             if self is not p and self.get_string() == p.get_string():
                 return True
         return False
+
 
 class Eppsea:
     def __init__(self, config_path=None):
@@ -732,16 +733,16 @@ class Eppsea:
 
         return
 
-    def check_gp_population_uniqueness(self, population, warningThreshold):
+    def check_gp_population_uniqueness(self, population, warning_threshold):
         population_strings = list(p.get_string() for p in population)
         unique_strings = set(population_strings)
         uniqueness = len(unique_strings) / len(population_strings)
-        if uniqueness <= warningThreshold:
+        if uniqueness <= warning_threshold:
             self.log('GP population uniqueness is at {0}%. Consider increasing mutation rate.'.format(round(uniqueness*100)), 'WARNING')
 
-    def generate_default_config(self, filePath):
-        # generates a default configuration file and writes it to filePath
-        with open(filePath, 'w') as file:
+    def generate_default_config(self, file_path):
+        # generates a default configuration file and writes it to file_path
+        with open(file_path, 'w') as file:
             file.writelines([
                 '[experiment]\n',
                 'seed: time\n',
