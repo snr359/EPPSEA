@@ -211,7 +211,7 @@ class GPTree:
             return [], 0
 
         # determine the fitness rankings for each population member, and the sum fitness of the population (normalized, if negative)
-        fitness_rankings = sorted(range(len(fitnesses)), key=lambda x: fitnesses[x])
+        fitness_rankings = []
         for i in range(len(fitness_rankings)):
             fitness_rankings[i] += 1
 
@@ -222,6 +222,29 @@ class GPTree:
             sum_fitness = sum(fitnesses)
 
         return fitness_rankings, sum_fitness
+
+    def get_selectabilities(self, candidates, population_size):
+        # calculates the selectabilities of the candidates
+        # returns a new list of tuples, each of (candidate, selectability)
+
+        # sort the candidates by fitness (for calculating fitness rank)
+        sorted_candidates = sorted(candidates, key=lambda c: c.fitness)
+
+        # get fitness stats
+        sum_fitness = sum(c.fitness for c in candidates)
+
+        # calculate selectabilities
+        selectabilities = []
+        for i in range(len(candidates)):
+            terminal_values = dict()
+            terminal_values['fitness'] = candidates[i].fitness
+            terminal_values['fitnessRank'] = i+1
+            terminal_values['sumFitness'] = sum_fitness
+            terminal_values['populationSize'] = population_size
+            selectabilities.append(self.get(terminal_values))
+
+        # zip the candidates and selectabilities, and return
+        return zip(candidates, selectabilities)
 
     def select(self, population, n=1, generation_num=None):
         # probabilistically selects n members of the population according to the selectability tree
@@ -241,24 +264,11 @@ class GPTree:
         else:
             candidates = list(population)
 
-        # shuffle candidates (to avoid positional bias)
-        random.shuffle(candidates)
+        # get the candidates with selectabilities
+        candidates_with_selectabilities = self.get_selectabilities(candidates, len(population))
 
-        # get the fitnesses from the candidates
-        fitnesses = list(p.fitness for p in candidates)
-
-        # get the fitness rankings and the (normalized) sum of fitnesses
-        fitness_rankings, sum_fitness = self.get_fitness_stats(tuple(fitnesses))
-
-        # determine the selectability for each population member
-        selectabilities = []
-        for i in range(len(candidates)):
-            terminal_values = dict()
-            terminal_values['fitness'] = fitnesses[i]
-            terminal_values['fitnessRank'] = fitness_rankings[i]
-            terminal_values['sumFitness'] = sum_fitness
-            terminal_values['populationSize'] = len(population)
-            selectabilities.append(self.get(terminal_values))
+        # get the newly ordered lists of candidates and selectabilities
+        candidates, selectabilities = zip(*candidates_with_selectabilities)
 
         # select, record, and return population members
         selected_members = []
