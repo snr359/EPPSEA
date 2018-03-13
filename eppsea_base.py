@@ -395,12 +395,25 @@ class GPTree:
         return self.root.get_code()
 
     def get_dict(self):
-        return self.root.get_dict()
+        result = dict()
+        result['reusing_parents'] = self.reusing_parents
+        result['select_from_subset'] = self.select_from_subset
+        result['selection_type'] = self.selection_type
+        result['selection_subset_size'] = self.selection_subset_size
+
+        result['root'] = self.root.get_dict()
+
+        return result
 
     def build_from_dict(self, d):
         self.fitness = None
+        self.reusing_parents = d['reusing_parents']
+        self.select_from_subset = d['select_from_subset']
+        self.selection_type = d['selection_type']
+        self.selection_subset_size = d['selection_subset_size']
+
         self.root = GPNode()
-        self.root.build_from_dict(d)
+        self.root.build_from_dict(d['root'])
 
     def save_to_dict(self, filename):
         with open(filename, 'wb') as pickleFile:
