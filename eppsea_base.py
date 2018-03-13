@@ -269,6 +269,8 @@ class GPTree:
 
         # get the newly ordered lists of candidates and selectabilities
         candidates, selectabilities = zip(*candidates_with_selectabilities)
+        candidates = list(candidates)
+        selectabilities = list(selectabilities)
 
         # select, record, and return population members
         selected_members = []
