@@ -50,7 +50,7 @@ def evaluate_eppsea_population(basic_ea, eppsea_population, using_multiprocessin
         p.fitness = statistics.mean(r['final_best_fitness'] for r in run_results)
 
 def test_against_basic_selection(basic_ea, eppsea_selection_function):
-    parent_selection_functions = ['truncation', 'fitness_proportional', 'fitness_rank', 'k_tournament']
+    parent_selection_functions = ['truncation', 'fitness_proportional', 'fitness_rank', 'k_tournament', 'random']
     results_all_selections = dict()
     if basic_ea.lam > basic_ea.mu * 2:
         parent_selection_functions.remove('truncation')
