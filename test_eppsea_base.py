@@ -13,8 +13,8 @@ class popi:
 
 def test_gptree_fitness_terminals(num_trials=50000):
     # first, build a sample population
-    sample_population = [popi(0),
-                         popi(5),
+    sample_population = [popi(5),
+                         popi(0),
                          popi(15),
                          popi(10)]
 
@@ -31,7 +31,7 @@ def test_gptree_fitness_terminals(num_trials=50000):
             'data': None
         }
     })
-    expected_proportions = [0 / 30, 5 / 30, 15 / 30, 10/ 30]
+    expected_proportions = [5 / 30, 0 / 30, 15 / 30, 10/ 30]
     selection_counts = [0]*len(sample_population)
     for _ in range(num_trials):
         selected_individual = test_tree.select(sample_population, 1)[0]
@@ -60,7 +60,7 @@ def test_gptree_fitness_terminals(num_trials=50000):
             'data': None
         }
     })
-    expected_proportions = [1 / 10, 2 / 10, 4 / 10, 3 / 10]
+    expected_proportions = [2 / 10, 1 / 10, 4 / 10, 3 / 10]
 
     selection_counts = [0]*len(sample_population)
     for _ in range(num_trials):
@@ -80,9 +80,9 @@ def test_gptree_fitness_terminals(num_trials=50000):
 def test_gptree_operators(num_trials=50000):
     # first, build a sample population
     sample_population = [popi(5),
+                         popi(20),
                          popi(10),
-                         popi(15),
-                         popi(20)]
+                         popi(15)]
 
     # TESTING "PLUS" OPERATOR -------------------------------------------------------
     print('Testing GPTree "plus" operator')
@@ -107,10 +107,8 @@ def test_gptree_operators(num_trials=50000):
             ]
         }
     })
-    expected_proportions = []
-    total = sum((p.fitness + p.fitness) for p in sample_population)
-    for p in sample_population:
-        expected_proportions.append((p.fitness + p.fitness) / total)
+    total = (5+5) + (20+20) + (10+10) + (15+15)
+    expected_proportions = [(5+5) / total, (20+20) / total, (10+10) / total, (15+15) / total]
 
     selection_counts = [0] * len(sample_population)
     for _ in range(num_trials):
@@ -150,10 +148,8 @@ def test_gptree_operators(num_trials=50000):
             ]
         }
     })
-    expected_proportions = []
-    total = sum((p.fitness * p.fitness) for p in sample_population)
-    for p in sample_population:
-        expected_proportions.append((p.fitness * p.fitness) / total)
+    total = (5*5) + (20*20) + (10*10) + (15*15)
+    expected_proportions = [(5*5) / total, (20*20) / total, (10*10) / total, (15*15) / total]
 
     selection_counts = [0] * len(sample_population)
     for _ in range(num_trials):
@@ -203,10 +199,8 @@ def test_gptree_operators(num_trials=50000):
             ]
         }
     })
-    expected_proportions = []
-    total = sum((p.fitness * p.fitness - p.fitness) for p in sample_population)
-    for p in sample_population:
-        expected_proportions.append(((p.fitness * p.fitness) - p.fitness) / total)
+    total = (5*5-5) + (20*20-20) + (10*10-10) + (15*15-15)
+    expected_proportions = [(5*5-5) / total, (20*20-20) / total, (10*10-10) / total, (15*15-15) / total]
 
     selection_counts = [0] * len(sample_population)
     for _ in range(num_trials):
@@ -266,10 +260,8 @@ def test_gptree_operators(num_trials=50000):
             ]
         }
     })
-    expected_proportions = []
-    total = sum(((p.fitness + p.fitness) / (p.fitness * p.fitness)) for p in sample_population)
-    for p in sample_population:
-        expected_proportions.append(((p.fitness + p.fitness) / (p.fitness * p.fitness)) / total)
+    total = ((5+5) / (5*5)) + ((20+20) / (20*20)) + ((10+10) / (10*10)) + ((15+15) / (15*15))
+    expected_proportions = [((5+5) / (5*5)) / total, ((20+20) / (20*20)) / total,  ((10+10) / (10*10)) / total, ((15+15) / (15*15)) / total]
 
     selection_counts = [0] * len(sample_population)
     for _ in range(num_trials):
@@ -353,7 +345,7 @@ def test_gptree_operators(num_trials=50000):
             ]
         }
     })
-    expected_proportions = [0, 0, 0.5, 0.5]
+    expected_proportions = [0, 0.5, 0, 0.5]
 
     selection_counts = [0] * len(sample_population)
     for _ in range(num_trials):
