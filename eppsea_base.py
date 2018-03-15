@@ -231,20 +231,20 @@ class GPTree:
         sorted_candidates = sorted(candidates, key=lambda c: c.fitness)
 
         # get fitness stats
-        sum_fitness = sum(c.fitness for c in candidates)
+        sum_fitness = sum(c.fitness for c in sorted_candidates)
 
         # calculate selectabilities
         selectabilities = []
-        for i in range(len(candidates)):
+        for i in range(len(sorted_candidates)):
             terminal_values = dict()
-            terminal_values['fitness'] = candidates[i].fitness
+            terminal_values['fitness'] = sorted_candidates[i].fitness
             terminal_values['fitnessRank'] = i+1
             terminal_values['sumFitness'] = sum_fitness
             terminal_values['populationSize'] = population_size
             selectabilities.append(self.get(terminal_values))
 
         # zip the candidates and selectabilities, and return
-        return zip(candidates, selectabilities)
+        return zip(sorted_candidates, selectabilities)
 
     def select(self, population, n=1, generation_num=None):
         # probabilistically selects n members of the population according to the selectability tree

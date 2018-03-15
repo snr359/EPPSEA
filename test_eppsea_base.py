@@ -15,8 +15,8 @@ def test_gptree_fitness_terminals(num_trials=50000):
     # first, build a sample population
     sample_population = [popi(0),
                          popi(5),
-                         popi(10),
-                         popi(15)]
+                         popi(15),
+                         popi(10)]
 
     # TESTING "FITNESS" TERMINAL -------------------------------------------------------
     print('Testing GPTree "fitness" terminal')
@@ -31,11 +31,7 @@ def test_gptree_fitness_terminals(num_trials=50000):
             'data': None
         }
     })
-    expected_proportions = []
-    total = sum(p.fitness for p in sample_population)
-    for p in sample_population:
-        expected_proportions.append(p.fitness / total)
-
+    expected_proportions = [0 / 30, 5 / 30, 15 / 30, 10/ 30]
     selection_counts = [0]*len(sample_population)
     for _ in range(num_trials):
         selected_individual = test_tree.select(sample_population, 1)[0]
@@ -64,10 +60,7 @@ def test_gptree_fitness_terminals(num_trials=50000):
             'data': None
         }
     })
-    expected_proportions = []
-    total = sum((i+1) for i in range(len(sample_population)))
-    for i in range(len(sample_population)):
-        expected_proportions.append((i+1) / total)
+    expected_proportions = [1 / 10, 2 / 10, 4 / 10, 3 / 10]
 
     selection_counts = [0]*len(sample_population)
     for _ in range(num_trials):
