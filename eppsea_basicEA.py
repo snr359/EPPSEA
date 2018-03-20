@@ -297,7 +297,7 @@ class basicEA:
 
         for i in range(self.genome_length):
             locus = [x[i]]
-            locus.extend(list(x[j] for j in self.epistasis[i]))
+            locus.extend((x[j] for j in self.epistasis[i]))
             locus_fitness = self.loci_values[tuple(locus)]
             result += locus_fitness
 
