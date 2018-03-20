@@ -17,21 +17,7 @@ def test_k_tournament(basic_ea, k):
 
     return average_best
 
-if __name__ == '__main__':
-
-    num_processes = int(sys.argv[2])
-
-    if len(sys.argv) < 2:
-        print('Please provide config file')
-        exit(1)
-
-    config_path = sys.argv[1]
-
-    config = configparser.ConfigParser()
-    config.read(config_path)
-
-    # create a basic EA object to do the evaluations with
-    basic_ea = eppsea_basicEA.basicEA(config)
+def find_optimal_k(basic_ea, num_processes):
 
     # sample for an interval for the optimum value by sectioning (assuming the optimal k-value is a local optimum among all possible k values)
     min_k = 1
@@ -79,4 +65,24 @@ if __name__ == '__main__':
 
     # calculate the best k values
     top = results.index(max(results))
-    print('Best k tournament value: {0}'.format(k_values[top]))
+    return k_values[top]
+
+if __name__ == '__main__':
+
+    num_processes = int(sys.argv[2])
+
+    if len(sys.argv) < 2:
+        print('Please provide config file')
+        exit(1)
+
+    config_path = sys.argv[1]
+
+    config = configparser.ConfigParser()
+    config.read(config_path)
+
+    # create a basic EA object to do the evaluations with
+    basic_ea = eppsea_basicEA.basicEA(config)
+
+    optimal_k = find_optimal_k(basic_ea, num_processes)
+
+    print('Best k tournament value: {0}'.format(optimal_k))
