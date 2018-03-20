@@ -157,7 +157,10 @@ class basicEA:
         self.max_evals = config.getint('EA', 'maximum evaluations')
         self.convergence_termination = config.getboolean('EA', 'terminate on convergence')
         self.convergence_generations = config.getint('EA', 'generations to convergence')
+        self.target_termination = config.getboolean('EA', 'terminate at target fitness')
+        self.target_fitness = config.getfloat('EA', 'target fitness')
         self.survival_selection = config.get('EA', 'survival selection')
+
 
         self.runs = config.getint('EA', 'runs')
 
@@ -431,6 +434,10 @@ class basicEA:
                     evals += 1
 
             population.extend(children)
+
+            if self.target_termination and any(p.fitness >= self.target_fitness for p in population):
+                break
+
             if self.survival_selection == 'random':
                 population = random.sample(population, self.mu)
             elif self.survival_selection == 'elitist_random':
