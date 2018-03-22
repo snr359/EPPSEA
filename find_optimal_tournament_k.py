@@ -22,10 +22,10 @@ def test_k_tournament(basic_ea, k):
 
     return average_best
 
-def find_optimal_k(basic_ea, num_k_values=None):
+def find_optimal_k(basic_ea, num_interval_points=None):
     # if num_processes is None or invalid, approximate a value for a two-iteration approach
-    if num_k_values is None or num_k_values < 4:
-        num_k_values = max(4, math.ceil(math.sqrt(2 * basic_ea.mu)))
+    if num_interval_points is None or num_interval_points < 4:
+        num_interval_points = max(4, math.ceil(math.sqrt(2 * basic_ea.mu)))
 
     # save old k-tournament value so it can be reassigned later
     old_tournament_k = basic_ea.tournament_k
@@ -35,11 +35,11 @@ def find_optimal_k(basic_ea, num_k_values=None):
     max_k = basic_ea.mu
     known_values = dict()
 
-    while (max_k - min_k)+1 > num_k_values:
+    while (max_k - min_k)+1 > num_interval_points:
         # determine evenly spaced k values
-        stepsize = (max_k - min_k) / (num_k_values - 1)
+        stepsize = (max_k - min_k) / (num_interval_points - 1)
         k_values = []
-        for i in range(num_k_values - 1):
+        for i in range(num_interval_points - 1):
             k_values.append(round(min_k + i*stepsize))
         k_values.append(max_k)
 
@@ -97,9 +97,9 @@ def find_optimal_k(basic_ea, num_k_values=None):
 if __name__ == '__main__':
 
     if len(sys.argv) < 3:
-        num_k_values = None
+        num_interval_points = None
     else:
-        num_k_values = int(sys.argv[2])
+        num_interval_points = int(sys.argv[2])
 
     if len(sys.argv) < 2:
         print('Please provide config file')
@@ -113,6 +113,6 @@ if __name__ == '__main__':
     # create a basic EA object to do the evaluations with
     basic_ea = eppsea_basicEA.basicEA(config)
 
-    optimal_k = find_optimal_k(basic_ea, num_k_values)
+    optimal_k = find_optimal_k(basic_ea, num_interval_points)
 
     print('Best k tournament value: {0}'.format(optimal_k))
