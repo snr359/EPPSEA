@@ -15,6 +15,7 @@ import datetime
 import pickle
 
 import eppsea_base
+import find_optimal_tournament_k
 
 def postprocess(final_results_path, results_directory):
     # calls the postprocessing script on a pickled dictionary mapping fitness functions to ResultHolder objects
@@ -150,6 +151,15 @@ class basicEA:
     }
 
     def __init__(self, config):
+
+        present_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        experiment_name = "eppsea_basicEA_" + str(present_time)
+
+        self.results_directory = 'results/eppsea_basicEA/{0}'.format(experiment_name)
+        os.makedirs(self.results_directory, exist_ok=True)
+
+        self.log_file_location = '{0}/log.txt'.format(self.results_directory)
+
         self.mu = config.getint('EA', 'population size')
         self.lam = config.getint('EA', 'offspring size')
 
@@ -172,7 +182,15 @@ class basicEA:
         self.max_initial_range = config.getfloat('fitness function', 'max initial range')
         self.trap_size = config.getint('fitness function', 'trap size')
         self.epistasis_k = config.getint('fitness function', 'epistasis k')
-        self.tournament_k = config.getint('EA', 'tournament k')
+
+        try:
+            self.tournament_k = config.getint('EA', 'tournament k')
+        except ValueError:
+            self.log('Determining optimal K for K tournament...')
+            self.tournament_k = None
+            optimal_k = find_optimal_tournament_k.find_optimal_k(self)
+            self.log('Optimal K value is {0}'.format(optimal_k))
+            self.tournament_k = optimal_k
 
         if self.fitness_function == 'rastrigin':
             self.fitness_function_offset = self.generate_offset(self.genome_length)
@@ -185,14 +203,6 @@ class basicEA:
             self.loci_values, self.epistasis = None, None
 
         self.basic_results = None
-
-        present_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        experiment_name = "eppsea_basicEA_" + str(present_time)
-
-        self.results_directory = 'results/eppsea_basicEA/{0}'.format(experiment_name)
-        os.makedirs(self.results_directory, exist_ok=True)
-
-        self.log_file_location = '{0}/log.txt'.format(self.results_directory)
 
     def log(self, message):
         print(message)
