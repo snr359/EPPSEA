@@ -183,15 +183,6 @@ class basicEA:
         self.trap_size = config.getint('fitness function', 'trap size')
         self.epistasis_k = config.getint('fitness function', 'epistasis k')
 
-        try:
-            self.tournament_k = config.getint('EA', 'tournament k')
-        except ValueError:
-            self.log('Determining optimal K for K tournament...')
-            self.tournament_k = None
-            optimal_k = find_optimal_tournament_k.find_optimal_k(self)
-            self.log('Optimal K value is {0}'.format(optimal_k))
-            self.tournament_k = optimal_k
-
         if self.fitness_function == 'rastrigin':
             self.fitness_function_offset = self.generate_offset(self.genome_length)
         else:
@@ -201,6 +192,17 @@ class basicEA:
             self.loci_values, self.epistasis = self.generate_epistatis(self.genome_length, self.epistasis_k)
         else:
             self.loci_values, self.epistasis = None, None
+
+        try:
+            self.tournament_k = config.getint('EA', 'tournament k')
+        except ValueError:
+            self.log('Determining optimal K for K tournament...')
+            self.tournament_k = None
+            optimal_k = find_optimal_tournament_k.find_optimal_k(self)
+            self.log('Optimal K value is {0}'.format(optimal_k))
+            self.tournament_k = optimal_k
+
+
 
         self.basic_results = None
 
