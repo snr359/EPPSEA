@@ -278,50 +278,6 @@ def test_gptree_operators(num_trials=50000):
     else:
         print('TEST PASSED')
 
-    # TESTING "DIVIDE BY ZERO" SPECIAL_CASE -------------------------------------------------------
-    print('Testing GPTree "divide" operator special case: division by 0')
-    test_tree = eppsea_base.GPTree()
-    test_tree.build_from_dict({
-        'reusing_parents': True,
-        'selection_type': 'proportional',
-        'select_from_subset': False,
-        'selection_subset_size': 2,
-        'root': {
-            'operation': '/',
-            'data': None,
-            'children':[
-                {
-                    'operation': 'constant',
-                    'data': 1
-                },
-                {
-                    'operation': 'fitness',
-                    'data': None
-                }
-            ]
-        }
-    })
-    expected_proportions = [1, 0, 0, 0]
-    special_case_sample_population = [popi(0),
-                         popi(1),
-                         popi(1),
-                         popi(1)]
-
-    selection_counts = [0] * len(special_case_sample_population)
-    for _ in range(num_trials):
-        selected_individual = test_tree.select(special_case_sample_population, 1)[0]
-        selected_index = special_case_sample_population.index(selected_individual)
-        selection_counts[selected_index] += 1
-
-    actual_proportions = list(s / num_trials for s in selection_counts)
-
-    if any(abs(expected_proportions[i] - actual_proportions[i]) > 0.01 for i in range(len(special_case_sample_population))):
-        print('TEST FAILED')
-        print('Expected proportions: {0}'.format(expected_proportions))
-        print('Actual proportions: {0}'.format(actual_proportions))
-    else:
-        print('TEST PASSED')
-
     # TESTING "STEP" OPERATOR -------------------------------------------------------
     print('Testing GPTree "step" operator')
     test_tree = eppsea_base.GPTree()
@@ -362,12 +318,93 @@ def test_gptree_operators(num_trials=50000):
     else:
         print('TEST PASSED')
 
-def test_gptree_other_terminals():
+def test_gptree_other_terminals(num_trials=50000):
     pass
+
+def test_gptree_special_cases(num_trials=50000):
+    # TESTING "DIVIDE BY ZERO" SPECIAL_CASE -------------------------------------------------------
+    print('Testing GPTree "divide" operator special case: division by 0')
+    test_tree = eppsea_base.GPTree()
+    test_tree.build_from_dict({
+        'reusing_parents': True,
+        'selection_type': 'proportional',
+        'select_from_subset': False,
+        'selection_subset_size': 2,
+        'root': {
+            'operation': '/',
+            'data': None,
+            'children':[
+                {
+                    'operation': 'constant',
+                    'data': 1
+                },
+                {
+                    'operation': 'fitness',
+                    'data': None
+                }
+            ]
+        }
+    })
+    expected_proportions = [1, 0, 0, 0]
+    special_case_sample_population = [popi(0),
+                                      popi(1),
+                                      popi(1),
+                                      popi(1)]
+
+    selection_counts = [0] * len(special_case_sample_population)
+    for _ in range(num_trials):
+        selected_individual = test_tree.select(special_case_sample_population, 1)[0]
+        selected_index = special_case_sample_population.index(selected_individual)
+        selection_counts[selected_index] += 1
+
+    actual_proportions = list(s / num_trials for s in selection_counts)
+
+    if any(abs(expected_proportions[i] - actual_proportions[i]) > 0.01 for i in range(len(special_case_sample_population))):
+        print('TEST FAILED')
+        print('Expected proportions: {0}'.format(expected_proportions))
+        print('Actual proportions: {0}'.format(actual_proportions))
+    else:
+        print('TEST PASSED')
+
+    # TESTING VERY SMALL FITNESSES SPECIAL_CASE -------------------------------------------------------
+    print('Testing GPTree fitness operator special case: small fitnesses')
+    test_tree = eppsea_base.GPTree()
+    test_tree.build_from_dict({
+        'reusing_parents': True,
+        'selection_type': 'proportional',
+        'select_from_subset': False,
+        'selection_subset_size': 2,
+        'root': {
+            'operation': 'fitness',
+            'data': None
+        }
+    })
+    expected_proportions = [0.25, 0.25, 0.25, 0.25]
+    special_case_sample_population = [popi(float('1e-300')),
+                         popi(float('1e-300')),
+                         popi(float('1e-300')),
+                         popi(float('1e-300'))]
+
+    selection_counts = [0] * len(special_case_sample_population)
+    for _ in range(num_trials):
+        selected_individual = test_tree.select(special_case_sample_population, 1)[0]
+        selected_index = special_case_sample_population.index(selected_individual)
+        selection_counts[selected_index] += 1
+
+    actual_proportions = list(s / num_trials for s in selection_counts)
+
+    if any(abs(expected_proportions[i] - actual_proportions[i]) > 0.01 for i in range(len(special_case_sample_population))):
+        print('TEST FAILED')
+        print('Expected proportions: {0}'.format(expected_proportions))
+        print('Actual proportions: {0}'.format(actual_proportions))
+    else:
+        print('TEST PASSED')
 
 def main():
     test_gptree_fitness_terminals()
     test_gptree_operators()
+    test_gptree_other_terminals()
+    test_gptree_special_cases()
 
 
 if __name__ == '__main__':
