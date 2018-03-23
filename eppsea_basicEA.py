@@ -528,6 +528,9 @@ def main(config_path):
     except Exception as e:
         evaluator.log('Postprocessing failed. Run postprocessing directly on {0}'.format(final_results_path))
 
+    eppsea_base_results_path = eppsea.results_directory
+    shutil.copytree(eppsea_base_results_path, evaluator.results_directory + '/base')
+
 if __name__ == '__main__':
 
     if len(sys.argv) < 2:
