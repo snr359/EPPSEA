@@ -264,45 +264,51 @@ class GPTree:
         else:
             candidates = list(population)
 
-        # get the candidates with selectabilities
-        candidates_with_selectabilities = self.get_selectabilities(candidates, len(population))
+        # prepare to catch an overflow error
+        try:
+            # get the candidates with selectabilities
+            candidates_with_selectabilities = self.get_selectabilities(candidates, len(population))
 
-        # get the newly ordered lists of candidates and selectabilities
-        candidates, selectabilities = zip(*candidates_with_selectabilities)
-        candidates = list(candidates)
-        selectabilities = list(selectabilities)
+            # get the newly ordered lists of candidates and selectabilities
+            candidates, selectabilities = zip(*candidates_with_selectabilities)
+            candidates = list(candidates)
+            selectabilities = list(selectabilities)
 
-        # select, record, and return population members
-        selected_members = []
-        for i in range(n):
-            if len(candidates) == 0:
-                raise Exception('EPPSEA ERROR: There are no candidates available for selection. '
-                                ' If mu < 2*lambda in your EA, make sure "select with replacement" is set to True'
-                                ' in your EPPSEA configuration, or handle this special case in your evaluation'
-                                ' of EPPSEA functions.')
+            # select, record, and return population members
+            selected_members = []
+            for i in range(n):
+                if len(candidates) == 0:
+                    raise Exception('EPPSEA ERROR: There are no candidates available for selection. '
+                                    ' If mu < 2*lambda in your EA, make sure "select with replacement" is set to True'
+                                    ' in your EPPSEA configuration, or handle this special case in your evaluation'
+                                    ' of EPPSEA functions.')
 
-            if self.select_from_subset and self.selection_subset_size < len(candidates):
-                subset_size = self.selection_subset_size
-            else:
-                subset_size = None
+                if self.select_from_subset and self.selection_subset_size < len(candidates):
+                    subset_size = self.selection_subset_size
+                else:
+                    subset_size = None
 
-            if self.selection_type == 'proportional':
-                selected_member, selected_index = self.proportional_selection(candidates, selectabilities, subset_size)
-            elif self.selection_type == 'maximum':
-                selected_member, selected_index = self.maximum_selection(candidates, selectabilities, subset_size)
-            else:
-                raise Exception('EPPSEA ERROR: selection type {0} not found'.format(self.selection_type))
+                if self.selection_type == 'proportional':
+                    selected_member, selected_index = self.proportional_selection(candidates, selectabilities, subset_size)
+                elif self.selection_type == 'maximum':
+                    selected_member, selected_index = self.maximum_selection(candidates, selectabilities, subset_size)
+                else:
+                    raise Exception('EPPSEA ERROR: selection type {0} not found'.format(self.selection_type))
 
-            if generation_num is not None:
-                self.selected_in_generation[generation_num].append(selected_member)
+                if generation_num is not None:
+                    self.selected_in_generation[generation_num].append(selected_member)
 
-            if not self.reusing_parents:
-                candidates.pop(selected_index)
-                selectabilities.pop(selected_index)
+                if not self.reusing_parents:
+                    candidates.pop(selected_index)
+                    selectabilities.pop(selected_index)
 
-            selected_members.append(selected_member)
+                selected_members.append(selected_member)
 
-        return selected_members
+            return selected_members
+
+        # if EPPSEA overflows at any point, just return random choices
+        except OverflowError:
+            return random.sample(candidates, n)
 
     def recombine(self, parent2):
         # recombines two GPTrees and returns a new child
