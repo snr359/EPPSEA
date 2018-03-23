@@ -191,6 +191,23 @@ class GPTree:
             if selection_number <= w:
                 return population[i], i
 
+        # if the program reaches this point, something is wrong. dump everything
+        print('ERROR: EPPSEA tree overran proportional selection. Dumping objects in "errors"')
+        timestamp = datetime.datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+        error_directory = 'errors/error_{0}'.format(timestamp)
+        os.makedirs(error_directory, exist_ok=True)
+
+        with open(error_directory + '/population', 'wb') as file:
+            pickle.dump(population, file)
+        with open(error_directory + '/variables', 'w') as file:
+            file.write('min_weight: {0}\n'.format(min_weight))
+            file.write('weights: {0}\n'.format(weights))
+            file.write('subset_size: {0}\n'.format(subset_size))
+            file.write('selectable_indices: {0}\n'.format(selectable_indices))
+            file.write('cum_weight: {0}\n'.format(cum_weight))
+            file.write('sum_weight: {0}\n'.format(sum_weight))
+            file.write('selection_number: {0}\n'.format(selection_number))
+
     def maximum_selection(self, population, weights, subset_size):
         # returns the member of the population for which the corresponding entry in weights is maximum
 
