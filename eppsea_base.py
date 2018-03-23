@@ -170,21 +170,26 @@ class GPTree:
 
         # determine the indeces of selectable candidates
         if subset_size is not None:
-            selectable_indices = list(random.sample(range(len(population)), subset_size))
+            selectable_indices = random.sample(range(len(population)), subset_size)
         else:
-            selectable_indices = list(range(len(population)))
+            selectable_indices = range(len(population))
 
-        # calculate the sum weight and select a number between 0 and the sum weight
-        sum_weight = sum(weights[i] for i in selectable_indices)
+        # build a list of the indices and cumulative selection weights
+        indices_and_weights = []
+        cum_weight = 0
+        for i in selectable_indices:
+            cum_weight += weights[i]
+            indices_and_weights.append((i, cum_weight))
+        sum_weight = cum_weight
+
+        # select a number between 0 and the sum weight
         selection_number = random.uniform(0, sum_weight)
 
         # iterate through the items in the population until weights up to the selection number have passed, then return
         # the current item
-        for i in selectable_indices:
-            if selection_number <= weights[i]:
+        for i,w in indices_and_weights:
+            if selection_number <= w:
                 return population[i], i
-            else:
-                selection_number -= weights[i]
 
     def maximum_selection(self, population, weights, subset_size):
         # returns the member of the population for which the corresponding entry in weights is maximum
