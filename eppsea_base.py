@@ -182,6 +182,12 @@ class GPTree:
             indices_and_weights.append((i, cum_weight))
         sum_weight = cum_weight
 
+        # if the sum weight is 0 or inf, just return random candidate
+        if sum_weight == 0 or sum_weight == math.inf:
+            selection = random.choice(population)
+            index = population.index(selection)
+            return selection, index
+
         # select a number between 0 and the sum weight
         selection_number = random.uniform(0, sum_weight)
 

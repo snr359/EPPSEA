@@ -400,6 +400,74 @@ def test_gptree_special_cases(num_trials=50000):
     else:
         print('TEST PASSED')
 
+    # TESTING 0 FITNESSES SPECIAL_CASE -------------------------------------------------------
+    print('Testing GPTree fitness operator special case: zero fitnesses')
+    test_tree = eppsea_base.GPTree()
+    test_tree.build_from_dict({
+        'reusing_parents': True,
+        'selection_type': 'proportional',
+        'select_from_subset': False,
+        'selection_subset_size': 2,
+        'root': {
+            'operation': 'fitness',
+            'data': None
+        }
+    })
+    expected_proportions = [0.25, 0.25, 0.25, 0.25]
+    special_case_sample_population = [popi(0),
+                         popi(0),
+                         popi(0),
+                         popi(0)]
+
+    selection_counts = [0] * len(special_case_sample_population)
+    for _ in range(num_trials):
+        selected_individual = test_tree.select(special_case_sample_population, 1)[0]
+        selected_index = special_case_sample_population.index(selected_individual)
+        selection_counts[selected_index] += 1
+
+    actual_proportions = list(s / num_trials for s in selection_counts)
+
+    if any(abs(expected_proportions[i] - actual_proportions[i]) > 0.01 for i in range(len(special_case_sample_population))):
+        print('TEST FAILED')
+        print('Expected proportions: {0}'.format(expected_proportions))
+        print('Actual proportions: {0}'.format(actual_proportions))
+    else:
+        print('TEST PASSED')
+
+    # TESTING INFINITY FITNESS SPECIAL_CASE -------------------------------------------------------
+    print('Testing GPTree fitness operator special case: infinity fitness')
+    test_tree = eppsea_base.GPTree()
+    test_tree.build_from_dict({
+        'reusing_parents': True,
+        'selection_type': 'proportional',
+        'select_from_subset': False,
+        'selection_subset_size': 2,
+        'root': {
+            'operation': 'fitness',
+            'data': None
+        }
+    })
+    expected_proportions = [0.25, 0.25, 0.25, 0.25]
+    special_case_sample_population = [popi(0),
+                         popi(0),
+                         popi(math.inf),
+                         popi(0)]
+
+    selection_counts = [0] * len(special_case_sample_population)
+    for _ in range(num_trials):
+        selected_individual = test_tree.select(special_case_sample_population, 1)[0]
+        selected_index = special_case_sample_population.index(selected_individual)
+        selection_counts[selected_index] += 1
+
+    actual_proportions = list(s / num_trials for s in selection_counts)
+
+    if any(abs(expected_proportions[i] - actual_proportions[i]) > 0.01 for i in range(len(special_case_sample_population))):
+        print('TEST FAILED')
+        print('Expected proportions: {0}'.format(expected_proportions))
+        print('Actual proportions: {0}'.format(actual_proportions))
+    else:
+        print('TEST PASSED')
+
 def main():
     test_gptree_fitness_terminals()
     test_gptree_operators()
