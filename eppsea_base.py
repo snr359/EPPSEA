@@ -13,7 +13,7 @@ import statistics
 
 class GPNode:
     numeric_terminals = ['constant'] #TODO: include random later?
-    data_terminals = ['fitness', 'fitnessRank', 'populationSize', 'sumFitness']
+    data_terminals = ['fitness', 'fitness_rank', 'population_size', 'sum_fitness']
     non_terminals = ['+', '-', '*', '/', 'step']
     child_count = {'+': 2, '-': 2, '*': 2, '/': 2, 'step': 2}
 
@@ -266,9 +266,9 @@ class GPTree:
         for i in range(len(sorted_candidates)):
             terminal_values = dict()
             terminal_values['fitness'] = sorted_candidates[i].fitness
-            terminal_values['fitnessRank'] = i+1
-            terminal_values['sumFitness'] = sum_fitness
-            terminal_values['populationSize'] = population_size
+            terminal_values['fitness_rank'] = i+1
+            terminal_values['sum_fitness'] = sum_fitness
+            terminal_values['population_size'] = population_size
             selectabilities.append(self.get(terminal_values))
 
         # zip the candidates and selectabilities, and return
