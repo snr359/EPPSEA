@@ -205,7 +205,7 @@ class GPTree:
 
         # iterate through the items in the population until weights up to the selection number have passed, then return
         # the current item
-        for i,w in indices_and_weights:
+        for i, w in indices_and_weights:
             if selection_number <= w:
                 return population[i], i
 

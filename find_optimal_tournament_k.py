@@ -111,7 +111,7 @@ if __name__ == '__main__':
     config.read(config_path)
 
     # create a basic EA object to do the evaluations with
-    basic_ea = eppsea_basicEA.basicEA(config)
+    basic_ea = eppsea_basicEA.BasicEA(config)
 
     optimal_k = find_optimal_k(basic_ea, num_interval_points)
 

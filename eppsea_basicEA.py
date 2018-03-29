@@ -6,16 +6,15 @@ import sys
 import configparser
 import os
 import shutil
-import csv
 import subprocess
 import multiprocessing
 import time
-import uuid
 import datetime
 import pickle
 
 import eppsea_base
 import find_optimal_tournament_k
+
 
 def postprocess(final_results_path, results_directory):
     # calls the postprocessing script on a pickled dictionary mapping fitness functions to ResultHolder objects
@@ -23,6 +22,7 @@ def postprocess(final_results_path, results_directory):
     result = subprocess.run(params, stdout=subprocess.PIPE, universal_newlines=True)
 
     return result.stdout
+
 
 def evaluate_eppsea_population(basic_ea, eppsea_population, using_multiprocessing):
     # evaluates a population of eppsea individuals and assigns fitness values to them
@@ -49,6 +49,7 @@ def evaluate_eppsea_population(basic_ea, eppsea_population, using_multiprocessin
         stop = (i+1)*basic_ea.runs
         run_results = results_all_runs[start:stop]
         p.fitness = statistics.mean(r['final_best_fitness'] for r in run_results)
+
 
 def test_against_basic_selection(basic_ea, eppsea_selection_function):
     parent_selection_functions = ['truncation', 'fitness_proportional', 'fitness_rank', 'k_tournament', 'random']
@@ -83,6 +84,7 @@ def test_against_basic_selection(basic_ea, eppsea_selection_function):
     results_all_selections['eppsea_selection_function'] = new_result_holder
 
     return results_all_selections
+
 
 class ResultHolder:
     # a class for holding the results of eppsea runs
@@ -142,7 +144,8 @@ class ResultHolder:
     def get_average_final_average_fitness(self):
         return statistics.mean(self.get_final_average_fitness_all_runs())
 
-class basicEA:
+
+class BasicEA:
     genome_types = {
         'rastrigin': 'float',
         'rosenbrock': 'float',
@@ -170,7 +173,6 @@ class basicEA:
         self.target_termination = config.getboolean('EA', 'terminate at target fitness')
         self.target_fitness = config.getfloat('EA', 'target fitness')
         self.survival_selection = config.get('EA', 'survival selection')
-
 
         self.runs = config.getint('EA', 'runs')
 
@@ -202,8 +204,6 @@ class basicEA:
             self.log('Optimal K value is {0}'.format(optimal_k))
             self.tournament_k = optimal_k
 
-
-
         self.basic_results = None
 
     def log(self, message):
@@ -211,7 +211,7 @@ class basicEA:
         with open(self.log_file_location, 'a') as log_file:
             log_file.write(message + '\n')
 
-    class popi:
+    class Popi:
         def __init__(self, other=None):
             if other is None:
                 self.genome = None
@@ -252,7 +252,7 @@ class basicEA:
                 self.mutate_gene(i)
 
         def recombine(self, parent2):
-            new_child = basicEA.popi(self)
+            new_child = BasicEA.Popi(self)
             if self.genome_type == 'bool':
                 for i in range(self.genome_length):
                     if random.random() > 0.5:
@@ -355,9 +355,9 @@ class basicEA:
             return population[i]
 
         elif selection_function == 'fitness_proportional':
-            minFitness = min(p.fitness for p in population)
-            if minFitness < 0:
-                selection_chances = [p.fitness - minFitness for p in population]
+            min_fitness = min(p.fitness for p in population)
+            if min_fitness < 0:
+                selection_chances = [p.fitness - min_fitness for p in population]
             else:
                 selection_chances = [p.fitness for p in population]
             n = random.uniform(0, sum(selection_chances))
@@ -382,7 +382,7 @@ class basicEA:
 
         population = list()
         for i in range(self.mu):
-            new_child = self.popi()
+            new_child = self.Popi()
             new_child.randomize(self.genome_length, self.max_initial_range, self.genome_type)
             self.evaluate_child(new_child)
             population.append(new_child)
@@ -487,15 +487,15 @@ class basicEA:
         results['average_fitnesses'] = average_fitnesses
         results['best_fitnesses'] = best_fitnesses
 
-
         return results
+
 
 def main(config_path):
 
     config = configparser.ConfigParser()
     config.read(config_path)
 
-    evaluator = basicEA(config)
+    evaluator = BasicEA(config)
     shutil.copy(config_path, '{0}/config.cfg'.format(evaluator.results_directory))
 
     print('Now starting EPPSEA')
@@ -525,11 +525,12 @@ def main(config_path):
         postprocess_results = postprocess(final_results_path, evaluator.results_directory)
         evaluator.log('Postprocess results:')
         evaluator.log(postprocess_results)
-    except Exception as e:
+    except Exception:
         evaluator.log('Postprocessing failed. Run postprocessing directly on {0}'.format(final_results_path))
 
     eppsea_base_results_path = eppsea.results_directory
     shutil.copytree(eppsea_base_results_path, evaluator.results_directory + '/base')
+
 
 if __name__ == '__main__':
 
