@@ -13,7 +13,7 @@ import statistics
 
 class GPNode:
     numeric_terminals = ['constant', 'random'] 
-    data_terminals = ['fitness', 'fitness_rank', 'population_size', 'sum_fitness']
+    data_terminals = ['fitness', 'fitness_rank', 'population_size', 'sum_fitness', 'generation_num']
     non_terminals = ['+', '-', '*', '/', 'step']
     child_count = {'+': 2, '-': 2, '*': 2, '/': 2, 'step': 2}
 
@@ -263,7 +263,7 @@ class GPTree:
 
         return fitness_rankings, sum_fitness
 
-    def get_selectabilities(self, candidates, population_size):
+    def get_selectabilities(self, candidates, population_size, generation_num):
         # calculates the selectabilities of the candidates
         # returns a new list of tuples, each of (candidate, selectability)
 
@@ -281,6 +281,12 @@ class GPTree:
             terminal_values['fitness_rank'] = i+1
             terminal_values['sum_fitness'] = sum_fitness
             terminal_values['population_size'] = population_size
+
+            if generation_num is None:
+                terminal_values['generation_num'] = generation_num
+            else:
+                terminal_values['generation_num'] = 0
+
             selectabilities.append(self.get(terminal_values))
 
         # zip the candidates and selectabilities, and return
@@ -295,7 +301,7 @@ class GPTree:
                             'when one of the members does not have "fitness" defined.')
 
         # create a list of selected individuals for the current generation if one does not exist
-        if generation_num is not None and generation_num not in self.selected_in_generation.keys():
+        if generation_num not in self.selected_in_generation.keys():
             self.selected_in_generation[generation_num] = list()
 
         # determine the list of candidates for selection
@@ -307,7 +313,7 @@ class GPTree:
         # prepare to catch an overflow error
         try:
             # get the candidates with selectabilities
-            candidates_with_selectabilities = self.get_selectabilities(candidates, len(population))
+            candidates_with_selectabilities = self.get_selectabilities(candidates, len(population), generation_num)
 
             # get the newly ordered lists of candidates and selectabilities
             candidates, selectabilities = zip(*candidates_with_selectabilities)
