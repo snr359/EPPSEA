@@ -379,11 +379,13 @@ class BasicEA:
             print('PARENT SELECTION {0} NOT FOUND'.format(selection_function))
 
     def one_run(self, parent_selection_function, eppsea_selection_function):
+        generation_number = 0
 
         population = list()
         for _ in range(self.mu):
             new_child = self.Popi()
             new_child.randomize(self.genome_length, self.max_initial_range, self.genome_type)
+            new_child.birth_gen = generation_number
             self.evaluate_child(new_child)
             population.append(new_child)
 
@@ -395,10 +397,10 @@ class BasicEA:
         best_fitnesses = dict()
         best_fitnesses[evals] = max(p.fitness for p in population)
 
-        generation_number = 0
-
         generations_since_best_fitness_improvement = 0
         previous_best_fitness = -math.inf
+
+        generation_number = 1
 
         while evals <= self.max_evals:
             if parent_selection_function == 'eppsea_selection_function':
@@ -409,6 +411,7 @@ class BasicEA:
                     parent2 = all_parents[i+1]
 
                     new_child = parent1.recombine(parent2)
+                    new_child.birth_gen = generation_number
                     for j in range(self.genome_length):
                         if random.random() < self.mutation_rate:
                             new_child.mutate_gene(j)
@@ -435,6 +438,7 @@ class BasicEA:
                         pass
 
                     new_child = parent1.recombine(parent2)
+                    new_child.birth_gen = generation_number
                     for i in range(self.genome_length):
                         if random.random() < self.mutation_rate:
                             new_child.mutate_gene(i)

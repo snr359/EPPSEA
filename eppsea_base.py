@@ -281,6 +281,7 @@ class GPTree:
             terminal_values['fitness_rank'] = i+1
             terminal_values['sum_fitness'] = sum_fitness
             terminal_values['population_size'] = population_size
+            terminal_values['birth_gen'] = sorted_candidates[i].birth_gen
 
             if generation_num is None:
                 terminal_values['generation_num'] = generation_num
@@ -299,6 +300,11 @@ class GPTree:
         if not all(hasattr(p, 'fitness') for p in population):
             raise Exception('EPPSEA ERROR: Trying to use an EEPSEA selector to select from a population'
                             'when one of the members does not have "fitness" defined.')
+
+        # raise an error if the population members do not have a birth_gen attribute
+        if not all(hasattr(p, 'birth_gen') for p in population):
+            raise Exception('EPPSEA ERROR: Trying to use an EEPSEA selector to select from a population'
+                            'when one of the members does not have "birth_gen" defined.')
 
         # create a list of selected individuals for the current generation if one does not exist
         if generation_num not in self.selected_in_generation.keys():
