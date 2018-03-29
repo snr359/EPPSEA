@@ -381,7 +381,7 @@ class BasicEA:
     def one_run(self, parent_selection_function, eppsea_selection_function):
 
         population = list()
-        for i in range(self.mu):
+        for _ in range(self.mu):
             new_child = self.Popi()
             new_child.randomize(self.genome_length, self.max_initial_range, self.genome_type)
             self.evaluate_child(new_child)
@@ -409,9 +409,9 @@ class BasicEA:
                     parent2 = all_parents[i+1]
 
                     new_child = parent1.recombine(parent2)
-                    for i in range(self.genome_length):
+                    for j in range(self.genome_length):
                         if random.random() < self.mutation_rate:
-                            new_child.mutate_gene(i)
+                            new_child.mutate_gene(j)
 
                     self.evaluate_child(new_child)
 
@@ -422,7 +422,7 @@ class BasicEA:
             else:
                 children = list()
                 unique_parents = list(population)
-                for i in range(self.lam):
+                for _ in range(self.lam):
                     parent1 = self.parent_selection_basic(population, unique_parents, parent_selection_function)
                     try:
                         unique_parents.remove(parent1)
