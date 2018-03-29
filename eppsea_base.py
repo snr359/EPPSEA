@@ -12,12 +12,12 @@ import statistics
 
 
 class GPNode:
-    numeric_terminals = ['constant'] #TODO: include random later?
+    numeric_terminals = ['constant', 'random'] 
     data_terminals = ['fitness', 'fitness_rank', 'population_size', 'sum_fitness']
     non_terminals = ['+', '-', '*', '/', 'step']
     child_count = {'+': 2, '-': 2, '*': 2, '/': 2, 'step': 2}
 
-    def __init__(self, constant_min, constant_max):
+    def __init__(self, constant_min, constant_max, random_min, random_max):
         self.operation = None
         self.data = None
         self.children = None
@@ -25,6 +25,9 @@ class GPNode:
 
         self.constant_min = constant_min
         self.constant_max = constant_max
+        
+        self.random_min = random_min
+        self.random_max = random_max
 
     def grow(self, depth_limit, parent):
         if depth_limit == 0:
@@ -37,7 +40,7 @@ class GPNode:
         if self.operation in GPNode.non_terminals:
             self.children = []
             for i in range(GPNode.child_count[self.operation]):
-                new_child_node = GPNode(self.constant_min, self.constant_max)
+                new_child_node = GPNode(self.constant_min, self.constant_max, self.random_min, self.random_max)
                 new_child_node.grow(depth_limit - 1, self)
                 self.children.append(new_child_node)
         self.parent = parent
@@ -68,7 +71,7 @@ class GPNode:
             return self.data
 
         elif self.operation == 'random':
-            return random.expovariate(0.07)
+            return random.uniform(self.random_min, self.random_max)
 
     def get_string(self):
         if self.operation in GPNode.non_terminals:
@@ -97,7 +100,7 @@ class GPNode:
         elif self.operation == 'constant':
             result = '(' + str(self.data) + ')'
         elif self.operation == 'random':
-            result = '(random.expovariate(0.07))'
+            result = '(random.random({0}, {1}))'.format(self.random_min, self.random_max)
         return result
 
     def get_all_nodes(self):
@@ -135,7 +138,7 @@ class GPNode:
         if 'children' in d.keys():
             self.children = []
             for c in d['children']:
-                new_node = GPNode(self.constant_min, self.constant_max)
+                new_node = GPNode(self.constant_min, self.constant_max, self.random_min, self.random_max)
                 new_node.build_from_dict(c)
                 new_node.parent = self
                 self.children.append(new_node)
@@ -148,7 +151,7 @@ class GPTree:
     # to parent selection
     selection_types = ['proportional', 'maximum']
 
-    def __init__(self, constant_min, constant_max):
+    def __init__(self, constant_min, constant_max, random_min, random_max):
         self.root = None
         self.fitness = None
         self.reusing_parents = None
@@ -160,6 +163,9 @@ class GPTree:
 
         self.constant_min = constant_min
         self.constant_max = constant_max
+        
+        self.random_min = random_min
+        self.random_max = random_max
 
     def proportional_selection(self, population, weights, subset_size):
         # makes a random weighted selection from the population
@@ -379,7 +385,7 @@ class GPTree:
         insertion_point = random.choice(self.get_all_nodes())
 
         # randomly generate a new subtree
-        new_subtree = GPNode(self.constant_min, self.constant_max)
+        new_subtree = GPNode(self.constant_min, self.constant_max, self.random_min, self.random_max)
         new_subtree.grow(3, None)
 
         # insert the new subtree
@@ -424,7 +430,7 @@ class GPTree:
 
     def randomize(self, initial_depth_limit, initial_selection_subset_size):
         if self.root is None:
-            self.root = GPNode(self.constant_min, self.constant_max)
+            self.root = GPNode(self.constant_min, self.constant_max, self.random_min, self.random_max)
         self.root.grow(initial_depth_limit, None)
 
         self.selection_type = random.choice(self.selection_types)
@@ -468,7 +474,7 @@ class GPTree:
         self.constant_min = d['constant_min']
         self.constant_max = d['constant_max']
 
-        self.root = GPNode(self.constant_min, self.constant_max)
+        self.root = GPNode(self.constant_min, self.constant_max, self.random_min, self.random_max)
         self.root.build_from_dict(d['root'])
 
     def save_to_dict(self, filename):
@@ -561,6 +567,9 @@ class Eppsea:
 
         self.constant_min = config.getfloat('evolved selection', 'constant min')
         self.constant_max = config.getfloat('evolved selection', 'constant max')
+        
+        self.random_min = config.getfloat('evolved selection', 'random min')
+        self.random_max = config.getfloat('evolved selection', 'random max')
 
         selection_type = config.get('evolved selection', 'selection type')
         if selection_type not in GPTree.selection_types and selection_type != 'evolved':
@@ -628,7 +637,7 @@ class Eppsea:
         # initialize the population
         self.population = []
         for i in range(self.gp_mu):
-            new_tree = GPTree(self.constant_min, self.constant_max)
+            new_tree = GPTree(self.constant_min, self.constant_max, self.random_min, self.random_max)
             new_tree.randomize(self.initial_gp_depth_limit, self.initial_selection_subset_size)
             self.population.append(new_tree)
 
@@ -722,7 +731,7 @@ class Eppsea:
             if self.restarting:
                 self.population = []
                 for i in range(self.gp_mu):
-                    new_tree = GPTree(self.constant_min, self.constant_max)
+                    new_tree = GPTree(self.constant_min, self.constant_max, self.random_min, self.random_max)
                     new_tree.randomize(self.initial_gp_depth_limit, self.initial_selection_subset_size)
                     self.population.append(new_tree)
 
