@@ -31,7 +31,7 @@ def evaluate_eppsea_population(basic_ea, eppsea_population, using_multiprocessin
         # setup parameters for multiprocessing
         params = []
         for p in eppsea_population:
-            params.extend([('eppsea_selection_function', p)]*basic_ea.runs)
+            params.extend([('eppsea_selection_function', p, False)]*basic_ea.runs)
 
         # run all runs
         pool = multiprocessing.Pool()
@@ -42,7 +42,7 @@ def evaluate_eppsea_population(basic_ea, eppsea_population, using_multiprocessin
         results_all_runs = []
         for p in eppsea_population:
             for r in range(basic_ea.runs):
-                results_all_runs.append(basic_ea.one_run('eppsea_selection_function', p))
+                results_all_runs.append(basic_ea.one_run('eppsea_selection_function', p, False))
 
     for i, p in enumerate(eppsea_population):
         start = i*basic_ea.runs
@@ -60,9 +60,9 @@ def test_against_basic_selection(basic_ea, eppsea_selection_function):
     # set up parameters for multiprocessing
     params = []
     for parent_selection_function in parent_selection_functions:
-        params.extend([(parent_selection_function, None)]*basic_ea.runs)
+        params.extend([(parent_selection_function, None, True)]*basic_ea.runs)
 
-    params.extend([('eppsea_selection_function', eppsea_selection_function)]*basic_ea.runs)
+    params.extend([('eppsea_selection_function', eppsea_selection_function, True)]*basic_ea.runs)
 
     pool = multiprocessing.Pool()
     results_all_runs = pool.starmap(basic_ea.one_run, params)
@@ -73,13 +73,13 @@ def test_against_basic_selection(basic_ea, eppsea_selection_function):
         stop = (i+1)*basic_ea.runs
         new_result_holder = ResultHolder()
         new_result_holder.selection_function = parent_selection_function
-        new_result_holder.fitness_function = basic_ea.fitness_function
+        new_result_holder.fitness_function = basic_ea.fitness_function_name
         new_result_holder.run_results = results_all_runs[start:stop]
         results_all_selections[parent_selection_function] = new_result_holder
 
     new_result_holder = ResultHolder()
     new_result_holder.selection_function = 'eppsea_selection_function'
-    new_result_holder.fitness_function = basic_ea.fitness_function
+    new_result_holder.fitness_function = basic_ea.fitness_function_name
     new_result_holder.run_results = results_all_runs[-basic_ea.runs:]
     results_all_selections['eppsea_selection_function'] = new_result_holder
 
@@ -145,7 +145,7 @@ class ResultHolder:
         return statistics.mean(self.get_final_average_fitness_all_runs())
 
 
-class BasicEA:
+class FitnessFunction:
     genome_types = {
         'rastrigin': 'float',
         'rosenbrock': 'float',
@@ -155,29 +155,8 @@ class BasicEA:
 
     def __init__(self, config):
 
-        present_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        experiment_name = "eppsea_basicEA_" + str(present_time)
-
-        self.results_directory = 'results/eppsea_basicEA/{0}'.format(experiment_name)
-        os.makedirs(self.results_directory, exist_ok=True)
-
-        self.log_file_location = '{0}/log.txt'.format(self.results_directory)
-
-        self.mu = config.getint('EA', 'population size')
-        self.lam = config.getint('EA', 'offspring size')
-
-        self.mutation_rate = config.getfloat('EA', 'mutation rate')
-        self.max_evals = config.getint('EA', 'maximum evaluations')
-        self.convergence_termination = config.getboolean('EA', 'terminate on convergence')
-        self.convergence_generations = config.getint('EA', 'generations to convergence')
-        self.target_termination = config.getboolean('EA', 'terminate at target fitness')
-        self.target_fitness = config.getfloat('EA', 'target fitness')
-        self.survival_selection = config.get('EA', 'survival selection')
-
-        self.runs = config.getint('EA', 'runs')
-
-        self.fitness_function = config.get('EA', 'fitness function')
-        self.genome_type = self.genome_types.get(self.fitness_function, None)
+        self.fitness_function_name = config.get('EA', 'fitness function')
+        self.genome_type = self.genome_types.get(self.fitness_function_name, None)
 
         self.genome_length = config.getint('fitness function', 'genome length')
         self.fitness_function_a = config.getfloat('fitness function', 'a')
@@ -185,94 +164,15 @@ class BasicEA:
         self.trap_size = config.getint('fitness function', 'trap size')
         self.epistasis_k = config.getint('fitness function', 'epistasis k')
 
-        if self.fitness_function == 'rastrigin':
+        if self.fitness_function_name == 'rastrigin':
             self.fitness_function_offset = self.generate_offset(self.genome_length)
         else:
             self.fitness_function_offset = None
 
-        if self.fitness_function == 'nk_landscape':
+        if self.fitness_function_name == 'nk_landscape':
             self.loci_values, self.epistasis = self.generate_epistatis(self.genome_length, self.epistasis_k)
         else:
             self.loci_values, self.epistasis = None, None
-
-        try:
-            self.tournament_k = config.getint('EA', 'tournament k')
-        except ValueError:
-            self.log('Determining optimal K for K tournament...')
-            self.tournament_k = None
-            optimal_k = find_optimal_tournament_k.find_optimal_k(self)
-            self.log('Optimal K value is {0}'.format(optimal_k))
-            self.tournament_k = optimal_k
-
-        self.basic_results = None
-
-    def log(self, message):
-        print(message)
-        with open(self.log_file_location, 'a') as log_file:
-            log_file.write(message + '\n')
-
-    class Popi:
-        def __init__(self, other=None):
-            if other is None:
-                self.genome = None
-                self.genome_type = None
-                self.genome_length = None
-                self.fitness = None
-            else:
-                self.genome = list(other.genome)
-                self.genome_type = other.genome_type
-                self.genome_length = other.genome_length
-
-        def randomize(self, n, max_range, genome_type):
-            self.genome = list()
-            self.genome_length = n
-
-            if genome_type == 'bool':
-                self.genome_type = 'bool'
-                for i in range(n):
-                    self.genome.append(bool(random.random() > 0.5))
-            elif genome_type == 'float':
-                self.genome_type = 'float'
-                for i in range(n):
-                    self.genome.append(random.uniform(-max_range, max_range))
-
-        def mutate_gene(self, gene):
-            if self.genome_type == 'bool':
-                self.genome[gene] = not self.genome[gene]
-
-            elif self.genome_type == 'float':
-                self.genome[gene] += random.uniform(-1, 1)
-
-        def mutate_one(self):
-            gene = random.randrange(self.genome_length)
-            self.mutate_gene(gene)
-
-        def mutate_all(self):
-            for i in range(self.genome_length):
-                self.mutate_gene(i)
-
-        def recombine(self, parent2):
-            new_child = BasicEA.Popi(self)
-            if self.genome_type == 'bool':
-                for i in range(self.genome_length):
-                    if random.random() > 0.5:
-                        new_child.genome[i] = parent2.genome[i]
-            elif self.genome_type == 'float':
-                for i in range(self.genome_length):
-                    a = random.random()
-                    new_child.genome[i] = a*self.genome[i] + (1-a)*parent2.genome[i]
-
-            return new_child
-
-    def evaluate_child(self, popi):
-        if self.fitness_function == 'rosenbrock':
-            popi.fitness = self.rosenbrock(popi.genome, self.fitness_function_a)
-        elif self.fitness_function == 'rastrigin':
-            popi.fitness = self.offset_rastrigin(popi.genome, self.fitness_function_a, self.fitness_function_offset)
-        elif self.fitness_function == 'dtrap':
-            popi.fitness = self.dtrap(popi.genome, self.trap_size)
-        elif self.fitness_function == 'nk_landscape':
-            popi.fitness = self.nk_landscape(popi.genome)
 
     def rosenbrock(self, x, a):
         result = 0
@@ -338,6 +238,147 @@ class BasicEA:
 
         return loci_values, epistasis
 
+    def evaluate(self, genome):
+        if self.fitness_function_name == 'rosenbrock':
+            fitness = self.rosenbrock(genome, self.fitness_function_a)
+        elif self.fitness_function_name == 'rastrigin':
+            fitness = self.offset_rastrigin(genome, self.fitness_function_a, self.fitness_function_offset)
+        elif self.fitness_function_name == 'dtrap':
+            fitness = self.dtrap(genome, self.trap_size)
+        elif self.fitness_function_name == 'nk_landscape':
+            fitness = self.nk_landscape(genome)
+
+        else:
+            raise Exception('EPPSEA BasicEA ERROR: fitness function name {0} not recognized'.format(self.fitness_function_name))
+
+        return fitness
+
+
+class BasicEA:
+    genome_types = {
+        'rastrigin': 'float',
+        'rosenbrock': 'float',
+        'dtrap': 'bool',
+        'nk_landscape': 'bool'
+    }
+
+    def __init__(self, config):
+
+        present_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        experiment_name = "eppsea_basicEA_" + str(present_time)
+
+        self.results_directory = 'results/eppsea_basicEA/{0}'.format(experiment_name)
+        os.makedirs(self.results_directory, exist_ok=True)
+
+        self.log_file_location = '{0}/log.txt'.format(self.results_directory)
+
+        self.mu = config.getint('EA', 'population size')
+        self.lam = config.getint('EA', 'offspring size')
+
+        self.mutation_rate = config.getfloat('EA', 'mutation rate')
+        self.max_evals = config.getint('EA', 'maximum evaluations')
+        self.convergence_termination = config.getboolean('EA', 'terminate on convergence')
+        self.convergence_generations = config.getint('EA', 'generations to convergence')
+        self.target_termination = config.getboolean('EA', 'terminate at target fitness')
+        self.target_fitness = config.getfloat('EA', 'target fitness')
+        self.survival_selection = config.get('EA', 'survival selection')
+
+        self.runs = config.getint('EA', 'runs')
+
+        self.fitness_function_name = config.get('EA', 'fitness function')
+
+        self.fitness_function_policy = config.get('EA', 'fitness function policy')
+        if self.fitness_function_policy == 'single':
+            self.training_fitness_functions = [FitnessFunction(config)]
+            self.testing_fitness_functions = []
+        elif self.fitness_function_policy == 'multiple':
+            self.training_fitness_functions = []
+            self.testing_fitness_functions = []
+            for _ in range(config.getint('EA', 'num training fitness functions')):
+                self.training_fitness_functions.append(FitnessFunction(config))
+        elif self.fitness_function_policy == 'generalization':
+            self.training_fitness_functions = []
+            self.testing_fitness_functions = []
+            for _ in range(config.getint('EA', 'num training fitness functions')):
+                self.training_fitness_functions.append(FitnessFunction(config))
+            for _ in range(config.getint('EA', 'num testing fitness functions')):
+                self.testing_fitness_functions.append(FitnessFunction(config))
+        else:
+            raise Exception('EPPSEA BasicEA ERROR: fitness function policy {0} not recognized'.format(self.fitness_function_policy))
+
+        try:
+            self.tournament_k = config.getint('EA', 'tournament k')
+        except ValueError:
+            self.log('Determining optimal K for K tournament...')
+            self.tournament_k = None
+            optimal_k = find_optimal_tournament_k.find_optimal_k(self)
+            self.log('Optimal K value is {0}'.format(optimal_k))
+            self.tournament_k = optimal_k
+
+
+        self.basic_results = None
+
+    def log(self, message):
+        print(message)
+        with open(self.log_file_location, 'a') as log_file:
+            log_file.write(message + '\n')
+
+    class Popi:
+        def __init__(self, other=None):
+            if other is None:
+                self.genome = None
+                self.genome_type = None
+                self.genome_length = None
+                self.fitness = None
+            else:
+                self.genome = list(other.genome)
+                self.genome_type = other.genome_type
+                self.genome_length = other.genome_length
+
+        def randomize(self, n, max_range, genome_type):
+            self.genome = list()
+            self.genome_length = n
+
+            if genome_type == 'bool':
+                self.genome_type = 'bool'
+                for i in range(n):
+                    self.genome.append(bool(random.random() > 0.5))
+            elif genome_type == 'float':
+                self.genome_type = 'float'
+                for i in range(n):
+                    self.genome.append(random.uniform(-max_range, max_range))
+
+        def mutate_gene(self, gene):
+            if self.genome_type == 'bool':
+                self.genome[gene] = not self.genome[gene]
+
+            elif self.genome_type == 'float':
+                self.genome[gene] += random.uniform(-1, 1)
+
+        def mutate_one(self):
+            gene = random.randrange(self.genome_length)
+            self.mutate_gene(gene)
+
+        def mutate_all(self):
+            for i in range(self.genome_length):
+                self.mutate_gene(i)
+
+        def recombine(self, parent2):
+            new_child = BasicEA.Popi(self)
+            if self.genome_type == 'bool':
+                for i in range(self.genome_length):
+                    if random.random() > 0.5:
+                        new_child.genome[i] = parent2.genome[i]
+            elif self.genome_type == 'float':
+                for i in range(self.genome_length):
+                    a = random.random()
+                    new_child.genome[i] = a*self.genome[i] + (1-a)*parent2.genome[i]
+
+            return new_child
+
+    def evaluate_child(self, popi, fitness_function):
+        popi.fitness = fitness_function.evaluate(popi.genome)
+
     def parent_selection_eppsea_function(self, population, eppsea_selection_function, n, generation_number):
         return eppsea_selection_function.select(population, n, generation_number)
 
@@ -378,15 +419,27 @@ class BasicEA:
         else:
             print('PARENT SELECTION {0} NOT FOUND'.format(selection_function))
 
-    def one_run(self, parent_selection_function, eppsea_selection_function):
+    def one_run(self, parent_selection_function, eppsea_selection_function, is_testing):
+        fitness_function = None
+
+        if self.fitness_function_policy == 'single':
+            fitness_function = self.training_fitness_functions[0]
+        elif self.fitness_function_policy == 'multiple':
+            fitness_function = random.choice(self.training_fitness_functions)
+        elif self.fitness_function_policy == 'generalization':
+            if is_testing:
+                fitness_function = random.choice(self.testing_fitness_functions)
+            else:
+                fitness_function = random.choice(self.training_fitness_functions)
+
         generation_number = 0
 
         population = list()
         for _ in range(self.mu):
             new_child = self.Popi()
-            new_child.randomize(self.genome_length, self.max_initial_range, self.genome_type)
+            new_child.randomize(fitness_function.genome_length, fitness_function.max_initial_range, fitness_function.genome_type)
             new_child.birth_gen = generation_number
-            self.evaluate_child(new_child)
+            self.evaluate_child(new_child, fitness_function)
             population.append(new_child)
 
         evals = self.mu
@@ -412,11 +465,11 @@ class BasicEA:
 
                     new_child = parent1.recombine(parent2)
                     new_child.birth_gen = generation_number
-                    for j in range(self.genome_length):
+                    for j in range(new_child.genome_length):
                         if random.random() < self.mutation_rate:
                             new_child.mutate_gene(j)
 
-                    self.evaluate_child(new_child)
+                    self.evaluate_child(new_child, fitness_function)
 
                     children.append(new_child)
 
@@ -439,11 +492,11 @@ class BasicEA:
 
                     new_child = parent1.recombine(parent2)
                     new_child.birth_gen = generation_number
-                    for i in range(self.genome_length):
+                    for i in range(new_child.genome_length):
                         if random.random() < self.mutation_rate:
                             new_child.mutate_gene(i)
 
-                    self.evaluate_child(new_child)
+                    self.evaluate_child(new_child, fitness_function)
 
                     children.append(new_child)
 

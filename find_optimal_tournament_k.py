@@ -12,7 +12,7 @@ def test_k_tournament(basic_ea, k):
     basic_ea.tournament_k = k
     params = []
     for _ in range(basic_ea.runs):
-        params.append(('k_tournament', None))
+        params.append(('k_tournament', None, True))
 
     pool = multiprocessing.Pool()
     results = pool.starmap(basic_ea.one_run, params)
