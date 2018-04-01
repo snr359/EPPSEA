@@ -15,7 +15,7 @@ def main():
     config = configparser.ConfigParser()
     config.read(config_path)
 
-    basic_ea = eppsea_basicEA.BasicEA(config)
+    basic_ea = eppsea_basicEA.EppseaBasicEA(config)
 
     for parent_selection_function in ['truncation', 'fitness_proportional', 'fitness_rank', 'k_tournament']:
         done = False

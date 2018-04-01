@@ -23,74 +23,15 @@ def postprocess(final_results_path, results_directory):
 
     return result.stdout
 
-
-def evaluate_eppsea_population(basic_ea, eppsea_population, using_multiprocessing):
-    # evaluates a population of eppsea individuals and assigns fitness values to them
-
-    if using_multiprocessing:
-        # setup parameters for multiprocessing
-        params = []
-        for p in eppsea_population:
-            params.extend([('eppsea_selection_function', p, False)]*basic_ea.runs)
-
-        # run all runs
-        pool = multiprocessing.Pool()
-        results_all_runs = pool.starmap(basic_ea.one_run, params)
-        pool.close()
-
-    else:
-        results_all_runs = []
-        for p in eppsea_population:
-            for r in range(basic_ea.runs):
-                results_all_runs.append(basic_ea.one_run('eppsea_selection_function', p, False))
-
-    for i, p in enumerate(eppsea_population):
-        start = i*basic_ea.runs
-        stop = (i+1)*basic_ea.runs
-        run_results = results_all_runs[start:stop]
-        p.fitness = statistics.mean(r['final_best_fitness'] for r in run_results)
-
-
-def test_against_basic_selection(basic_ea, eppsea_selection_function):
-    parent_selection_functions = ['truncation', 'fitness_proportional', 'fitness_rank', 'k_tournament', 'random']
-    results_all_selections = dict()
-    if basic_ea.lam > basic_ea.mu * 2:
-        parent_selection_functions.remove('truncation')
-
-    # set up parameters for multiprocessing
-    params = []
-    for parent_selection_function in parent_selection_functions:
-        params.extend([(parent_selection_function, None, True)]*basic_ea.runs)
-
-    params.extend([('eppsea_selection_function', eppsea_selection_function, True)]*basic_ea.runs)
-
-    pool = multiprocessing.Pool()
-    results_all_runs = pool.starmap(basic_ea.one_run, params)
-    pool.close()
-
-    for i, parent_selection_function in enumerate(parent_selection_functions):
-        start = i*basic_ea.runs
-        stop = (i+1)*basic_ea.runs
-        new_result_holder = ResultHolder()
-        new_result_holder.selection_function = parent_selection_function
-        new_result_holder.fitness_function = basic_ea.fitness_function_name
-        new_result_holder.run_results = results_all_runs[start:stop]
-        results_all_selections[parent_selection_function] = new_result_holder
-
-    new_result_holder = ResultHolder()
-    new_result_holder.selection_function = 'eppsea_selection_function'
-    new_result_holder.fitness_function = basic_ea.fitness_function_name
-    new_result_holder.run_results = results_all_runs[-basic_ea.runs:]
-    results_all_selections['eppsea_selection_function'] = new_result_holder
-
-    return results_all_selections
-
+def run_ea(ea):
+    result = ea.one_run()
+    return result
 
 class ResultHolder:
     # a class for holding the results of eppsea runs
     def __init__(self):
-        self.selection_function = None
-        self.fitness_function = None
+        self.selection_function_name = None
+        self.fitness_function_name = None
         self.run_results = []
 
     def get_eval_counts(self):
@@ -254,7 +195,7 @@ class FitnessFunction:
         return fitness
 
 
-class BasicEA:
+class EA:
     genome_types = {
         'rastrigin': 'float',
         'rosenbrock': 'float',
@@ -262,16 +203,7 @@ class BasicEA:
         'nk_landscape': 'bool'
     }
 
-    def __init__(self, config):
-
-        present_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        experiment_name = "eppsea_basicEA_" + str(present_time)
-
-        self.results_directory = 'results/eppsea_basicEA/{0}'.format(experiment_name)
-        os.makedirs(self.results_directory, exist_ok=True)
-
-        self.log_file_location = '{0}/log.txt'.format(self.results_directory)
-
+    def __init__(self, config, fitness_function, selection_function_name, selection_function, tournament_k):
         self.mu = config.getint('EA', 'population size')
         self.lam = config.getint('EA', 'offspring size')
 
@@ -282,46 +214,13 @@ class BasicEA:
         self.target_termination = config.getboolean('EA', 'terminate at target fitness')
         self.target_fitness = config.getfloat('EA', 'target fitness')
         self.survival_selection = config.get('EA', 'survival selection')
-
-        self.runs = config.getint('EA', 'runs')
+        self.tournament_k = tournament_k
 
         self.fitness_function_name = config.get('EA', 'fitness function')
+        self.fitness_function = fitness_function
 
-        self.fitness_function_policy = config.get('EA', 'fitness function policy')
-        if self.fitness_function_policy == 'single':
-            self.training_fitness_functions = [FitnessFunction(config)]
-            self.testing_fitness_functions = []
-        elif self.fitness_function_policy == 'multiple':
-            self.training_fitness_functions = []
-            self.testing_fitness_functions = []
-            for _ in range(config.getint('EA', 'num training fitness functions')):
-                self.training_fitness_functions.append(FitnessFunction(config))
-        elif self.fitness_function_policy == 'generalization':
-            self.training_fitness_functions = []
-            self.testing_fitness_functions = []
-            for _ in range(config.getint('EA', 'num training fitness functions')):
-                self.training_fitness_functions.append(FitnessFunction(config))
-            for _ in range(config.getint('EA', 'num testing fitness functions')):
-                self.testing_fitness_functions.append(FitnessFunction(config))
-        else:
-            raise Exception('EPPSEA BasicEA ERROR: fitness function policy {0} not recognized'.format(self.fitness_function_policy))
-
-        try:
-            self.tournament_k = config.getint('EA', 'tournament k')
-        except ValueError:
-            self.log('Determining optimal K for K tournament...')
-            self.tournament_k = None
-            optimal_k = find_optimal_tournament_k.find_optimal_k(self)
-            self.log('Optimal K value is {0}'.format(optimal_k))
-            self.tournament_k = optimal_k
-
-
-        self.basic_results = None
-
-    def log(self, message):
-        print(message)
-        with open(self.log_file_location, 'a') as log_file:
-            log_file.write(message + '\n')
+        self.selection_function_name = selection_function_name
+        self.selection_function = selection_function
 
     class Popi:
         def __init__(self, other=None):
@@ -364,7 +263,7 @@ class BasicEA:
                 self.mutate_gene(i)
 
         def recombine(self, parent2):
-            new_child = BasicEA.Popi(self)
+            new_child = EA.Popi(self)
             if self.genome_type == 'bool':
                 for i in range(self.genome_length):
                     if random.random() > 0.5:
@@ -419,27 +318,15 @@ class BasicEA:
         else:
             print('PARENT SELECTION {0} NOT FOUND'.format(selection_function))
 
-    def one_run(self, parent_selection_function, eppsea_selection_function, is_testing):
-        fitness_function = None
-
-        if self.fitness_function_policy == 'single':
-            fitness_function = self.training_fitness_functions[0]
-        elif self.fitness_function_policy == 'multiple':
-            fitness_function = random.choice(self.training_fitness_functions)
-        elif self.fitness_function_policy == 'generalization':
-            if is_testing:
-                fitness_function = random.choice(self.testing_fitness_functions)
-            else:
-                fitness_function = random.choice(self.training_fitness_functions)
-
+    def one_run(self):
         generation_number = 0
 
         population = list()
         for _ in range(self.mu):
             new_child = self.Popi()
-            new_child.randomize(fitness_function.genome_length, fitness_function.max_initial_range, fitness_function.genome_type)
+            new_child.randomize(self.fitness_function.genome_length, self.fitness_function.max_initial_range, self.fitness_function.genome_type)
             new_child.birth_gen = generation_number
-            self.evaluate_child(new_child, fitness_function)
+            self.evaluate_child(new_child, self.fitness_function)
             population.append(new_child)
 
         evals = self.mu
@@ -456,9 +343,9 @@ class BasicEA:
         generation_number = 1
 
         while evals <= self.max_evals:
-            if parent_selection_function == 'eppsea_selection_function':
+            if self.selection_function_name == 'eppsea_selection_function':
                 children = []
-                all_parents = self.parent_selection_eppsea_function(population, eppsea_selection_function, self.lam*2, generation_number)
+                all_parents = self.parent_selection_eppsea_function(population, self.selection_function, self.lam*2, generation_number)
                 for i in range(0, len(all_parents), 2):
                     parent1 = all_parents[i]
                     parent2 = all_parents[i+1]
@@ -469,7 +356,7 @@ class BasicEA:
                         if random.random() < self.mutation_rate:
                             new_child.mutate_gene(j)
 
-                    self.evaluate_child(new_child, fitness_function)
+                    self.evaluate_child(new_child, self.fitness_function)
 
                     children.append(new_child)
 
@@ -479,12 +366,12 @@ class BasicEA:
                 children = list()
                 unique_parents = list(population)
                 for _ in range(self.lam):
-                    parent1 = self.parent_selection_basic(population, unique_parents, parent_selection_function)
+                    parent1 = self.parent_selection_basic(population, unique_parents, self.selection_function_name)
                     try:
                         unique_parents.remove(parent1)
                     except ValueError:
                         pass
-                    parent2 = self.parent_selection_basic(population, unique_parents, parent_selection_function)
+                    parent2 = self.parent_selection_basic(population, unique_parents, self.selection_function_name)
                     try:
                         unique_parents.remove(parent2)
                     except ValueError:
@@ -496,7 +383,7 @@ class BasicEA:
                         if random.random() < self.mutation_rate:
                             new_child.mutate_gene(i)
 
-                    self.evaluate_child(new_child, fitness_function)
+                    self.evaluate_child(new_child, self.fitness_function)
 
                     children.append(new_child)
 
@@ -537,57 +424,218 @@ class BasicEA:
                 if self.convergence_termination and generations_since_best_fitness_improvement >= self.convergence_generations:
                     break
 
-        results = dict()
-        results['final_average_fitness'] = statistics.mean(p.fitness for p in population)
-        results['final_best_fitness'] = max(p.fitness for p in population)
-        results['final_fitness_std_dev'] = statistics.stdev(p.fitness for p in population)
-        results['average_fitnesses'] = average_fitnesses
-        results['best_fitnesses'] = best_fitnesses
+        run_results = dict()
+        run_results['final_average_fitness'] = statistics.mean(p.fitness for p in population)
+        run_results['final_best_fitness'] = max(p.fitness for p in population)
+        run_results['final_fitness_std_dev'] = statistics.stdev(p.fitness for p in population)
+        run_results['average_fitnesses'] = average_fitnesses
+        run_results['best_fitnesses'] = best_fitnesses
 
-        return results
+        return run_results
+
+
+class EppseaBasicEA:
+    genome_types = {
+        'rastrigin': 'float',
+        'rosenbrock': 'float',
+        'dtrap': 'bool',
+        'nk_landscape': 'bool'
+    }
+
+    def __init__(self, config):
+        self.config = config
+
+        present_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        experiment_name = "eppsea_basicEA_" + str(present_time)
+
+        self.results_directory = 'results/eppsea_basicEA/{0}'.format(experiment_name)
+        os.makedirs(self.results_directory, exist_ok=True)
+
+        self.log_file_location = '{0}/log.txt'.format(self.results_directory)
+
+        self.using_multiprocessing = config.getboolean('EA', 'use multiprocessing')
+        self.runs = config.getint('EA', 'runs')
+
+        self.fitness_function_policy = config.get('EA', 'fitness function policy')
+        if self.fitness_function_policy == 'single':
+            self.training_fitness_functions = [FitnessFunction(config)]
+            self.testing_fitness_functions = []
+        elif self.fitness_function_policy == 'multiple':
+            self.training_fitness_functions = []
+            self.testing_fitness_functions = []
+            for _ in range(config.getint('EA', 'num training fitness functions')):
+                self.training_fitness_functions.append(FitnessFunction(config))
+        elif self.fitness_function_policy == 'generalization':
+            self.training_fitness_functions = []
+            self.testing_fitness_functions = []
+            for _ in range(config.getint('EA', 'num training fitness functions')):
+                self.training_fitness_functions.append(FitnessFunction(config))
+            for _ in range(config.getint('EA', 'num testing fitness functions')):
+                self.testing_fitness_functions.append(FitnessFunction(config))
+        else:
+            raise Exception('EPPSEA BasicEA ERROR: fitness function policy {0} not recognized'.format(self.fitness_function_policy))
+
+        self.num_training_fitness_functions = len(self.training_fitness_functions)
+        self.num_testing_fitness_functions = len(self.testing_fitness_functions)
+
+        try:
+            self.tournament_k = config.getint('EA', 'tournament k')
+        except ValueError:
+            self.log('Determining optimal K for K tournament...')
+            self.tournament_k = None
+            optimal_k = find_optimal_tournament_k.find_optimal_k(self)
+            self.log('Optimal K value is {0}'.format(optimal_k))
+            self.tournament_k = optimal_k
+
+        self.basic_results = None
+
+    def log(self, message):
+        print(message)
+        with open(self.log_file_location, 'a') as log_file:
+            log_file.write(message + '\n')
+
+    def get_eas(self, selection_functions, is_testing):
+        # this prepares and returns a list of EAs for the provided selection functions
+        # selection_functions is a list of tuples of the form (selection_function_name, selection_function),
+        # where, if the selection_function_name is 'eppsea_selection_function', then selection_function is
+        # expected to be an eppsea selection function
+
+        result = list()
+
+        for selection_function_name, selection_function in selection_functions:
+
+            ###sanity check
+            if selection_function_name == 'eppsea_selection_function':
+                assert(selection_function is not None)
+            else:
+                assert(selection_function is None)
+
+            if is_testing:
+                for f in self.testing_fitness_functions:
+                    result.append(EA(self.config, f, selection_function_name, selection_function, self.tournament_k))
+            else:
+                for f in self.training_fitness_functions:
+                    result.append(EA(self.config, f, selection_function_name, selection_function, self.tournament_k))
+
+        return result
+
+    def run_eas(self, eas):
+        # runs each of the eas for the configured number of runs, returning one list for each ea
+        results_all_eas = []
+
+        if self.using_multiprocessing:
+            # setup parameters for multiprocessing
+            params = []
+            for ea in eas:
+                params.extend([ea]*self.runs)
+            # run all runs
+            pool = multiprocessing.Pool()
+            results = pool.map(run_ea, params)
+            pool.close()
+
+            # split up results by ea
+            for i in range(len(eas)):
+                start = i * self.runs
+                stop = (i + 1) * self.runs
+
+                result_holder = ResultHolder()
+                result_holder.selection_function_name = eas[i].selection_function_name
+                result_holder.fitness_function_name = eas[i].fitness_function_name
+                result_holder.run_results = results[start:stop]
+
+                results_all_eas.append(result_holder)
+
+        else:
+            for ea in eas:
+                results = []
+                for r in range(self.runs):
+                    results.append(run_ea(ea))
+
+                result_holder = ResultHolder()
+                result_holder.selection_function_name = ea.selection_function_name
+                result_holder.fitness_function_name = ea.fitness_function_name
+                result_holder.run_results = results
+
+        return results_all_eas
+
+    def evaluate_eppsea_population(self, eppsea_population, is_testing):
+        # evaluates a population of eppsea individuals and assigns fitness values to them
+        if is_testing:
+            num_fitness_functions = self.num_testing_fitness_functions
+        else:
+            num_fitness_functions = self.num_training_fitness_functions
+
+        selection_functions = list(('eppsea_selection_function', e) for e in eppsea_population)
+        eas = self.get_eas(selection_functions, is_testing)
+        ea_results = self.run_eas(eas)
+        for i in range(len(eppsea_population)):
+            start = i * num_fitness_functions
+            stop = (i + 1) * num_fitness_functions
+            fitnesses = (r.get_average_final_best_fitness() for r in ea_results[start:stop])
+            fitness = statistics.mean(fitnesses)
+            eppsea_population[i].fitness = fitness
+
+    def test_against_basic_selection(self, eppsea_selection_function, is_testing):
+        selection_function_names = ['truncation', 'fitness_proportional', 'fitness_rank', 'k_tournament', 'random']
+        if self.config.getint('EA', 'offspring size') > self.config.getint('EA', 'population size') * 2:
+            selection_function_names.remove('truncation')
+
+        selection_functions = []
+        for s in selection_function_names:
+            selection_functions.append((s, None))
+        selection_functions.append(('eppsea_selection_function', eppsea_selection_function))
+
+        eas = self.get_eas(selection_functions, is_testing)
+
+        ea_results = self.run_eas(eas)
+
+        return ea_results
+
+    def run_eppsea_basicea(self):
+        print('Now starting EPPSEA')
+        start_time = time.time()
+
+        eppsea_config = self.config.get('EA', 'base eppsea config path')
+        eppsea = eppsea_base.Eppsea(eppsea_config)
+
+        eppsea.start_evolution()
+
+        while not eppsea.evolution_finished:
+            self.evaluate_eppsea_population(eppsea.new_population, False)
+            eppsea.next_generation()
+
+        best_selection_function = eppsea.final_best_member
+        final_test_results = self.test_against_basic_selection(best_selection_function, True)
+        end_time = time.time() - start_time
+        self.log('Time elapsed: {0}'.format(end_time))
+
+        all_fitness_function_results = dict()
+        for i in range(self.num_testing_fitness_functions):
+            fitness_function_results = final_test_results[i::self.num_testing_fitness_functions]
+            all_fitness_function_results[i] = fitness_function_results
+
+        final_results_path = '{0}/final_results'.format(self.results_directory)
+        with open(final_results_path, 'wb') as pickle_file:
+            pickle.dump(all_fitness_function_results, pickle_file)
+
+        try:
+            postprocess_results = postprocess(final_results_path, self.results_directory)
+            self.log('Postprocess results:')
+            self.log(postprocess_results)
+        except Exception:
+            self.log('Postprocessing failed. Run postprocessing directly on {0}'.format(final_results_path))
+
+        eppsea_base_results_path = eppsea.results_directory
+        shutil.copytree(eppsea_base_results_path, self.results_directory + '/base')
 
 
 def main(config_path):
-
     config = configparser.ConfigParser()
     config.read(config_path)
 
-    evaluator = BasicEA(config)
+    evaluator = EppseaBasicEA(config)
     shutil.copy(config_path, '{0}/config.cfg'.format(evaluator.results_directory))
-
-    print('Now starting EPPSEA')
-    start_time = time.time()
-
-    eppsea_config = config.get('EA', 'base eppsea config path')
-    eppsea = eppsea_base.Eppsea(eppsea_config)
-
-    eppsea.start_evolution()
-
-    using_multiprocessing = config.getboolean('EA', 'use multiprocessing')
-
-    while not eppsea.evolution_finished:
-        evaluate_eppsea_population(evaluator, eppsea.new_population, using_multiprocessing)
-        eppsea.next_generation()
-
-    best_selection_function = eppsea.final_best_member
-    final_results = test_against_basic_selection(evaluator, best_selection_function)
-    end_time = time.time() - start_time
-    evaluator.log('Time elapsed: {0}'.format(end_time))
-
-    final_results_path = '{0}/final_results'.format(evaluator.results_directory)
-    with open(final_results_path, 'wb') as pickle_file:
-        pickle.dump(final_results, pickle_file)
-
-    try:
-        postprocess_results = postprocess(final_results_path, evaluator.results_directory)
-        evaluator.log('Postprocess results:')
-        evaluator.log(postprocess_results)
-    except Exception:
-        evaluator.log('Postprocessing failed. Run postprocessing directly on {0}'.format(final_results_path))
-
-    eppsea_base_results_path = eppsea.results_directory
-    shutil.copytree(eppsea_base_results_path, evaluator.results_directory + '/base')
-
+    evaluator.run_eppsea_basicea()
 
 if __name__ == '__main__':
 

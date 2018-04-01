@@ -9,30 +9,26 @@ import eppsea_basicEA
 
 def test_k_tournament(basic_ea, k):
     # tests a value for k tournament selection and returns the average best fitness of the EA
-    basic_ea.tournament_k = k
-    params = []
-    for _ in range(basic_ea.runs):
-        params.append(('k_tournament', None, True))
-
-    pool = multiprocessing.Pool()
-    results = pool.starmap(basic_ea.one_run, params)
-    pool.close()
-
-    average_best = statistics.mean(r['final_best_fitness'] for r in results)
-
+    selection_functions = [('k_tournament', None)]
+    eas = basic_ea.get_eas(selection_functions, True)
+    for ea in eas:
+        ea.tournament_k = k
+    results = basic_ea.run_eas(eas)[0]
+    average_best = results.get_average_final_best_fitness()
     return average_best
 
 def find_optimal_k(basic_ea, num_interval_points=None):
+    min_k = 1
+    max_k = basic_ea.config.getint('EA', 'population size')
+
     # if num_processes is None or invalid, approximate a value for a two-iteration approach
     if num_interval_points is None or num_interval_points < 4:
-        num_interval_points = max(4, math.ceil(math.sqrt(2 * basic_ea.mu)))
+        num_interval_points = max(4, math.ceil(math.sqrt(max_k)))
 
     # save old k-tournament value so it can be reassigned later
     old_tournament_k = basic_ea.tournament_k
 
     # sample for an interval for the optimum value by sectioning (assuming the optimal k-value is a local optimum among all possible k values)
-    min_k = 1
-    max_k = basic_ea.mu
     known_values = dict()
 
     while (max_k - min_k)+1 > num_interval_points:
@@ -111,7 +107,7 @@ if __name__ == '__main__':
     config.read(config_path)
 
     # create a basic EA object to do the evaluations with
-    basic_ea = eppsea_basicEA.BasicEA(config)
+    basic_ea = eppsea_basicEA.EppseaBasicEA(config)
 
     optimal_k = find_optimal_k(basic_ea, num_interval_points)
 
