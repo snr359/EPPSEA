@@ -13,7 +13,7 @@ def test_k_tournament(basic_ea, k):
     eas = basic_ea.get_eas(selection_functions, True)
     for ea in eas:
         ea.tournament_k = k
-    results = basic_ea.run_eas(eas)[0]
+    results = basic_ea.run_eas(eas, True)[0]
     average_best = results.get_average_final_best_fitness()
     return average_best
 
@@ -23,7 +23,7 @@ def find_optimal_k(basic_ea, num_interval_points=None):
 
     # if num_processes is None or invalid, approximate a value for a two-iteration approach
     if num_interval_points is None or num_interval_points < 4:
-        num_interval_points = max(4, math.ceil(math.sqrt(max_k)))
+        num_interval_points = max(4, math.ceil(math.sqrt(max_k*2)))
 
     # save old k-tournament value so it can be reassigned later
     old_tournament_k = basic_ea.tournament_k

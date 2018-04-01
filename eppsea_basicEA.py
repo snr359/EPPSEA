@@ -454,7 +454,9 @@ class EppseaBasicEA:
         self.log_file_location = '{0}/log.txt'.format(self.results_directory)
 
         self.using_multiprocessing = config.getboolean('EA', 'use multiprocessing')
-        self.runs = config.getint('EA', 'runs')
+
+        self.training_runs = config.getint('EA', 'training runs')
+        self.testing_runs = config.getint('EA', 'testing runs')
 
         self.fitness_function_policy = config.get('EA', 'fitness function policy')
         if self.fitness_function_policy == 'single':
@@ -519,15 +521,20 @@ class EppseaBasicEA:
 
         return result
 
-    def run_eas(self, eas):
+    def run_eas(self, eas, is_testing):
         # runs each of the eas for the configured number of runs, returning one list for each ea
         results_all_eas = []
+
+        if is_testing:
+            runs = self.testing_runs
+        else:
+            runs = self.training_runs
 
         if self.using_multiprocessing:
             # setup parameters for multiprocessing
             params = []
             for ea in eas:
-                params.extend([ea]*self.runs)
+                params.extend([ea]*runs)
             # run all runs
             pool = multiprocessing.Pool()
             results = pool.map(run_ea, params)
@@ -535,8 +542,8 @@ class EppseaBasicEA:
 
             # split up results by ea
             for i in range(len(eas)):
-                start = i * self.runs
-                stop = (i + 1) * self.runs
+                start = i * runs
+                stop = (i + 1) * runs
 
                 result_holder = ResultHolder()
                 result_holder.selection_function_name = eas[i].selection_function_name
@@ -548,7 +555,7 @@ class EppseaBasicEA:
         else:
             for ea in eas:
                 results = []
-                for r in range(self.runs):
+                for r in range(runs):
                     results.append(run_ea(ea))
 
                 result_holder = ResultHolder()
@@ -567,7 +574,7 @@ class EppseaBasicEA:
 
         selection_functions = list(('eppsea_selection_function', e) for e in eppsea_population)
         eas = self.get_eas(selection_functions, is_testing)
-        ea_results = self.run_eas(eas)
+        ea_results = self.run_eas(eas, is_testing)
         for i in range(len(eppsea_population)):
             start = i * num_fitness_functions
             stop = (i + 1) * num_fitness_functions
@@ -587,7 +594,7 @@ class EppseaBasicEA:
 
         eas = self.get_eas(selection_functions, is_testing)
 
-        ea_results = self.run_eas(eas)
+        ea_results = self.run_eas(eas, is_testing)
 
         return ea_results
 
