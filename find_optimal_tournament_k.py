@@ -13,8 +13,9 @@ def test_k_tournament(basic_ea, k):
     eas = basic_ea.get_eas(selection_functions, True)
     for ea in eas:
         ea.tournament_k = k
-    results = basic_ea.run_eas(eas, True)[0]
-    average_best = results.get_average_final_best_fitness()
+    results = basic_ea.run_eas(eas, True)
+    final_best_fitnesses = (r.get_average_final_best_fitness() for r in results)
+    average_best = statistics.mean(final_best_fitnesses)
     return average_best
 
 def find_optimal_k(basic_ea, num_interval_points=None):
