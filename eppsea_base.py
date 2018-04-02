@@ -13,7 +13,7 @@ import statistics
 
 class GPNode:
     numeric_terminals = ['constant', 'random'] 
-    data_terminals = ['fitness', 'fitness_rank', 'population_size', 'sum_fitness', 'generation_num']
+    data_terminals = ['fitness', 'fitness_rank', 'population_size', 'sum_fitness', 'generation_num', 'birth_gen']
     non_terminals = ['+', '-', '*', '/', 'step']
     child_count = {'+': 2, '-': 2, '*': 2, '/': 2, 'step': 2}
 
