@@ -171,7 +171,7 @@ class FitnessFunction:
     def generate_epistatis(self, n, k):
         loci_values = dict()
         for locus in itertools.product([True, False], repeat=k+1):
-            loci_values[locus] = (locus.count(True) % 2)
+            loci_values[locus] = random.randint(0,k)
 
         epistasis = dict()
         for i in range(n):
