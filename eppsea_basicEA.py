@@ -644,6 +644,10 @@ def main(config_path):
     shutil.copy(config_path, '{0}/config.cfg'.format(evaluator.results_directory))
     evaluator.run_eppsea_basicea()
 
+    pickle_path = '{0}/EppseaBasicEA'.format(evaluator.results_directory)
+    with open(pickle_path, 'wb') as pickle_file:
+        pickle.dump(evaluator, pickle_file)
+
 if __name__ == '__main__':
 
     if len(sys.argv) < 2:
