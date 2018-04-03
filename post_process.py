@@ -42,17 +42,18 @@ def main():
 
         print('Doing t-tests')
         eppsea_results = results['eppsea_selection_function']
+        sample1 = eppsea_results.get_final_best_fitness_all_runs()
+        sample1_mean = statistics.mean(sample1)
+        print('Mean performance of EPPSEA function on fitness function {0}: {1}'.format(fitness_function_number, sample1_mean))
         for parent_selection_function, final_result in results.items():
             if parent_selection_function != 'eppsea_selection_function':
-                sample1 = eppsea_results.get_final_best_fitness_all_runs()
                 sample2 = final_result.get_final_best_fitness_all_runs()
-                sample1_mean = statistics.mean(sample1)
                 sample2_mean = statistics.mean(sample2)
                 mean_difference = sample1_mean - sample2_mean
 
                 t, p = scipy.stats.ttest_rel(sample1, sample2)
 
-                print('Mean difference in final best fitness on fitness function {0} compared to {1} selection: {2}. p-value: {3}'.format(fitness_function_number, parent_selection_function, mean_difference, p))
+                print('Mean performance of {0} selection: {1} | Difference versus EPPSEA: {2} | p-value: {3} '.format(parent_selection_function, sample2_mean, mean_difference, p))
 
 
 if __name__ == '__main__':
