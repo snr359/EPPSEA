@@ -307,7 +307,7 @@ class EA:
                 i += 1
             return population[i]
 
-        elif selection_function == 'k_tournament':
+        elif selection_function == 'k_tournament' or 'k_tournament' in selection_function:
             tournament = random.sample(population, self.tournament_k)
             winner = max(tournament, key=lambda p: p.fitness)
             return winner
@@ -482,12 +482,19 @@ class EppseaBasicEA:
 
         try:
             self.tournament_k = config.getint('EA', 'tournament k')
+            self.tournament_k_list = None
         except ValueError:
-            self.log('Determining optimal K for K tournament...')
-            self.tournament_k = None
-            optimal_k = find_optimal_tournament_k.find_optimal_k(self)
-            self.log('Optimal K value is {0}'.format(optimal_k))
-            self.tournament_k = optimal_k
+            if config.get('EA', 'tournament k') == 'typical':
+                self.log('Using K values 2, 3, and 5')
+                self.tournament_k = None
+                self.tournament_k_list = [2,3,5]
+            else:
+                self.log('Determining optimal K for K tournament...')
+                self.tournament_k = None
+                optimal_k = find_optimal_tournament_k.find_optimal_k(self)
+                self.log('Optimal K value is {0}'.format(optimal_k))
+                self.tournament_k = optimal_k
+                self.tournament_k_list = None
 
         self.basic_results = None
 
@@ -587,12 +594,23 @@ class EppseaBasicEA:
         if self.config.getint('EA', 'offspring size') > self.config.getint('EA', 'population size') * 2:
             selection_function_names.remove('truncation')
 
+        if self.tournament_k_list is not None:
+            selection_function_names.remove('k_tournament')
+            for k in self.tournament_k_list:
+                selection_function_names.append('k_tournament_{0}'.format(k))
+
         selection_functions = []
         for s in selection_function_names:
             selection_functions.append((s, None))
         selection_functions.append(('eppsea_selection_function', eppsea_selection_function))
 
         eas = self.get_eas(selection_functions, is_testing)
+
+        if self.tournament_k_list is not None:
+            for ea in eas:
+                if 'k_tournament_' in ea.selection_function_name:
+                    k = int(ea.selection_function_name.split('_')[-1])
+                    ea.tournament_k = k
 
         ea_results = self.run_eas(eas, is_testing)
 
