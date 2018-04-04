@@ -37,8 +37,8 @@ def main():
         plt.title('Average Best fitness, {0} function'.format(fitness_function_name))
         plt.xlabel('Evaluations')
         plt.ylabel('Best Fitness')
-        plt.legend()
-        plt.savefig('{0}/figure{1}.png'.format(results_directory, fitness_function_number))
+        plt.legend(loc=(1.02,0))
+        plt.savefig('{0}/figure{1}.png'.format(results_directory, fitness_function_number), bbox_inches='tight')
 
         print('Doing t-tests')
         eppsea_results = results['eppsea_selection_function']
