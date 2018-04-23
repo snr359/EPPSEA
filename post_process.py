@@ -32,7 +32,20 @@ def main():
         for parent_selection_function, final_result in sorted(results.items()):
             mu = final_result.get_eval_counts()
             fitness = final_result.get_average_best_fitness()
-            plt.plot(mu, fitness, label=parent_selection_function)
+
+            errors = []
+            for m in final_result.get_eval_counts():
+                best_fitnesses = []
+                for r in final_result.run_results:
+                    if m in r['best_fitnesses']:
+                        best_fitnesses.append(r['best_fitnesses'][m])
+                    # if this run terminated early, use the final best fitness
+                    elif all(m > rm for rm in r['best_fitnesses'].keys()):
+                        best_fitnesses.append(r['final_best_fitness'])
+                error = statistics.stdev(best_fitnesses)
+                errors.append(error)
+
+            plt.errorbar(mu, fitness, errors, label=parent_selection_function, errorevery=5)
 
         plt.title('Average Best fitness, {0} function'.format(fitness_function_name))
         plt.xlabel('Evaluations')
