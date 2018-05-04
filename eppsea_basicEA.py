@@ -94,7 +94,21 @@ class FitnessFunction:
         'nk_landscape': 'bool'
     }
 
-    def __init__(self, config):
+    def __init__(self):
+        self.fitness_function_name = None
+        self.genome_type = None
+        self.genome_length = None
+        self.max_initial_range = None
+        self.trap_size = None
+
+        self.fitness_function_a = None
+        self.epistasis_k = None
+
+        self.fitness_function_offset = None
+        self.loci_values = None
+        self.epistasis = None
+
+    def generate(self, config):
 
         self.fitness_function_name = config.get('EA', 'fitness function')
         self.genome_type = self.genome_types.get(self.fitness_function_name, None)
@@ -455,30 +469,16 @@ class EppseaBasicEA:
 
         self.using_multiprocessing = config.getboolean('EA', 'use multiprocessing')
 
+        self.test_generalization = config.getboolean('EA', 'test generalization')
         self.training_runs = config.getint('EA', 'training runs')
         self.testing_runs = config.getint('EA', 'testing runs')
 
-        self.fitness_function_policy = config.get('EA', 'fitness function policy')
-        if self.fitness_function_policy == 'single':
-            self.training_fitness_functions = [FitnessFunction(config)]
-            self.testing_fitness_functions = []
-        elif self.fitness_function_policy == 'multiple':
-            self.training_fitness_functions = []
-            self.testing_fitness_functions = []
-            for _ in range(config.getint('EA', 'num training fitness functions')):
-                self.training_fitness_functions.append(FitnessFunction(config))
-        elif self.fitness_function_policy == 'generalization':
-            self.training_fitness_functions = []
-            self.testing_fitness_functions = []
-            for _ in range(config.getint('EA', 'num training fitness functions')):
-                self.training_fitness_functions.append(FitnessFunction(config))
-            for _ in range(config.getint('EA', 'num testing fitness functions')):
-                self.testing_fitness_functions.append(FitnessFunction(config))
-        else:
-            raise Exception('EPPSEA BasicEA ERROR: fitness function policy {0} not recognized'.format(self.fitness_function_policy))
+        self.num_training_fitness_functions = None
+        self.num_testing_fitness_functions = None
+        self.training_fitness_functions = None
+        self.testing_fitness_functions = None
 
-        self.num_training_fitness_functions = len(self.training_fitness_functions)
-        self.num_testing_fitness_functions = len(self.testing_fitness_functions)
+        self.prepare_fitness_functions(config)
 
         try:
             self.tournament_k = config.getint('EA', 'tournament k')
@@ -497,6 +497,79 @@ class EppseaBasicEA:
                 self.tournament_k_list = None
 
         self.basic_results = None
+
+    def prepare_fitness_functions(self, config):
+        self.num_training_fitness_functions = config.getint('EA', 'num training fitness functions')
+        if config.getboolean('EA', 'test generalization'):
+            self.num_testing_fitness_functions = config.getint('EA', 'num testing fitness functions')
+        else:
+            self.num_testing_fitness_functions = 0
+
+        self.training_fitness_functions = []
+        training_fitness_function_path = config.get('EA', 'fitness function training instances directory')
+        self.testing_fitness_functions = []
+        testing_fitness_function_path = config.get('EA', 'fitness function testing instances directory')
+
+        if config.getboolean('EA', 'generate new fitness functions'):
+            for i in range(self.num_training_fitness_functions):
+                new_fitness_function = FitnessFunction()
+                new_fitness_function.generate(config)
+                self.training_fitness_functions.append(new_fitness_function)
+
+            for i in range(self.num_testing_fitness_functions):
+                new_fitness_function = FitnessFunction()
+                new_fitness_function.generate(config)
+                self.testing_fitness_functions.append(new_fitness_function)
+
+            if config.getboolean('EA', 'save generated fitness functions'):
+                os.makedirs(training_fitness_function_path, exist_ok=True)
+                for i, f in enumerate(self.training_fitness_functions):
+                    filepath = '{0}/training{1}'.format(training_fitness_function_path, i)
+                    with open(filepath, 'wb') as file:
+                        pickle.dump(f, file)
+
+                os.makedirs(testing_fitness_function_path, exist_ok=True)
+                for i, f in enumerate(self.testing_fitness_functions):
+                    filepath = '{0}/testing{1}'.format(testing_fitness_function_path, i)
+                    with open(filepath, 'wb') as file:
+                        pickle.dump(f, file)
+
+        else:
+            if not os.path.exists(training_fitness_function_path):
+                raise Exception('ERROR: Attempting to load fitness functions from non-existent path {0}'.format(training_fitness_function_path))
+
+            training_fitness_function_files = sorted(os.listdir(training_fitness_function_path))
+            for filepath in training_fitness_function_files:
+                try:
+                    full_filepath = '{0}/{1}'.format(training_fitness_function_path, filepath) 
+                    with open(full_filepath, 'rb') as file:
+                        self.training_fitness_functions.append(pickle.load(file))
+                except (pickle.PickleError, pickle.PickleError, ImportError, AttributeError):
+                    print('Failed to load fitness function at {0}, possibly not a saved fitness function'.format(filepath))
+                    pass
+                
+                if len(self.training_fitness_functions) == self.num_training_fitness_functions:
+                    break
+                    
+            if config.getboolean('EA', 'test generalization'):
+                
+                if not os.path.exists(testing_fitness_function_path):
+                    raise Exception('ERROR: Attempting to load fitness functions from non-existent path {0}'.format(
+                        testing_fitness_function_path))
+
+                testing_fitness_function_files = sorted(os.listdir(testing_fitness_function_path))
+                for filepath in testing_fitness_function_files:
+                    try:
+                        full_filepath = '{0}/{1}'.format(testing_fitness_function_path, filepath)
+                        with open(full_filepath, 'rb') as file:
+                            self.testing_fitness_functions.append(pickle.load(file))
+                    except (pickle.PickleError, pickle.PickleError, ImportError, AttributeError):
+                        print('Failed to load fitness function at {0}, possibly not a saved fitness function'.format(
+                            filepath))
+                        pass
+
+                    if len(self.testing_fitness_functions) == self.num_testing_fitness_functions:
+                        break
 
     def log(self, message):
         print(message)
@@ -589,7 +662,7 @@ class EppseaBasicEA:
             fitness = statistics.mean(fitnesses)
             eppsea_population[i].fitness = fitness
 
-    def test_against_basic_selection(self, eppsea_selection_function, is_testing):
+    def test_against_basic_selection(self, eppsea_selection_function):
         selection_function_names = ['truncation', 'fitness_proportional', 'fitness_rank', 'k_tournament', 'random']
         if self.config.getint('EA', 'offspring size') > self.config.getint('EA', 'population size') * 2:
             selection_function_names.remove('truncation')
@@ -603,6 +676,8 @@ class EppseaBasicEA:
         for s in selection_function_names:
             selection_functions.append((s, None))
         selection_functions.append(('eppsea_selection_function', eppsea_selection_function))
+
+        is_testing = self.test_generalization
 
         eas = self.get_eas(selection_functions, is_testing)
 
@@ -630,7 +705,7 @@ class EppseaBasicEA:
             eppsea.next_generation()
 
         best_selection_function = eppsea.final_best_member
-        final_test_results = self.test_against_basic_selection(best_selection_function, True)
+        final_test_results = self.test_against_basic_selection(best_selection_function)
         end_time = time.time() - start_time
         self.log('Time elapsed: {0}'.format(end_time))
 
