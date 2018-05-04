@@ -209,6 +209,80 @@ class FitnessFunction:
         return fitness
 
 
+class SelectionFunction:
+    def __init__(self):
+        self.type = None
+        self.name = None
+        self.tournament_k = None
+        self.eppsea_selection_function = None
+
+    def generate_from_config(self, config):
+        self.type = config.get('selection function', 'type')
+        self.name = config.get('selection function', 'name')
+        self.tournament_k = config.getint('selection function', 'tournament k')
+
+    def generate_from_eppsea_individual(self, eppsea_selection_function):
+        self.type = 'eppsea_selection_function'
+        self.name = 'Evolved Selection Function'
+        self.tournament_k = None
+        self.eppsea_selection_function = eppsea_selection_function
+
+    def select(self, population, n, generation_number):
+        if self.type == 'eppsea_selection_function':
+            return self.eppsea_selection_function.select(population, n, generation_number)
+
+        elif self.type == 'truncation':
+            return sorted(population, key=lambda x: x.fitness)[:n]
+
+        elif self.type == 'fitness_rank':
+            selected = []
+            sorted_population = sorted(population, key=lambda p: p.fitness, reverse=True)
+            ranks = list(range(len(population), 0, -1))
+            sum_ranks = (len(sorted_population) * (len(sorted_population)+1)) / 2
+            for _ in range(n):
+                r = random.randint(0, sum_ranks)
+                i = 0
+                while r > ranks[i]:
+                    r -= ranks[i]
+                    i += 1
+                selected.append(population[i])
+            return selected
+
+        elif self.type == 'fitness_proportional':
+            selected = []
+            min_fitness = min(p.fitness for p in population)
+            if min_fitness < 0:
+                selection_chances = [p.fitness - min_fitness for p in population]
+            else:
+                selection_chances = [p.fitness for p in population]
+            sum_selection_chances = sum(selection_chances)
+            for _ in range(n):
+                r = random.uniform(0, sum_selection_chances)
+                i = 0
+                while r > selection_chances[i]:
+                    r -= selection_chances[i]
+                    i += 1
+                selected.append(population[i])
+            return selected
+
+        elif self.type == 'k_tournament':
+            selected = []
+            for _ in range(n):
+                tournament = random.sample(population, self.tournament_k)
+                winner = max(tournament, key=lambda p: p.fitness)
+                selected.append(winner)
+            return selected
+
+        elif self.type == 'random':
+            selected = []
+            for _ in range(n):
+                selected.append(random.choice(population))
+            return selected
+
+        else:
+            print('PARENT SELECTION {0} NOT FOUND'.format(self.type))
+
+
 class EA:
     genome_types = {
         'rastrigin': 'float',
@@ -217,7 +291,7 @@ class EA:
         'nk_landscape': 'bool'
     }
 
-    def __init__(self, config, fitness_function, selection_function_name, selection_function, tournament_k):
+    def __init__(self, config, fitness_function, selection_function):
         self.mu = config.getint('EA', 'population size')
         self.lam = config.getint('EA', 'offspring size')
 
@@ -228,12 +302,8 @@ class EA:
         self.target_termination = config.getboolean('EA', 'terminate at target fitness')
         self.target_fitness = config.getfloat('EA', 'target fitness')
         self.survival_selection = config.get('EA', 'survival selection')
-        self.tournament_k = tournament_k
 
-        self.fitness_function_name = config.get('EA', 'fitness function')
         self.fitness_function = fitness_function
-
-        self.selection_function_name = selection_function_name
         self.selection_function = selection_function
 
     class Popi:
@@ -292,46 +362,6 @@ class EA:
     def evaluate_child(self, popi, fitness_function):
         popi.fitness = fitness_function.evaluate(popi.genome)
 
-    def parent_selection_eppsea_function(self, population, eppsea_selection_function, n, generation_number):
-        return eppsea_selection_function.select(population, n, generation_number)
-
-    def parent_selection_basic(self, population, unique_parents, selection_function):
-        if selection_function == 'truncation':
-            return max(unique_parents, key=lambda x: x.fitness)
-        elif selection_function == 'fitness_rank':
-            population.sort(key=lambda x: x.fitness, reverse=True)
-            ranks = list(range(len(population), 0, -1))
-            n = random.randint(0, sum(ranks))
-            i = 0
-            while n > ranks[i]:
-                n -= ranks[i]
-                i += 1
-            return population[i]
-
-        elif selection_function == 'fitness_proportional':
-            min_fitness = min(p.fitness for p in population)
-            if min_fitness < 0:
-                selection_chances = [p.fitness - min_fitness for p in population]
-            else:
-                selection_chances = [p.fitness for p in population]
-            n = random.uniform(0, sum(selection_chances))
-            i = 0
-            while n > selection_chances[i]:
-                n -= selection_chances[i]
-                i += 1
-            return population[i]
-
-        elif selection_function == 'k_tournament' or 'k_tournament' in selection_function:
-            tournament = random.sample(population, self.tournament_k)
-            winner = max(tournament, key=lambda p: p.fitness)
-            return winner
-
-        elif selection_function == 'random':
-            return random.choice(population)
-
-        else:
-            print('PARENT SELECTION {0} NOT FOUND'.format(selection_function))
-
     def one_run(self):
         generation_number = 0
 
@@ -357,51 +387,25 @@ class EA:
         generation_number = 1
 
         while evals <= self.max_evals:
-            if self.selection_function_name == 'eppsea_selection_function':
-                children = []
-                all_parents = self.parent_selection_eppsea_function(population, self.selection_function, self.lam*2, generation_number)
-                for i in range(0, len(all_parents), 2):
-                    parent1 = all_parents[i]
-                    parent2 = all_parents[i+1]
+            children = []
+            num_parents = self.lam*2
+            all_parents = self.selection_function.select(population, num_parents, generation_number)
 
-                    new_child = parent1.recombine(parent2)
-                    new_child.birth_gen = generation_number
-                    for j in range(new_child.genome_length):
-                        if random.random() < self.mutation_rate:
-                            new_child.mutate_gene(j)
+            for i in range(0, len(all_parents), 2):
+                parent1 = all_parents[i]
+                parent2 = all_parents[i + 1]
 
-                    self.evaluate_child(new_child, self.fitness_function)
+                new_child = parent1.recombine(parent2)
+                new_child.birth_gen = generation_number
+                for j in range(new_child.genome_length):
+                    if random.random() < self.mutation_rate:
+                        new_child.mutate_gene(j)
 
-                    children.append(new_child)
+                self.evaluate_child(new_child, self.fitness_function)
 
-                    evals += 1
+                children.append(new_child)
 
-            else:
-                children = list()
-                unique_parents = list(population)
-                for _ in range(self.lam):
-                    parent1 = self.parent_selection_basic(population, unique_parents, self.selection_function_name)
-                    try:
-                        unique_parents.remove(parent1)
-                    except ValueError:
-                        pass
-                    parent2 = self.parent_selection_basic(population, unique_parents, self.selection_function_name)
-                    try:
-                        unique_parents.remove(parent2)
-                    except ValueError:
-                        pass
-
-                    new_child = parent1.recombine(parent2)
-                    new_child.birth_gen = generation_number
-                    for i in range(new_child.genome_length):
-                        if random.random() < self.mutation_rate:
-                            new_child.mutate_gene(i)
-
-                    self.evaluate_child(new_child, self.fitness_function)
-
-                    children.append(new_child)
-
-                    evals += 1
+                evals += 1
 
             population.extend(children)
 
@@ -480,21 +484,8 @@ class EppseaBasicEA:
 
         self.prepare_fitness_functions(config)
 
-        try:
-            self.tournament_k = config.getint('EA', 'tournament k')
-            self.tournament_k_list = None
-        except ValueError:
-            if config.get('EA', 'tournament k') == 'typical':
-                self.log('Using K values 2, 3, and 5')
-                self.tournament_k = None
-                self.tournament_k_list = [2,3,5]
-            else:
-                self.log('Determining optimal K for K tournament...')
-                self.tournament_k = None
-                optimal_k = find_optimal_tournament_k.find_optimal_k(self)
-                self.log('Optimal K value is {0}'.format(optimal_k))
-                self.tournament_k = optimal_k
-                self.tournament_k_list = None
+        self.basic_selection_functions = None
+        self.prepare_basic_selection_functions(config)
 
         self.basic_results = None
 
@@ -571,12 +562,22 @@ class EppseaBasicEA:
                     if len(self.testing_fitness_functions) == self.num_testing_fitness_functions:
                         break
 
+    def  prepare_basic_selection_functions(self, config):
+        self.basic_selection_functions = []
+        selection_configs = config.items('basic selection function configs')
+        for _, config_path in selection_configs:
+            config = configparser.ConfigParser()
+            config.read(config_path)
+            basic_selection_function = SelectionFunction()
+            basic_selection_function.generate_from_config(config)
+            self.basic_selection_functions.append(basic_selection_function)
+
     def log(self, message):
         print(message)
         with open(self.log_file_location, 'a') as log_file:
             log_file.write(message + '\n')
 
-    def get_eas(self, selection_functions, is_testing):
+    def get_eas(self, fitness_functions, selection_functions):
         # this prepares and returns a list of EAs for the provided selection functions
         # selection_functions is a list of tuples of the form (selection_function_name, selection_function),
         # where, if the selection_function_name is 'eppsea_selection_function', then selection_function is
@@ -584,20 +585,9 @@ class EppseaBasicEA:
 
         result = list()
 
-        for selection_function_name, selection_function in selection_functions:
-
-            ###sanity check
-            if selection_function_name == 'eppsea_selection_function':
-                assert(selection_function is not None)
-            else:
-                assert(selection_function is None)
-
-            if is_testing:
-                for f in self.testing_fitness_functions:
-                    result.append(EA(self.config, f, selection_function_name, selection_function, self.tournament_k))
-            else:
-                for f in self.training_fitness_functions:
-                    result.append(EA(self.config, f, selection_function_name, selection_function, self.tournament_k))
+        for selection_function in selection_functions:
+            for fitness_function in fitness_functions:
+                result.append(EA(self.config, fitness_function, selection_function))
 
         return result
 
@@ -626,8 +616,8 @@ class EppseaBasicEA:
                 stop = (i + 1) * runs
 
                 result_holder = ResultHolder()
-                result_holder.selection_function_name = eas[i].selection_function_name
-                result_holder.fitness_function_name = eas[i].fitness_function_name
+                result_holder.selection_function_name = eas[i].selection_function.name
+                result_holder.fitness_function_name = eas[i].fitness_function.fitness_function_name
                 result_holder.run_results = results[start:stop]
 
                 results_all_eas.append(result_holder)
@@ -639,22 +629,25 @@ class EppseaBasicEA:
                     results.append(run_ea(ea))
 
                 result_holder = ResultHolder()
-                result_holder.selection_function_name = ea.selection_function_name
-                result_holder.fitness_function_name = ea.fitness_function_name
+                result_holder.selection_function_name = ea.selection_function.name
+                result_holder.fitness_function_name = ea.fitness_function.fitness_function_name
                 result_holder.run_results = results
 
         return results_all_eas
 
-    def evaluate_eppsea_population(self, eppsea_population, is_testing):
+    def evaluate_eppsea_population(self, eppsea_population):
         # evaluates a population of eppsea individuals and assigns fitness values to them
-        if is_testing:
-            num_fitness_functions = self.num_testing_fitness_functions
-        else:
-            num_fitness_functions = self.num_training_fitness_functions
+        num_fitness_functions = self.num_training_fitness_functions
+        fitness_functions = self.testing_fitness_functions
 
-        selection_functions = list(('eppsea_selection_function', e) for e in eppsea_population)
-        eas = self.get_eas(selection_functions, is_testing)
-        ea_results = self.run_eas(eas, is_testing)
+        selection_functions = []
+        for e in eppsea_population:
+            selection_function = SelectionFunction()
+            selection_function.generate_from_eppsea_individual(e)
+            selection_functions.append(selection_function)
+
+        eas = self.get_eas(fitness_functions, selection_functions)
+        ea_results = self.run_eas(eas, False)
         for i in range(len(eppsea_population)):
             start = i * num_fitness_functions
             stop = (i + 1) * num_fitness_functions
@@ -662,32 +655,26 @@ class EppseaBasicEA:
             fitness = statistics.mean(fitnesses)
             eppsea_population[i].fitness = fitness
 
-    def test_against_basic_selection(self, eppsea_selection_function):
-        selection_function_names = ['truncation', 'fitness_proportional', 'fitness_rank', 'k_tournament', 'random']
+    def test_against_basic_selection(self, eppsea_individual):
+
+        selection_functions = self.basic_selection_functions
         if self.config.getint('EA', 'offspring size') > self.config.getint('EA', 'population size') * 2:
-            selection_function_names.remove('truncation')
+            for s in list(selection_functions):
+                if s.type == 'truncation':
+                    selection_functions.remove(s)
 
-        if self.tournament_k_list is not None:
-            selection_function_names.remove('k_tournament')
-            for k in self.tournament_k_list:
-                selection_function_names.append('k_tournament_{0}'.format(k))
+        eppsea_selection_function = SelectionFunction()
+        eppsea_selection_function.generate_from_eppsea_individual(eppsea_individual)
+        selection_functions.append(eppsea_selection_function)
 
-        selection_functions = []
-        for s in selection_function_names:
-            selection_functions.append((s, None))
-        selection_functions.append(('eppsea_selection_function', eppsea_selection_function))
+        if self.test_generalization:
+            fitness_functions = self.testing_fitness_functions
+        else:
+            fitness_functions = self.training_fitness_functions
 
-        is_testing = self.test_generalization
+        eas = self.get_eas(fitness_functions, selection_functions)
 
-        eas = self.get_eas(selection_functions, is_testing)
-
-        if self.tournament_k_list is not None:
-            for ea in eas:
-                if 'k_tournament_' in ea.selection_function_name:
-                    k = int(ea.selection_function_name.split('_')[-1])
-                    ea.tournament_k = k
-
-        ea_results = self.run_eas(eas, is_testing)
+        ea_results = self.run_eas(eas, True)
 
         return ea_results
 
@@ -701,7 +688,7 @@ class EppseaBasicEA:
         eppsea.start_evolution()
 
         while not eppsea.evolution_finished:
-            self.evaluate_eppsea_population(eppsea.new_population, False)
+            self.evaluate_eppsea_population(eppsea.new_population)
             eppsea.next_generation()
 
         best_selection_function = eppsea.final_best_member
