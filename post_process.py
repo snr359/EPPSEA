@@ -18,18 +18,6 @@ def main():
     with open(final_results_path, 'rb') as final_results_file:
         all_final_results = pickle.load(final_results_file)
 
-    formal_selection_names = {
-        'eppsea_selection_function': 'Evolved Selection Function',
-        'k_tournament': 'k-tournament',
-        'k_tournament_2': 'k-tournament, k=2',
-        'k_tournament_3': 'k-tournament, k=3',
-        'k_tournament_5': 'k-tournament, k=5',
-        'fitness_rank': 'Fitness Ranking',
-        'fitness_proportional': 'Fitness Proportional',
-        'random': 'Random',
-        'truncation': 'Truncation'
-    }
-
     for fitness_function_number, fitness_function_results in all_final_results.items():
         plt.clf()
         print('Analyzing results for fitness function {0}'.format(fitness_function_number))
@@ -38,13 +26,12 @@ def main():
             results[r.selection_function_name] = r
 
         print('Plotting figure')
-        fitness_function_name = results['eppsea_selection_function'].fitness_function_name
+        fitness_function_name = results['Evolved Selection Function'].fitness_function_name
         if fitness_function_name in ['rosenbrock', 'rastrigin']:
             plt.yscale('symlog')
         for parent_selection_function, final_result in sorted(results.items()):
             if parent_selection_function == 'random':
                 continue
-            formal_selection_name = formal_selection_names[parent_selection_function]
             mu = final_result.get_eval_counts()
             fitness = final_result.get_average_best_fitness()
 
@@ -60,7 +47,7 @@ def main():
                 error = statistics.stdev(best_fitnesses)
                 errors.append(error)
 
-            plt.errorbar(mu, fitness, errors=None, label=formal_selection_name, errorevery=5)
+            plt.errorbar(mu, fitness, errors=None, label=fitness_function_name, errorevery=5)
 
         #plt.title('Average Best fitness, {0} function'.format(fitness_function_name))
         plt.xlabel('Evaluations')
@@ -70,18 +57,16 @@ def main():
 
         print('Plotting boxplot')
         final_best_fitnesses_list = []
-        formal_selection_name_list = []
-        fitness_function_name = results['eppsea_selection_function'].fitness_function_name
+        selection_name_list = []
         if fitness_function_name in ['rosenbrock', 'rastrigin']:
             plt.yscale('symlog')
-        for parent_selection_function, final_result in sorted(results.items()):
-            if parent_selection_function == 'random':
+        for parent_selection_function_name, final_result in sorted(results.items()):
+            if parent_selection_function_name == 'Random':
                 continue
-            formal_selection_name = formal_selection_names[parent_selection_function]
-            formal_selection_name_list.append(formal_selection_name)
+            selection_name_list.append(parent_selection_function_name)
             final_best_fitnesses = final_result.get_final_best_fitness_all_runs()
             final_best_fitnesses_list.append(final_best_fitnesses)
-        plt.boxplot(final_best_fitnesses_list, labels=formal_selection_name_list)
+        plt.boxplot(final_best_fitnesses_list, labels=selection_name_list)
 
         plt.xlabel('Evaluations')
         plt.xticks(rotation=90)
@@ -92,7 +77,7 @@ def main():
 
 
         print('Doing t-tests')
-        eppsea_results = results['eppsea_selection_function']
+        eppsea_results = results['Evolved Selection Function']
         sample1 = eppsea_results.get_final_best_fitness_all_runs()
         sample1_mean = statistics.mean(sample1)
         print('Mean performance of EPPSEA function on fitness function {0}: {1}'.format(fitness_function_number, sample1_mean))
