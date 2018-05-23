@@ -2,7 +2,7 @@ import sys
 import statistics
 import pickle
 
-from eppsea_basicEA import ResultHolder, FitnessFunction
+from eppsea_basicEA import ResultHolder, FitnessFunction, SelectionFunction
 
 import scipy.stats
 

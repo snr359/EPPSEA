@@ -30,8 +30,12 @@ def run_ea(ea):
 class ResultHolder:
     # a class for holding the results of eppsea runs
     def __init__(self):
+        self.selection_function = None
         self.selection_function_name = None
+
+        self.fitness_function = None
         self.fitness_function_name = None
+
         self.run_results = []
 
     def get_eval_counts(self):
@@ -616,8 +620,12 @@ class EppseaBasicEA:
                 stop = (i + 1) * runs
 
                 result_holder = ResultHolder()
+                result_holder.selection_function = eas[i].selection_function
                 result_holder.selection_function_name = eas[i].selection_function.name
+
+                result_holder.fitness_function = eas[i].fitness_function
                 result_holder.fitness_function_name = eas[i].fitness_function.fitness_function_name
+
                 result_holder.run_results = results[start:stop]
 
                 results_all_eas.append(result_holder)
@@ -635,10 +643,12 @@ class EppseaBasicEA:
 
         return results_all_eas
 
-    def evaluate_eppsea_population(self, eppsea_population):
+    def evaluate_eppsea_population(self, eppsea_population, is_testing):
         # evaluates a population of eppsea individuals and assigns fitness values to them
-        num_fitness_functions = self.num_training_fitness_functions
-        fitness_functions = self.testing_fitness_functions
+        if is_testing:
+            fitness_functions = self.testing_fitness_functions
+        else:
+            fitness_functions = self.training_fitness_functions
 
         selection_functions = []
         for e in eppsea_population:
@@ -648,12 +658,10 @@ class EppseaBasicEA:
 
         eas = self.get_eas(fitness_functions, selection_functions)
         ea_results = self.run_eas(eas, False)
-        for i in range(len(eppsea_population)):
-            start = i * num_fitness_functions
-            stop = (i + 1) * num_fitness_functions
-            fitnesses = (r.get_average_final_best_fitness() for r in ea_results[start:stop])
+        for e, s in zip(eppsea_population, selection_functions):
+            fitnesses = (r.get_average_final_best_fitness() for r in ea_results if r.selection_function is s)
             fitness = statistics.mean(fitnesses)
-            eppsea_population[i].fitness = fitness
+            e.fitness = fitness
 
     def test_against_basic_selection(self, eppsea_individual):
 
@@ -688,7 +696,7 @@ class EppseaBasicEA:
         eppsea.start_evolution()
 
         while not eppsea.evolution_finished:
-            self.evaluate_eppsea_population(eppsea.new_population)
+            self.evaluate_eppsea_population(eppsea.new_population, False)
             eppsea.next_generation()
 
         best_selection_function = eppsea.final_best_member
