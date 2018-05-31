@@ -133,6 +133,128 @@ class FitnessFunction:
         else:
             self.loci_values, self.epistasis = None, None
 
+    def random_genome(self):
+        # generates and returns a random genome
+
+        # generate a new genome
+        genome = []
+
+        # generate values and append to the genome
+        for _ in range(self.genome_length):
+            if self.genome_type == 'bool':
+                genome.append(random.choice((True, False)))
+            elif self.genome_type == 'real':
+                genome.append(random.uniform(-self.max_initial_range, self.max_initial_range))
+            else:
+                print('WARNING: genome type {0} not recognized for random genome generation'.format(self.genome_type))
+                break
+
+        # return the new genome
+        return genome
+
+    def hill_climber(self, max_evals):
+        # performs a first-ascent hill climb, restarting with random genomes at local optima
+        # for real-valued genomes, hill climbing is done with stochastic perturbations and may not settle on the local optima
+        # returns the best fitness, and the genome that generated it
+
+        # generate and evaluate a new genome
+        current_genome = self.random_genome()
+        current_fitness = self.evaluate(current_genome)
+
+        # evaluate adjacent genomes, keeping improvements and restarting on stagnation
+        evals = 1
+        best_fitness = current_fitness
+        best_genome = current_genome
+
+        # bool and real genomes are treated slightly differently
+        if self.genome_type == 'bool':
+            while evals < max_evals:
+                climbing = False
+                for i in random.sample(range(self.genome_length), self.genome_length):
+                    # copy the genome and flip one bit
+                    new_genome = current_genome[:]
+                    new_genome[i] = not new_genome[i]
+
+                    # rate the genome. If it is better, replace the current, and start flipping bits in a new order
+                    new_fitness = self.evaluate(new_genome)
+                    evals += 1
+
+                    if new_fitness > current_fitness:
+                        current_genome = new_genome
+                        current_fitness = new_fitness
+                        climbing = True
+                        break
+
+                # if we go through all the genes and have not climbed at all, we have found a local optimum. generate a
+                # new genome and start another hill climb
+                if not climbing:
+                    best_fitness = current_fitness
+                    best_genome = current_genome
+                    current_genome = self.random_genome()
+
+            # after we have expended all evaluations, record the best fitness and genome
+            if current_fitness > best_fitness:
+                best_fitness = current_fitness
+                best_genome = current_genome
+
+        elif self.genome_type == 'real':
+            while evals < max_evals:
+                climbing = False
+                for i in random.sample(range(self.genome_length), self.genome_length):
+                    # copy the genome
+                    new_genome = current_genome[:]
+
+                    # generate a positive perturbation
+                    perturbation = random.uniform(1.0, 1.01)
+
+                    # apply the perturbation
+                    new_genome[i] = perturbation * new_genome[i]
+
+                    # rate the genome. If it is better, replace the current, and start perturbing bits in a new order
+                    new_fitness = self.evaluate(new_genome)
+                    evals +=  1
+
+                    if new_fitness > current_fitness:
+                        current_genome = new_genome
+                        current_fitness = new_fitness
+                        climbing = True
+                        break
+
+                    # if a positive perturbation didn't increase fitness, try a negative one
+                    else:
+                        perturbation = random.uniform(0.99, 1.0)
+
+                        # apply the perturbation
+                        new_genome[i] = perturbation * new_genome[i]
+
+                        # rate the genome. If it is better, replace the current, and start perturbing bits in a new order
+                        new_fitness = self.evaluate(new_genome)
+                        evals += 1
+
+                        if new_fitness > current_fitness:
+                            current_genome = new_genome
+                            current_fitness = new_fitness
+                            climbing = True
+                            break
+
+                # if we go through all the genes and have not climbed at all, we have found a local optimum. generate a
+                # new genome and start another hill climb
+                if not climbing:
+                    best_fitness = current_fitness
+                    best_genome = current_genome
+                    current_genome = self.random_genome()
+
+            # after we have expended all evaluations, record the best fitness and genome
+            if current_fitness > best_fitness:
+                best_fitness = current_fitness
+                best_genome = current_genome
+
+        else:
+            print('WARNING: genome type {0} not recognized for hill climber'.format(self.genome_type))
+
+        # return best fitness and genome
+        return best_fitness, best_genome
+
     def rosenbrock(self, x, a):
         result = 0
         n = len(x)
