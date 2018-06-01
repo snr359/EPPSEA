@@ -95,7 +95,8 @@ class FitnessFunction:
         'rastrigin': 'float',
         'rosenbrock': 'float',
         'dtrap': 'bool',
-        'nk_landscape': 'bool'
+        'nk_landscape': 'bool',
+        'mk_landscape': 'bool'
     }
 
     def __init__(self):
@@ -122,6 +123,7 @@ class FitnessFunction:
         self.max_initial_range = config.getfloat('fitness function', 'max initial range')
         self.trap_size = config.getint('fitness function', 'trap size')
         self.epistasis_k = config.getint('fitness function', 'epistasis k')
+        self.epistasis_m = config.getint('fitness function', 'epistasis m')
 
         if self.fitness_function_name == 'rastrigin':
             self.fitness_function_offset = self.generate_offset(self.genome_length)
@@ -130,6 +132,8 @@ class FitnessFunction:
 
         if self.fitness_function_name == 'nk_landscape':
             self.loci_values, self.epistasis = self.generate_epistatis(self.genome_length, self.epistasis_k)
+        elif self.fitness_function_name == 'mk_landscape':
+            self.loci_values, self.epistasis = self.generate_mk_epistatis(self.genome_length, self.epistasis_m, self.epistasis_k)
         else:
             self.loci_values, self.epistasis = None, None
 
@@ -296,6 +300,17 @@ class FitnessFunction:
 
         return result
 
+    def mk_landscape(self, x):
+        result = 0
+
+        for e in self.epistasis:
+            locus = []
+            locus.extend(x[j] for j in e)
+            locus_fitness = self.loci_values[tuple(locus)]
+            result += locus_fitness
+
+        return result
+
     def offset_rastrigin(self, x, a, offset):
         offset_x = list(x)
         for i in range(len(x)):
@@ -319,6 +334,17 @@ class FitnessFunction:
 
         return loci_values, epistasis
 
+    def generate_mk_epistatis(self, n, m, k):
+        loci_values = dict()
+        for locus in itertools.product([True, False], repeat=k):
+            loci_values[locus] = random.randint(0,k)
+
+        epistasis = list()
+        for _ in range(m):
+            epistasis.append(list(random.sample(list(j for j in range(n)), k)))
+
+        return loci_values, epistasis
+
     def evaluate(self, genome):
         if self.fitness_function_name == 'rosenbrock':
             fitness = self.rosenbrock(genome, self.fitness_function_a)
@@ -328,6 +354,8 @@ class FitnessFunction:
             fitness = self.dtrap(genome, self.trap_size)
         elif self.fitness_function_name == 'nk_landscape':
             fitness = self.nk_landscape(genome)
+        elif self.fitness_function_name == 'mk_landscape':
+            fitness = self.mk_landscape(genome)
 
         else:
             raise Exception('EPPSEA BasicEA ERROR: fitness function name {0} not recognized'.format(self.fitness_function_name))
@@ -414,7 +442,8 @@ class EA:
         'rastrigin': 'float',
         'rosenbrock': 'float',
         'dtrap': 'bool',
-        'nk_landscape': 'bool'
+        'nk_landscape': 'bool',
+        'mk_landscape': 'bool'
     }
 
     def __init__(self, config, fitness_function, selection_function):
@@ -583,7 +612,8 @@ class EppseaBasicEA:
         'rastrigin': 'float',
         'rosenbrock': 'float',
         'dtrap': 'bool',
-        'nk_landscape': 'bool'
+        'nk_landscape': 'bool',
+        'mk_landscape': 'bool'
     }
 
     def __init__(self, config):
