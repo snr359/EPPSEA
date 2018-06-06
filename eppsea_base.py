@@ -518,7 +518,7 @@ class Eppsea:
         self.results_directory = results_directory
 
         # setup logging file
-        self.log_file = open(self.results_directory + '/log.txt', 'w')
+        self.log_file_path = self.results_directory + '/log.txt'
 
         # try to read a config file from the config file path
         # if we do not have a config file, generate and use a default config
@@ -638,8 +638,9 @@ class Eppsea:
 
         # Print and log the message
         print(full_message)
-        self.log_file.write(full_message)
-        self.log_file.write('\n')
+        with open(self.log_file_path, 'a') as log_file:
+            log_file.write(full_message)
+            log_file.write('\n')
 
     def start_evolution(self):
         self.log('Starting evolution', 'INFO')
