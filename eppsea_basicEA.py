@@ -159,7 +159,7 @@ class FitnessFunction:
     def hill_climber(self, max_evals):
         # performs a first-ascent hill climb, restarting with random genomes at local optima
         # for real-valued genomes, hill climbing is done with stochastic perturbations and may not settle on the local optima
-        # returns the best fitness, and the genome that generated it
+        # returns a dictionary with results, and the best genome found
 
         # generate and evaluate a new genome
         current_genome = self.random_genome()
@@ -169,6 +169,9 @@ class FitnessFunction:
         evals = 1
         best_fitness = current_fitness
         best_genome = current_genome
+
+        best_fitnesses = dict()
+        best_fitnesses[1] = best_fitness
 
         # bool and real genomes are treated slightly differently
         if self.genome_type == 'bool':
@@ -186,6 +189,7 @@ class FitnessFunction:
                     if new_fitness > current_fitness:
                         current_genome = new_genome
                         current_fitness = new_fitness
+                        best_fitnesses[evals] = current_fitness
                         climbing = True
                         break
 
@@ -199,6 +203,7 @@ class FitnessFunction:
             # after we have expended all evaluations, record the best fitness and genome
             if current_fitness > best_fitness:
                 best_fitness = current_fitness
+                best_fitnesses[evals] = best_fitness
                 best_genome = current_genome
 
         elif self.genome_type == 'real':
@@ -221,6 +226,7 @@ class FitnessFunction:
                     if new_fitness > current_fitness:
                         current_genome = new_genome
                         current_fitness = new_fitness
+                        best_fitnesses[evals] = current_fitness
                         climbing = True
                         break
 
@@ -251,13 +257,18 @@ class FitnessFunction:
             # after we have expended all evaluations, record the best fitness and genome
             if current_fitness > best_fitness:
                 best_fitness = current_fitness
+                best_fitnesses[evals] = best_fitness
                 best_genome = current_genome
 
         else:
             print('WARNING: genome type {0} not recognized for hill climber'.format(self.genome_type))
 
+        results = dict()
+        results['best_fitnesses'] = best_fitnesses
+        results['final_best_fitness'] = best_fitness
+
         # return best fitness and genome
-        return best_fitness, best_genome
+        return results, best_genome
 
     def rosenbrock(self, x, a):
         result = 0
