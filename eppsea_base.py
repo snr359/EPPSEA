@@ -9,6 +9,7 @@ import configparser
 import shutil
 import pickle
 import statistics
+import uuid
 
 
 class GPNode:
@@ -166,6 +167,12 @@ class GPTree:
         
         self.random_min = random_min
         self.random_max = random_max
+
+        self.id = None
+
+    def assign_id(self):
+        # assigns a random id to self. Every unique EPPSEA individual should call this once
+        self.id = uuid.uuid4()
 
     def proportional_selection(self, population, weights, subset_size):
         # makes a random weighted selection from the population
@@ -368,6 +375,7 @@ class GPTree:
         # copy the first parent
         new_child = copy.deepcopy(self)
         new_child.fitness = None
+        new_child.assign_id()
 
         # select a point to insert a tree from the second parent
         insertion_point = random.choice(new_child.get_all_nodes())
@@ -450,6 +458,8 @@ class GPTree:
         self.select_from_subset = bool(random.random() < 0.5)
         self.selection_subset_size = initial_selection_subset_size
 
+        self.assign_id()
+
     def verify_parents(self):
         for n in self.get_all_nodes():
             if n is self.root:
@@ -472,6 +482,7 @@ class GPTree:
         result['selection_subset_size'] = self.selection_subset_size
         result['constant_min'] = self.constant_min
         result['constant_max'] = self.constant_max
+        result['id'] = self.id
 
         result['root'] = self.root.get_dict()
 
@@ -485,6 +496,7 @@ class GPTree:
         self.selection_subset_size = d['selection_subset_size']
         self.constant_min = d['constant_min']
         self.constant_max = d['constant_max']
+        self.id = d['id']
 
         self.root = GPNode(self.constant_min, self.constant_max, self.random_min, self.random_max)
         self.root.build_from_dict(d['root'])
