@@ -44,8 +44,9 @@ def main():
                     # if this run terminated early, use the final best fitness
                     elif all(m > rm for rm in r['best_fitnesses'].keys()):
                         best_fitnesses.append(r['final_best_fitness'])
-                error = statistics.stdev(best_fitnesses)
-                errors.append(error)
+                if len(best_fitnesses) > 1:
+                    error = statistics.stdev(best_fitnesses)
+                    errors.append(error)
 
             plt.errorbar(mu, fitness, errors=None, label=fitness_function_name, errorevery=5)
 

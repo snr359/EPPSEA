@@ -27,6 +27,10 @@ def run_ea(ea):
     result = ea.one_run()
     return result
 
+def run_hill_climber(fitness_function, iterations):
+    result = fitness_function.hill_climber(iterations)
+    return result
+
 class ResultHolder:
     # a class for holding the results of eppsea runs
     def __init__(self):
@@ -759,7 +763,7 @@ class EppseaBasicEA:
         return result
 
     def run_eas(self, eas, is_testing):
-        # runs each of the eas for the configured number of runs, returning one list for each ea
+        # runs each of the eas for the configured number of runs, returning one result_holder for each ea
         results_all_eas = []
 
         if is_testing:
@@ -806,6 +810,57 @@ class EppseaBasicEA:
 
         return results_all_eas
 
+    def run_hill_climbers(self, fitness_functions, iterations, is_testing):
+        # runs hill climbers on a set of fitness functions, once for every run
+        # runs each of the eas for the configured number of runs, returning one result_holder for each ea
+        results_all_hill_climbers = []
+
+        if is_testing:
+            runs = self.testing_runs
+        else:
+            runs = self.training_runs
+
+        if self.using_multiprocessing:
+            # setup parameters for multiprocessing
+            params = []
+            for f in fitness_functions:
+                params.extend([(f, iterations)]*runs)
+            # run all runs
+            pool = multiprocessing.Pool()
+            results = pool.starmap(run_hill_climber, params)
+            pool.close()
+
+            # split up results by ea
+            for i, f in enumerate(fitness_functions):
+                start = i * runs
+                stop = (i + 1) * runs
+
+                result_holder = ResultHolder()
+                result_holder.selection_function = None
+                result_holder.selection_function_name = 'Hill Climber'
+
+                result_holder.fitness_function = f
+                result_holder.fitness_function_name = f.fitness_function_name
+
+                result_holder.run_results = list(r[0] for r in results[start:stop])
+
+                results_all_hill_climbers.append(result_holder)
+
+        else:
+            for f in fitness_functions:
+                results = []
+                for r in range(runs):
+                    results.append(run_hill_climber(f, iterations)[0])
+
+                result_holder = ResultHolder()
+                result_holder.selection_function_name = 'Hill Climber'
+                result_holder.fitness_function_name = f.fitness_function_name
+                result_holder.run_results = results
+
+                results_all_hill_climbers.append(result_holder)
+
+        return results_all_hill_climbers
+
     def evaluate_eppsea_population(self, eppsea_population, is_testing):
         # evaluates a population of eppsea individuals and assigns fitness values to them
         if is_testing:
@@ -847,7 +902,9 @@ class EppseaBasicEA:
 
         ea_results = self.run_eas(eas, True)
 
-        return ea_results
+        hill_climber_results = self.run_hill_climbers(self.testing_fitness_functions, 1000, True) #TODO: make iterations configurable
+
+        return ea_results + hill_climber_results
 
     def run_eppsea_basicea(self):
         print('Now starting EPPSEA')
