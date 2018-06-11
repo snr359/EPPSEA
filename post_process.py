@@ -82,7 +82,7 @@ def main():
         sample1_mean = statistics.mean(sample1)
         print('Mean performance of EPPSEA function on fitness function {0}: {1}'.format(fitness_function_number, sample1_mean))
         for parent_selection_function, final_result in results.items():
-            if parent_selection_function != 'eppsea_selection_function':
+            if parent_selection_function != 'Evolved Selection Function':
                 sample2 = final_result.get_final_best_fitness_all_runs()
                 sample2_mean = statistics.mean(sample2)
                 mean_difference = sample1_mean - sample2_mean

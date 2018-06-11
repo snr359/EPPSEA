@@ -868,8 +868,8 @@ class EppseaBasicEA:
         self.log('Time elapsed: {0}'.format(end_time))
 
         all_fitness_function_results = dict()
-        for i in range(self.num_testing_fitness_functions):
-            fitness_function_results = final_test_results[i::self.num_testing_fitness_functions]
+        for i, f in enumerate(self.testing_fitness_functions):
+            fitness_function_results = list(r for r in final_test_results if r.fitness_function is f)
             all_fitness_function_results[i] = fitness_function_results
 
         final_results_path = '{0}/final_results'.format(self.results_directory)
