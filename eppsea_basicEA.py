@@ -647,6 +647,8 @@ class EppseaBasicEA:
         self.test_generalization = config.getboolean('EA', 'test generalization')
         self.training_runs = config.getint('EA', 'training runs')
         self.testing_runs = config.getint('EA', 'testing runs')
+        self.test_hill_climber = config.getboolean('EA', 'test hill climber')
+        self.hill_climber_iterations = config.getint('EA', 'hill climber iterations')
 
         self.num_training_fitness_functions = None
         self.num_testing_fitness_functions = None
@@ -902,7 +904,10 @@ class EppseaBasicEA:
 
         ea_results = self.run_eas(eas, True)
 
-        hill_climber_results = self.run_hill_climbers(self.testing_fitness_functions, 1000, True) #TODO: make iterations configurable
+        if self.test_hill_climber:
+            hill_climber_results = self.run_hill_climbers(self.testing_fitness_functions, self.hill_climber_iterations, True)
+        else:
+            hill_climber_results = []
 
         return ea_results + hill_climber_results
 
