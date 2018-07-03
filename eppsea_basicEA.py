@@ -389,6 +389,10 @@ class SelectionFunction:
         self.type = config.get('selection function', 'type')
         self.name = config.get('selection function', 'name')
         self.tournament_k = config.getint('selection function', 'tournament k')
+        if self.type == 'eppsea_selection_function':
+            file_path = config.get('selection function', 'file path (for evolved selection)')
+            self.eppsea_selection_function = eppsea_base.GPTree(None, None, None, None)
+            self.eppsea_selection_function.load_from_dict(file_path)
 
     def generate_from_eppsea_individual(self, eppsea_selection_function):
         self.type = 'eppsea_selection_function'

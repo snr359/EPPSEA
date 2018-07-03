@@ -482,6 +482,8 @@ class GPTree:
         result['selection_subset_size'] = self.selection_subset_size
         result['constant_min'] = self.constant_min
         result['constant_max'] = self.constant_max
+        result['random_min'] = self.random_min
+        result['random_max'] = self.random_max
         result['id'] = self.id
 
         result['root'] = self.root.get_dict()
@@ -496,6 +498,8 @@ class GPTree:
         self.selection_subset_size = d['selection_subset_size']
         self.constant_min = d['constant_min']
         self.constant_max = d['constant_max']
+        self.random_min = d['random_min']
+        self.random_max = d['random_max']
         self.id = d['id']
 
         self.root = GPNode(self.constant_min, self.constant_max, self.random_min, self.random_max)
