@@ -18,7 +18,7 @@
 
 ## Directory where tuning instances are located, either absolute path or
 ## relative to current directory.
-trainInstancesDir = "./fitness_functions/nk_landscape/training"
+trainInstancesDir = "./fitness_functions/mk_landscape/training"
 
 ## File with a list of instances and (optionally) parameters.
 ## If empty or NULL, do not use a file.
@@ -54,7 +54,7 @@ trainInstancesDir = "./fitness_functions/nk_landscape/training"
 
 ## The maximum number of runs (invocations of targetRunner) that will
 ## performed. It determines the (maximum) budget of experiments for the tuning.
-maxExperiments = 10000
+maxExperiments = 5000
 
 ## The maximum time in seconds for the runs of targetRunner that will be 
 ## performed. The mean execution time is estimated to calculate the maximum number 
