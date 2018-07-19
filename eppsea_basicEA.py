@@ -11,14 +11,15 @@ import multiprocessing
 import time
 import datetime
 import pickle
+import json
 
 import eppsea_base
 import find_optimal_tournament_k
 
 
-def postprocess(final_results_path, results_directory):
+def postprocess(final_results_paths, results_directory):
     # calls the postprocessing script on a pickled dictionary mapping fitness functions to ResultHolder objects
-    params = ['python3', 'post_process.py', final_results_path, results_directory]
+    params = ['python3', 'post_process.py', results_directory] + final_results_paths
     result = subprocess.run(params, stdout=subprocess.PIPE, universal_newlines=True)
 
     return result.stdout
@@ -915,6 +916,47 @@ class EppseaBasicEA:
 
         return ea_results + hill_climber_results
 
+    def export_run_results(self, final_test_results):
+        # takes a list of ResultsHolder objects and exports several json files that are compatible with the post_process
+        # script
+        results_paths = []
+        # get a set of the selection functions tested
+        selection_function_names = set(f.selection_function_name for f in final_test_results)
+        # create a dictionary of results for each selection function
+        for s in selection_function_names:
+            results_dict = dict()
+            results_dict['Name'] = s
+            # get the list of results for this particular selection function
+            results = list(f for f in final_test_results if f.selection_function_name == s)
+            # check if a log scale needs to be used
+            if any(r.fitness_function.fitness_function_name in ['rosenbrock, rastrigin'] for r in results):
+                results_dict['Log Scale'] = True
+            else:
+                results_dict['Log Scale'] = False
+            # check if this is the EPPSEA selection function, in which case a t test must be done
+            if s == 'Evolved Selection Function':
+                results_dict['T Test'] = True
+            else:
+                results_dict['T Test'] = False
+            results_dict['Fitness Functions'] = dict()
+            # enumerate over all fitness functions tested
+            for i,f in enumerate(self.testing_fitness_functions):
+                # get the result holder corresponding to the runs for this fitness function
+                fitness_function_result = next(r for r in results if r.fitness_function is f)
+                # get the mappings of evaluations to best fitnesses for all runs of this fitness function
+                run_results = list(r['best_fitnesses'] for r in fitness_function_result.run_results)
+
+                fitness_function_name = f.fitness_function_name
+                results_dict['Fitness Functions'][i] = {'Name':fitness_function_name, 'Runs':run_results}
+
+            # export the json file and record its location
+            results_path = '{0}/{1}.json'.format(self.results_directory, s)
+            with open(results_path, 'w') as file:
+                json.dump(results_dict, file)
+            results_paths.append(results_path)
+        return results_paths
+
+
     def run_eppsea_basicea(self):
         print('Now starting EPPSEA')
         start_time = time.time()
@@ -933,21 +975,14 @@ class EppseaBasicEA:
         end_time = time.time() - start_time
         self.log('Time elapsed: {0}'.format(end_time))
 
-        all_fitness_function_results = dict()
-        for i, f in enumerate(self.testing_fitness_functions):
-            fitness_function_results = list(r for r in final_test_results if r.fitness_function is f)
-            all_fitness_function_results[i] = fitness_function_results
-
-        final_results_path = '{0}/final_results'.format(self.results_directory)
-        with open(final_results_path, 'wb') as pickle_file:
-            pickle.dump(all_fitness_function_results, pickle_file)
+        result_file_paths = self.export_run_results(final_test_results)
 
         try:
-            postprocess_results = postprocess(final_results_path, self.results_directory)
+            postprocess_results = postprocess(result_file_paths, self.results_directory)
             self.log('Postprocess results:')
             self.log(postprocess_results)
         except Exception:
-            self.log('Postprocessing failed. Run postprocessing directly on {0}'.format(final_results_path))
+            self.log('Postprocessing failed. Run postprocessing directly at {0}'.format(self.results_directory))
 
         eppsea_base_results_path = eppsea.results_directory
         shutil.copytree(eppsea_base_results_path, self.results_directory + '/base')
