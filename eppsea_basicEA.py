@@ -975,8 +975,10 @@ class EppseaBasicEA:
         end_time = time.time() - start_time
         self.log('Time elapsed: {0}'.format(end_time))
 
+        print('Exporting Run Results')
         result_file_paths = self.export_run_results(final_test_results)
 
+        print('Running Postprocessing')
         try:
             postprocess_results = postprocess(result_file_paths, self.results_directory)
             self.log('Postprocess results:')
