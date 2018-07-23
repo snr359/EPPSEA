@@ -152,7 +152,7 @@ class GPTree:
     # to parent selection
     selection_types = ['proportional', 'maximum']
 
-    def __init__(self, constant_min, constant_max, random_min, random_max):
+    def __init__(self):
         self.root = None
         self.fitness = None
         self.reusing_parents = None
@@ -162,17 +162,19 @@ class GPTree:
         self.final = False
         self.selected_in_generation = dict()
 
-        self.constant_min = constant_min
-        self.constant_max = constant_max
-        
-        self.random_min = random_min
-        self.random_max = random_max
+        self.constant_min = None
+        self.constant_max = None
+        self.random_min = None
+        self.random_max = None
+
+        self.initial_gp_depth_limit = None
+        self.initial_selection_subset_size = None
 
         self.id = None
 
     def assign_id(self):
         # assigns a random id to self. Every unique GP Tree should call this once
-        self.id = uuid.uuid4()
+        self.id = self.id = '{0}_{1}_{2}'.format('GPTree', str(id(self)), str(uuid.uuid4()))
 
     def proportional_selection(self, population, weights, subset_size):
         # makes a random weighted selection from the population
@@ -448,15 +450,15 @@ class GPTree:
                     break
             replacement_node.parent = parent_of_replacement
 
-    def randomize(self, initial_depth_limit, initial_selection_subset_size):
+    def randomize(self):
         if self.root is None:
             self.root = GPNode(self.constant_min, self.constant_max, self.random_min, self.random_max)
-        self.root.grow(initial_depth_limit, None)
+        self.root.grow(self.initial_gp_depth_limit, None)
 
         self.selection_type = random.choice(self.selection_types)
         self.reusing_parents = bool(random.random() < 0.5)
         self.select_from_subset = bool(random.random() < 0.5)
-        self.selection_subset_size = initial_selection_subset_size
+        self.selection_subset_size = self.initial_selection_subset_size
 
         self.assign_id()
 
@@ -525,42 +527,97 @@ class GPTree:
 
 class EppseaSelectionFunction:
     # encapsulates all trees and functionality associated with one selection function
-    def __init__(self, constant_min, constant_max, random_min, random_max):
-        self.fitness = None
-        self.gp_trees = None
-        self.id = None
+    def __init__(self, other=None):
+        # if other is provided, copy variable values. Otherwise, initialize them all to none
+        if other is not None:
+            self.fitness = other.fitness
+            self.gp_trees = other.gp_trees[:]
 
-        self.constant_min = constant_min
-        self.constant_max = constant_max
-        self.random_min = random_min
-        self.random_max = random_max
+
+            self.constant_min = other.constant_min
+            self.constant_max = other.constant_max
+            self.random_min = other.random_min
+            self.random_max = other.random_max
+
+            self.initial_gp_depth_limit = other.initial_gp_depth_limit
+            self.initial_selection_subset_size = other.initial_selection_subset_size
+        else:
+            self.fitness = None
+            self.gp_trees = None
+
+            self.constant_min = None
+            self.constant_max = None
+            self.random_min = None
+            self.random_max = None
+
+            self.initial_gp_depth_limit = None
+            self.initial_selection_subset_size = None
+
+        # the id should never be copied, and should instead be reassigned with assign_id
+        self.id = None
 
     def assign_id(self):
         # assigns a random id to self. Every unique EPPSEA individual should call this once
-        self.id = uuid.uuid4()
+        self.id = '{0}_{1}_{2}'.format('EppseaSelectionFunction', str(id(self)), str(uuid.uuid4()))
 
-    def randomize(self, initial_gp_depth_limit, initial_selection_subset_size):
+    def randomize(self):
+        # randomizes this individual and assigns a new id
+        # clear the gp_trees
         self.gp_trees = []
-        new_gp_tree = GPTree(self.constant_min, self.constant_max, self.random_min, self.random_max)
-        new_gp_tree.randomize(initial_gp_depth_limit, initial_selection_subset_size)
+
+        # create each new tree (only one for now)
+        new_gp_tree = GPTree()
+
+        new_gp_tree.constant_min = self.constant_min
+        new_gp_tree.constant_max = self.constant_max
+        new_gp_tree.random_min = self.random_min
+        new_gp_tree.random_max = self.random_max
+
+        new_gp_tree.initial_gp_depth_limit = self.initial_gp_depth_limit
+        new_gp_tree.initial_selection_subset_size = self.initial_selection_subset_size
+
+        new_gp_tree.randomize()
+        self.gp_trees.append(new_gp_tree)
+
+    def mutate(self):
+        # mutates each gp tree
+        for tree in self.gp_trees:
+            tree.mutate()
 
     def recombine(self, parent2):
         # recombines each gp_tree belonging to this selection function
-        new_selection_function = EppseaSelectionFunction(self.constant_min, self. constant_max, self.random_min, self.random_max)
+        # make a new selection function
+        new_selection_function = EppseaSelectionFunction()
+
+        # clear the list of gp_trees and recombine them
         new_selection_function.gp_trees = []
         for gp_tree1, gp_tree2 in zip(self.gp_trees, parent2.gp_trees):
             new_gptree = gp_tree1.recombine(gp_tree2)
             new_selection_function.gp_trees.append(new_gptree)
 
+        # clear the fitness rating and assign a new id
         new_selection_function.assign_id()
+        new_selection_function.fitness = None
         return new_selection_function
 
     def select(self, population, n=1, generation_num=None):
         return self.gp_trees[0].select(population, n, generation_num)
 
     def is_clone(self, population):
+        # returns true if this selection function is a clone of any other selection function in the population
         trees = (p.gp_trees[0] for p in population)
         return self.gp_trees[0].is_clone(trees)
+
+    def get_string(self):
+        # for now, just gets the string of the only gp_tree
+        return self.gp_trees[0].get_string()
+
+    def gp_trees_size(self):
+        # returns the size of all gp_trees
+        size = 0
+        for tree in self.gp_trees:
+            size += tree.size()
+        return size
 
 
 class Eppsea:
@@ -695,16 +752,24 @@ class Eppsea:
             log_file.write(full_message)
             log_file.write('\n')
 
-    def start_evolution(self):
-        self.log('Starting evolution', 'INFO')
-        # record start time
-        self.start_time = time.time()
-
-        # initialize the population
+    def randomize_population(self):
+        # Fills the population with "mu" randomized individuals
         self.population = []
+
         for i in range(self.gp_mu):
-            new_selection_function = EppseaSelectionFunction(self.constant_min, self.constant_max, self.random_min, self.random_max)
-            new_selection_function.randomize(self.initial_gp_depth_limit, self.initial_selection_subset_size)
+            # generate a new selection function
+            new_selection_function = EppseaSelectionFunction()
+
+            # set parameters for new selection function
+            new_selection_function.constant_min = self.constant_min
+            new_selection_function.constant_max = self.constant_max
+            new_selection_function.random_min = self.random_min
+            new_selection_function.random_max = self.random_max
+            new_selection_function.initial_gp_depth_limit = self.initial_gp_depth_limit
+            new_selection_function.initial_selection_subset_size = self.initial_selection_subset_size
+
+            # randomize the selection function and add it to the population
+            new_selection_function.randomize()
             self.population.append(new_selection_function)
 
             # force selection function settings, if configured to
@@ -716,7 +781,15 @@ class Eppsea:
                 new_selection_function.gp_trees[0].select_from_subset = self.force_select_from_subset
 
         # mark the entire population as new
-        self.new_population = list(self.population)
+        self.new_population = self.population
+
+    def start_evolution(self):
+        self.log('Starting evolution', 'INFO')
+        # record start time
+        self.start_time = time.time()
+
+        # initialize the population
+        self.randomize_population()
 
         # check population uniqueness
         self.check_gp_population_uniqueness(self.population, 0.75)
@@ -746,7 +819,7 @@ class Eppsea:
 
         # apply parsimony pressure
         for p in self.new_population:
-            p.fitness -= self.gp_parsimony_pressure * p.size()
+            p.fitness -= self.gp_parsimony_pressure * p.gp_trees_size()
 
         # Update results
         average_fitness = statistics.mean(p.fitness for p in self.population)
@@ -795,21 +868,7 @@ class Eppsea:
 
             # if we are restarting, regenerate the population
             if self.restarting:
-                self.population = []
-                for i in range(self.gp_mu):
-                    new_tree = GPTree(self.constant_min, self.constant_max, self.random_min, self.random_max)
-                    new_tree.randomize(self.initial_gp_depth_limit, self.initial_selection_subset_size)
-                    self.population.append(new_tree)
-
-                    # force selection function settings, if configured to
-                    if self.force_selection_type is not None:
-                        new_tree.selection_type = self.force_selection_type
-                    if self.force_reusing_parents is not None:
-                        new_tree.reusing_parents = self.force_reusing_parents
-                    if self.force_select_from_subset is not None:
-                        new_tree.select_from_subset = self.force_select_from_subset
-
-                self.new_population = list(self.population)
+                self.randomize_population()
 
                 self.gens_since_avg_fitness_improvement = 0
                 self.gens_since_best_fitness_improvement = 0
