@@ -171,7 +171,7 @@ class GPTree:
         self.id = None
 
     def assign_id(self):
-        # assigns a random id to self. Every unique EPPSEA individual should call this once
+        # assigns a random id to self. Every unique GP Tree should call this once
         self.id = uuid.uuid4()
 
     def proportional_selection(self, population, weights, subset_size):
@@ -523,6 +523,46 @@ class GPTree:
         return False
 
 
+class EppseaSelectionFunction:
+    # encapsulates all trees and functionality associated with one selection function
+    def __init__(self, constant_min, constant_max, random_min, random_max):
+        self.fitness = None
+        self.gp_trees = None
+        self.id = None
+
+        self.constant_min = constant_min
+        self.constant_max = constant_max
+        self.random_min = random_min
+        self.random_max = random_max
+
+    def assign_id(self):
+        # assigns a random id to self. Every unique EPPSEA individual should call this once
+        self.id = uuid.uuid4()
+
+    def randomize(self, initial_gp_depth_limit, initial_selection_subset_size):
+        self.gp_trees = []
+        new_gp_tree = GPTree(self.constant_min, self.constant_max, self.random_min, self.random_max)
+        new_gp_tree.randomize(initial_gp_depth_limit, initial_selection_subset_size)
+
+    def recombine(self, parent2):
+        # recombines each gp_tree belonging to this selection function
+        new_selection_function = EppseaSelectionFunction(self.constant_min, self. constant_max, self.random_min, self.random_max)
+        new_selection_function.gp_trees = []
+        for gp_tree1, gp_tree2 in zip(self.gp_trees, parent2.gp_trees):
+            new_gptree = gp_tree1.recombine(gp_tree2)
+            new_selection_function.gp_trees.append(new_gptree)
+
+        new_selection_function.assign_id()
+        return new_selection_function
+
+    def select(self, population, n=1, generation_num=None):
+        return self.gp_trees[0].select(population, n, generation_num)
+
+    def is_clone(self, population):
+        trees = (p.gp_trees[0] for p in population)
+        return self.gp_trees[0].is_clone(trees)
+
+
 class Eppsea:
     def __init__(self, config_path=None):
 
@@ -639,9 +679,6 @@ class Eppsea:
         random.seed(seed)
         self.log('Using random seed {0}'.format(seed), 'INFO')
 
-    # record start time
-    start_time = time.time()
-
     def log(self, message, message_type):
         # Builds a log message out of a timestamp, the passed message, and a message type, then prints the message and
         # writes it in the log_file
@@ -666,17 +703,17 @@ class Eppsea:
         # initialize the population
         self.population = []
         for i in range(self.gp_mu):
-            new_tree = GPTree(self.constant_min, self.constant_max, self.random_min, self.random_max)
-            new_tree.randomize(self.initial_gp_depth_limit, self.initial_selection_subset_size)
-            self.population.append(new_tree)
+            new_selection_function = EppseaSelectionFunction(self.constant_min, self.constant_max, self.random_min, self.random_max)
+            new_selection_function.randomize(self.initial_gp_depth_limit, self.initial_selection_subset_size)
+            self.population.append(new_selection_function)
 
             # force selection function settings, if configured to
             if self.force_selection_type is not None:
-                new_tree.selection_type = self.force_selection_type
+                new_selection_function.gp_trees[0].selection_type = self.force_selection_type
             if self.force_reusing_parents is not None:
-                new_tree.reusing_parents = self.force_reusing_parents
+                new_selection_function.gp_trees[0].reusing_parents = self.force_reusing_parents
             if self.force_select_from_subset is not None:
-                new_tree.select_from_subset = self.force_select_from_subset
+                new_selection_function.gp_trees[0].select_from_subset = self.force_select_from_subset
 
         # mark the entire population as new
         self.new_population = list(self.population)
