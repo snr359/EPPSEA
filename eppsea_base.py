@@ -13,10 +13,10 @@ import uuid
 
 
 class GPNode:
-    numeric_terminals = ['constant', 'random'] 
-    data_terminals = ['fitness', 'fitness_rank', 'population_size', 'sum_fitness'] # ['generation_num', 'birth_gen']
-    non_terminals = ['+', '-', '*', '/', 'step']
-    child_count = {'+': 2, '-': 2, '*': 2, '/': 2, 'step': 2}
+    numeric_terminals = ['constant', 'random']
+    data_terminals = ['fitness', 'fitness_rank', 'population_size', 'sum_fitness', 'min_fitness', 'max_fitness', 'relative_fitness', 'birth_generation', 'generation_number']
+    non_terminals = ['+', '-', '*', '/', 'step', 'absolute']
+    child_count = {'+': 2, '-': 2, '*': 2, '/': 2, 'step': 2, 'absolute': 1}
 
     def __init__(self, constant_min, constant_max, random_min, random_max):
         self.operation = None
@@ -65,6 +65,9 @@ class GPNode:
             else:
                 return 0
 
+        elif self.operation == 'absolute':
+            return abs(self.children[0].get(terminal_values))
+
         elif self.operation in GPNode.data_terminals:
             return terminal_values[self.operation]
 
@@ -76,7 +79,10 @@ class GPNode:
 
     def get_string(self):
         if self.operation in GPNode.non_terminals:
-            result = "(" + self.children[0].get_string() + " " + self.operation + " " + self.children[1].get_string() + ")"
+            if self.child_count[self.operation] == 2:
+                result = "(" + self.children[0].get_string() + " " + self.operation + " " + self.children[1].get_string() + ")"
+            elif self.child_count[self.operation] == 1:
+                result = self.operation + "(" + self.children[0].get_string() + ")"
         elif self.operation == 'constant':
             result = str(self.data)
         else:
@@ -94,6 +100,8 @@ class GPNode:
                     result = '(' + self.children[0].get_code() + self.operation + '(0.000001+' + self.children[1].get_code() + '))'
                 elif self.operation == 'step':
                     result = '(int(' + self.children[0].get_code() + '>=' + self.children[1].get_code() + '))'
+                elif self.operation == 'absolute':
+                    result = 'abs( '+ self.children[0].get_code() +' )'
 
         elif self.operation in GPNode.data_terminals:
             result = '(p.' + self.operation + ')'
@@ -272,7 +280,7 @@ class GPTree:
 
         return fitness_rankings, sum_fitness
 
-    def get_selectabilities(self, candidates, population_size, generation_num):
+    def get_selectabilities(self, candidates, population_size, generation_number):
         # calculates the selectabilities of the candidates
         # returns a new list of tuples, each of (candidate, selectability)
 
@@ -281,6 +289,8 @@ class GPTree:
 
         # get fitness stats
         sum_fitness = sum(c.fitness for c in sorted_candidates)
+        min_fitness = min(c.fitness for c in sorted_candidates)
+        max_fitness = max(c.fitness for c in sorted_candidates)
 
         # calculate selectabilities
         selectabilities = []
@@ -289,20 +299,23 @@ class GPTree:
             terminal_values['fitness'] = sorted_candidates[i].fitness
             terminal_values['fitness_rank'] = i+1
             terminal_values['sum_fitness'] = sum_fitness
+            terminal_values['min_fitness'] = min_fitness
+            terminal_values['max_fitness'] = max_fitness
+            terminal_values['relative_fitness'] = (sorted_candidates[i].fitness - min_fitness) / (max_fitness - min_fitness)
             terminal_values['population_size'] = population_size
-            terminal_values['birth_gen'] = sorted_candidates[i].birth_gen
+            terminal_values['birth_generation'] = sorted_candidates[i].birth_generation
 
-            if generation_num is None:
-                terminal_values['generation_num'] = generation_num
+            if generation_number is not None:
+                terminal_values['generation_number'] = generation_number
             else:
-                terminal_values['generation_num'] = 0
+                terminal_values['generation_number'] = 0
 
             selectabilities.append(self.get(terminal_values))
 
         # zip the candidates and selectabilities, and return
         return zip(sorted_candidates, selectabilities)
 
-    def select(self, population, n=1, generation_num=None):
+    def select(self, population, n=1, generation_number=None):
         # probabilistically selects n members of the population according to the selectability tree
 
         # raise an error if the population members do not have a fitness attribute
@@ -310,25 +323,25 @@ class GPTree:
             raise Exception('EPPSEA ERROR: Trying to use an EEPSEA selector to select from a population'
                             'when one of the members does not have "fitness" defined.')
 
-        # raise an error if the population members do not have a birth_gen attribute
-        if not all(hasattr(p, 'birth_gen') for p in population):
+        # raise an error if the population members do not have a birth_generation attribute
+        if not all(hasattr(p, 'birth_generation') for p in population):
             raise Exception('EPPSEA ERROR: Trying to use an EEPSEA selector to select from a population'
-                            'when one of the members does not have "birth_gen" defined.')
+                            'when one of the members does not have "birth_generation" defined.')
 
         # create a list of selected individuals for the current generation if one does not exist
-        if generation_num not in self.selected_in_generation.keys():
-            self.selected_in_generation[generation_num] = list()
+        if generation_number not in self.selected_in_generation.keys():
+            self.selected_in_generation[generation_number] = list()
 
         # determine the list of candidates for selection
-        if not self.reusing_parents and generation_num is not None:
-            candidates = list(p for p in population if p not in self.selected_in_generation[generation_num])
+        if not self.reusing_parents and generation_number is not None:
+            candidates = list(p for p in population if p not in self.selected_in_generation[generation_number])
         else:
             candidates = list(population)
 
         # prepare to catch an overflow error
         try:
             # get the candidates with selectabilities
-            candidates_with_selectabilities = self.get_selectabilities(candidates, len(population), generation_num)
+            candidates_with_selectabilities = self.get_selectabilities(candidates, len(population), generation_number)
 
             # get the newly ordered lists of candidates and selectabilities
             candidates, selectabilities = zip(*candidates_with_selectabilities)
@@ -356,8 +369,8 @@ class GPTree:
                 else:
                     raise Exception('EPPSEA ERROR: selection type {0} not found'.format(self.selection_type))
 
-                if generation_num is not None:
-                    self.selected_in_generation[generation_num].append(selected_member)
+                if generation_number is not None:
+                    self.selected_in_generation[generation_number].append(selected_member)
 
                 if not self.reusing_parents:
                     candidates.pop(selected_index)
@@ -600,8 +613,8 @@ class EppseaSelectionFunction:
         new_selection_function.fitness = None
         return new_selection_function
 
-    def select(self, population, n=1, generation_num=None):
-        return self.gp_trees[0].select(population, n, generation_num)
+    def select(self, population, n=1, generation_number=None):
+        return self.gp_trees[0].select(population, n, generation_number)
 
     def is_clone(self, population):
         # returns true if this selection function is a clone of any other selection function in the population

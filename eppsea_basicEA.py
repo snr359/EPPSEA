@@ -544,7 +544,7 @@ class EA:
         for _ in range(self.mu):
             new_child = self.Popi()
             new_child.randomize(self.fitness_function.genome_length, self.fitness_function.max_initial_range, self.fitness_function.genome_type)
-            new_child.birth_gen = generation_number
+            new_child.birth_generation = generation_number
             self.evaluate_child(new_child, self.fitness_function)
             population.append(new_child)
 
@@ -571,7 +571,7 @@ class EA:
                 parent2 = all_parents[i + 1]
 
                 new_child = parent1.recombine(parent2)
-                new_child.birth_gen = generation_number
+                new_child.birth_generation = generation_number
                 for j in range(new_child.genome_length):
                     if random.random() < self.mutation_rate:
                         new_child.mutate_gene(j)
