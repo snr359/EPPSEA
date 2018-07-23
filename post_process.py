@@ -143,21 +143,24 @@ def main(final_output_directory, results_file_paths):
             if r1['T Test']:
                 r1_run_results = r1['Fitness Functions'][fitness_function_number]['Runs']
                 sample1 = get_final_best_fitnesses(r1_run_results)
-                sample1_mean = statistics.mean(sample1)
+                # round mean to 5 decimal places for cleaner display
+                sample1_mean = round(statistics.mean(sample1), 5)
                 print('Mean performance of {0}: {1}'.format(r1['Name'], sample1_mean))
                 for r2 in results:
                     if r2 is not r1:
                         r2_run_results = r2['Fitness Functions'][fitness_function_number]['Runs']
                         sample2 = get_final_best_fitnesses(r2_run_results)
-                        sample2_mean = statistics.mean(sample2)
+                        sample2_mean = round(statistics.mean(sample2), 5)
                         t, p = scipy.stats.ttest_rel(sample1, sample2)
-                        mean_difference = sample1_mean - sample2_mean
+                        mean_difference = round(sample1_mean - sample2_mean, 5)
 
-                        if mean_difference > 0:
-                            print('Mean performance of {0}: {1} | {2} performed {3} better | p-value: {4} '.format(r2['Name'], sample2_mean, r1['Name'], mean_difference, p))
+                        if p < 0.05:
+                            if mean_difference > 0:
+                                print('Mean performance of {0}: {1} | {2} performed {3} better | p-value: {4} '.format(r2['Name'], sample2_mean, r1['Name'], mean_difference, p))
+                            else:
+                                print('Mean performance of {0}: {1} | {2} performed {3} worse | p-value: {4} '.format(r2['Name'], sample2_mean, r1['Name'], mean_difference, p))
                         else:
-                            print('Mean performance of {0}: {1} | {2} performed {3} worse | p-value: {4} '.format(r2['Name'], sample2_mean, r1['Name'], mean_difference, p))
-
+                            print('Mean performance of {0}: {1} | {2} performance difference is insignificant | p-value: {4} '.format(r2['Name'], sample2_mean, r1['Name'], mean_difference, p))
 
 if __name__ == '__main__':
     final_output_directory = sys.argv[1]

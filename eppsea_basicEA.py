@@ -392,7 +392,7 @@ class SelectionFunction:
         self.tournament_k = config.getint('selection function', 'tournament k')
         if self.type == 'eppsea_selection_function':
             file_path = config.get('selection function', 'file path (for evolved selection)')
-            self.eppsea_selection_function = eppsea_base.GPTree(None, None, None, None)
+            self.eppsea_selection_function = eppsea_base.GPTree()
             self.eppsea_selection_function.load_from_dict(file_path)
 
     def generate_from_eppsea_individual(self, eppsea_selection_function):
@@ -971,9 +971,10 @@ class EppseaBasicEA:
             eppsea.next_generation()
 
         best_selection_function = eppsea.final_best_member
+        print('Running final tests')
         final_test_results = self.test_against_basic_selection(best_selection_function)
         end_time = time.time() - start_time
-        self.log('Time elapsed: {0}'.format(end_time))
+        self.log('Total time elapsed: {0}'.format(end_time))
 
         print('Exporting Run Results')
         result_file_paths = self.export_run_results(final_test_results)
