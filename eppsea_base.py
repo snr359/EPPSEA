@@ -158,7 +158,7 @@ class GPNode:
 class GPTree:
     # encapsulates a tree made of GPNodes that determine probability of selection, as well as other options relating
     # to parent selection
-    selection_types = ['proportional', 'maximum']
+    selection_types = ['proportional', 'maximum', 'stochastic_universal_sampling']
 
     def __init__(self):
         self.root = None
@@ -192,10 +192,11 @@ class GPTree:
             raise IndexError
 
         # normalize the weights, if necessary
-        min_weight = min(weights)
+        normalized_weights = weights[:]
+        min_weight = min(normalized_weights)
         if min_weight < 0:
-            for i in range(len(weights)):
-                weights[i] -= min_weight
+            for i in range(len(normalized_weights)):
+                normalized_weights[i] -= min_weight
 
         # determine the indeces of selectable candidates
         if subset_size is not None:
@@ -207,7 +208,7 @@ class GPTree:
         indices_and_weights = []
         cum_weight = 0
         for i in selectable_indices:
-            cum_weight += weights[i]
+            cum_weight += normalized_weights[i]
             indices_and_weights.append((i, cum_weight))
         sum_weight = cum_weight
 
@@ -261,6 +262,54 @@ class GPTree:
 
         # return the population member at that index
         return population[index_of_max], index_of_max
+
+    def stochastic_universal_sampling_selection(self, population, weights, subset_size, n):
+        # returns n members of the population selected using universal stochastic sampling
+
+        # raise an error if the lengths of the population and weights are different
+        if len(population) != len(weights):
+            raise IndexError
+
+        # normalize the weights, if necessary
+        normalized_weights = weights[:]
+        min_weight = min(normalized_weights)
+        if min_weight < 0:
+            for i in range(len(normalized_weights)):
+                normalized_weights[i] -= min_weight
+
+        # determine the indeces of selectable candidates
+        if subset_size is not None:
+            selectable_indices = random.sample(range(len(population)), subset_size)
+        else:
+            selectable_indices = range(len(population))
+
+        # build a list of the indices and cumulative selection weights
+        indices_and_weights = []
+        cum_weight = 0
+        for i in selectable_indices:
+            cum_weight += normalized_weights[i]
+            indices_and_weights.append((i, cum_weight))
+        sum_weight = cum_weight
+
+        # if the sum weight is 0 or inf, just return random candidate
+        if sum_weight == 0 or sum_weight == math.inf:
+            return random.sample(population, n)
+
+        # calculate interval length
+        interval_length = sum_weight / n
+
+        # calculate initial interval offset
+        offset = random.uniform(0, interval_length)
+
+        # select population members at interval points
+        selected = []
+        for i, w in indices_and_weights:
+            while offset < w:
+                selected.append(population[i])
+                offset += interval_length
+
+        return selected
+
 
     def get_fitness_stats(self, fitnesses):
         # return [],0 if no fitnesses
@@ -350,7 +399,10 @@ class GPTree:
 
             # select, record, and return population members
             selected_members = []
-            for i in range(n):
+
+            # if we are doing stochastic universal sampling, select members all at once. Otherwise, select one at a time
+            if self.selection_type == 'stochastic_universal_sampling':
+
                 if len(candidates) == 0:
                     raise Exception('EPPSEA ERROR: There are no candidates available for selection. '
                                     ' If mu < 2*lambda in your EA, make sure "select with replacement" is set to True'
@@ -362,26 +414,41 @@ class GPTree:
                 else:
                     subset_size = None
 
-                if self.selection_type == 'proportional':
-                    selected_member, selected_index = self.proportional_selection(candidates, selectabilities, subset_size)
-                elif self.selection_type == 'maximum':
-                    selected_member, selected_index = self.maximum_selection(candidates, selectabilities, subset_size)
-                else:
-                    raise Exception('EPPSEA ERROR: selection type {0} not found'.format(self.selection_type))
+                selected_members = self.stochastic_universal_sampling_selection(candidates, selectabilities, subset_size, n)
+            else:
+                for i in range(n):
+                    if len(candidates) == 0:
+                        raise Exception('EPPSEA ERROR: There are no candidates available for selection. '
+                                        ' If mu < 2*lambda in your EA, make sure "select with replacement" is set to True'
+                                        ' in your EPPSEA configuration, or handle this special case in your evaluation'
+                                        ' of EPPSEA functions.')
 
-                if generation_number is not None:
-                    self.selected_in_generation[generation_number].append(selected_member)
+                    if self.select_from_subset and self.selection_subset_size < len(candidates):
+                        subset_size = self.selection_subset_size
+                    else:
+                        subset_size = None
 
-                if not self.reusing_parents:
-                    candidates.pop(selected_index)
-                    selectabilities.pop(selected_index)
+                    if self.selection_type == 'proportional':
+                        selected_member, selected_index = self.proportional_selection(candidates, selectabilities, subset_size)
+                    elif self.selection_type == 'maximum':
+                        selected_member, selected_index = self.maximum_selection(candidates, selectabilities, subset_size)
+                    else:
+                        raise Exception('EPPSEA ERROR: selection type {0} not found'.format(self.selection_type))
 
-                selected_members.append(selected_member)
+                    if generation_number is not None:
+                        self.selected_in_generation[generation_number].append(selected_member)
+
+                    if not self.reusing_parents:
+                        candidates.pop(selected_index)
+                        selectabilities.pop(selected_index)
+
+                    selected_members.append(selected_member)
 
             return selected_members
 
         # if EPPSEA overflows at any point, just return random choices
         except OverflowError:
+            print('WARNING: EPPSEA Overflow. Returning random selection')
             return random.sample(candidates, n)
 
     def recombine(self, parent2):
