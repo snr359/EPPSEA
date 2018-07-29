@@ -16,6 +16,11 @@ import json
 import eppsea_base
 import find_optimal_tournament_k
 
+try:
+    import cocoex
+except ImportError:
+    print('BBOB COCO not found. COCO benchmarks will not be availbale')
+
 
 def postprocess(final_results_paths, results_directory):
     # calls the postprocessing script on a pickled dictionary mapping fitness functions to ResultHolder objects
@@ -101,7 +106,8 @@ class FitnessFunction:
         'rosenbrock': 'float',
         'dtrap': 'bool',
         'nk_landscape': 'bool',
-        'mk_landscape': 'bool'
+        'mk_landscape': 'bool',
+        'coco': 'float'
     }
 
     def __init__(self):
@@ -118,7 +124,14 @@ class FitnessFunction:
         self.loci_values = None
         self.epistasis = None
 
+        self.coco_function_index = None
+        self.coco_function_id = None
+        self.coco_function = None
+
+        self.started = False
+
     def generate(self, config):
+        # performs all first-time generation for a fitness function. Should be called once per unique fitness function
 
         self.fitness_function_name = config.get('EA', 'fitness function')
         self.genome_type = self.genome_types.get(self.fitness_function_name, None)
@@ -129,6 +142,8 @@ class FitnessFunction:
         self.trap_size = config.getint('fitness function', 'trap size')
         self.epistasis_k = config.getint('fitness function', 'epistasis k')
         self.epistasis_m = config.getint('fitness function', 'epistasis m')
+
+        self.coco_function_index = config.getint('fitness function', 'coco function index')
 
         if self.fitness_function_name == 'rastrigin':
             self.fitness_function_offset = self.generate_offset(self.genome_length)
@@ -142,6 +157,18 @@ class FitnessFunction:
         else:
             self.loci_values, self.epistasis = None, None
 
+    def start(self):
+        # should be called once at the start of each search
+        if self.fitness_function_name == 'coco':
+            suite = cocoex.Suite('bbob', '', 'dimensions:{0}, function_indices:{1}'.format(self.genome_length, self.coco_function_index))
+            self.coco_function = suite.get_problem(self.coco_function_id)
+        self.started = True
+
+    def finish(self):
+        # should be called once at the end of each EA
+        self.coco_function = None
+        self.started = False
+
     def random_genome(self):
         # generates and returns a random genome
 
@@ -152,7 +179,7 @@ class FitnessFunction:
         for _ in range(self.genome_length):
             if self.genome_type == 'bool':
                 genome.append(random.choice((True, False)))
-            elif self.genome_type == 'real':
+            elif self.genome_type == 'float':
                 genome.append(random.uniform(-self.max_initial_range, self.max_initial_range))
             else:
                 print('WARNING: genome type {0} not recognized for random genome generation'.format(self.genome_type))
@@ -165,6 +192,8 @@ class FitnessFunction:
         # performs a first-ascent hill climb, restarting with random genomes at local optima
         # for real-valued genomes, hill climbing is done with stochastic perturbations and may not settle on the local optima
         # returns a dictionary with results, and the best genome found
+
+        self.start()
 
         # generate and evaluate a new genome
         current_genome = self.random_genome()
@@ -211,7 +240,7 @@ class FitnessFunction:
                 best_fitnesses[evals] = best_fitness
                 best_genome = current_genome
 
-        elif self.genome_type == 'real':
+        elif self.genome_type == 'float':
             while evals < max_evals:
                 climbing = False
                 for i in random.sample(range(self.genome_length), self.genome_length):
@@ -267,6 +296,8 @@ class FitnessFunction:
 
         else:
             print('WARNING: genome type {0} not recognized for hill climber'.format(self.genome_type))
+
+        self.finish()
 
         results = dict()
         results['best_fitnesses'] = best_fitnesses
@@ -327,6 +358,10 @@ class FitnessFunction:
 
         return result
 
+    def coco(self, x):
+        # multiply by -1 since coco functions are minimization functions
+        return -1 * self.coco_function(x)
+
     def offset_rastrigin(self, x, a, offset):
         offset_x = list(x)
         for i in range(len(x)):
@@ -372,6 +407,8 @@ class FitnessFunction:
             fitness = self.nk_landscape(genome)
         elif self.fitness_function_name == 'mk_landscape':
             fitness = self.mk_landscape(genome)
+        elif self.fitness_function_name == 'coco':
+            fitness = self.coco(genome)
 
         else:
             raise Exception('EPPSEA BasicEA ERROR: fitness function name {0} not recognized'.format(self.fitness_function_name))
@@ -458,14 +495,6 @@ class SelectionFunction:
 
 
 class EA:
-    genome_types = {
-        'rastrigin': 'float',
-        'rosenbrock': 'float',
-        'dtrap': 'bool',
-        'nk_landscape': 'bool',
-        'mk_landscape': 'bool'
-    }
-
     def __init__(self, config, fitness_function, selection_function):
         self.mu = config.getint('EA', 'population size')
         self.lam = config.getint('EA', 'offspring size')
@@ -539,6 +568,7 @@ class EA:
 
     def one_run(self):
         generation_number = 0
+        self.fitness_function.start()
 
         population = list()
         for _ in range(self.mu):
@@ -617,6 +647,8 @@ class EA:
                 if self.convergence_termination and generations_since_best_fitness_improvement >= self.convergence_generations:
                     break
 
+        self.fitness_function.finish()
+
         run_results = dict()
         run_results['final_average_fitness'] = statistics.mean(p.fitness for p in population)
         run_results['final_best_fitness'] = max(p.fitness for p in population)
@@ -654,6 +686,7 @@ class EppseaBasicEA:
         self.testing_runs = config.getint('EA', 'testing runs')
         self.test_hill_climber = config.getboolean('EA', 'test hill climber')
         self.hill_climber_iterations = config.getint('EA', 'hill climber iterations')
+        self.fitness_function_name = config.get('EA', 'fitness function')
 
         self.num_training_fitness_functions = None
         self.num_testing_fitness_functions = None
@@ -668,9 +701,26 @@ class EppseaBasicEA:
         self.basic_results = None
 
     def prepare_fitness_functions(self, config):
+        # generates the fitness functions to be used in the EAs
+
+        # if we are using coco, count the number of available function indices
+        if self.fitness_function_name == 'coco':
+            genome_length = config.getint('fitness function', 'genome length')
+            if genome_length not in [2,3,5,10,20,40]:
+                print('WARNING: genome length {0} may not be supported by coco'.format(genome_length))
+            coco_function_index = config.get('fitness function', 'coco function index')
+            suite = cocoex.Suite('bbob', '', 'dimensions:{0}, function_indices:{1}'.format(genome_length, coco_function_index))
+            coco_ids = list(suite.ids())
+        else:
+            coco_ids = None
+
+        # get the number of training and testing fitness functions to be used
         self.num_training_fitness_functions = config.getint('EA', 'num training fitness functions')
         if config.getboolean('EA', 'test generalization'):
             self.num_testing_fitness_functions = config.getint('EA', 'num testing fitness functions')
+            # if we are using coco and testing fitness functions is -1, automatically use remaining instances as test functions
+            if self.num_testing_fitness_functions == -1 and self.fitness_function_name == 'coco':
+                self.num_testing_fitness_functions = len(coco_ids) - self.num_training_fitness_functions
         else:
             self.num_testing_fitness_functions = 0
 
@@ -679,15 +729,23 @@ class EppseaBasicEA:
         self.testing_fitness_functions = []
         testing_fitness_function_path = config.get('EA', 'fitness function testing instances directory')
 
+        # shuffle coco indeces so there is no bias in assigning training vs testing functions
+        if coco_ids is not None:
+            random.shuffle(coco_ids)
+
         if config.getboolean('EA', 'generate new fitness functions'):
             for i in range(self.num_training_fitness_functions):
                 new_fitness_function = FitnessFunction()
                 new_fitness_function.generate(config)
+                if self.fitness_function_name == 'coco':
+                    new_fitness_function.coco_function_id = coco_ids.pop()
                 self.training_fitness_functions.append(new_fitness_function)
 
             for i in range(self.num_testing_fitness_functions):
                 new_fitness_function = FitnessFunction()
                 new_fitness_function.generate(config)
+                if self.fitness_function_name == 'coco':
+                    new_fitness_function.coco_function_id = coco_ids.pop()
                 self.testing_fitness_functions.append(new_fitness_function)
 
             if config.getboolean('EA', 'save generated fitness functions'):
@@ -740,7 +798,7 @@ class EppseaBasicEA:
                     if len(self.testing_fitness_functions) == self.num_testing_fitness_functions:
                         break
 
-    def  prepare_basic_selection_functions(self, config):
+    def prepare_basic_selection_functions(self, config):
         self.basic_selection_functions = []
         selection_configs = config.items('basic selection function configs')
         for _, config_path in selection_configs:
@@ -811,9 +869,16 @@ class EppseaBasicEA:
                     results.append(run_ea(ea))
 
                 result_holder = ResultHolder()
+
+                result_holder.selection_function = ea.selection_function
                 result_holder.selection_function_name = ea.selection_function.name
+
+                result_holder.fitness_function = ea.fitness_function
                 result_holder.fitness_function_name = ea.fitness_function.fitness_function_name
+
                 result_holder.run_results = results
+
+                results_all_eas.append(result_holder)
 
         return results_all_eas
 
@@ -860,8 +925,13 @@ class EppseaBasicEA:
                     results.append(run_hill_climber(f, iterations)[0])
 
                 result_holder = ResultHolder()
+
+                result_holder.selection_function = None
                 result_holder.selection_function_name = 'Hill Climber'
+
+                result_holder.fitness_function = f
                 result_holder.fitness_function_name = f.fitness_function_name
+
                 result_holder.run_results = results
 
                 results_all_hill_climbers.append(result_holder)
@@ -929,7 +999,7 @@ class EppseaBasicEA:
             # get the list of results for this particular selection function
             results = list(f for f in final_test_results if f.selection_function_name == s)
             # check if a log scale needs to be used
-            if any(r.fitness_function.fitness_function_name in ['rosenbrock, rastrigin'] for r in results):
+            if any(r.fitness_function_name in ['rosenbrock', 'rastrigin', 'coco'] for r in results):
                 results_dict['Log Scale'] = True
             else:
                 results_dict['Log Scale'] = False
