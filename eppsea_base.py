@@ -291,9 +291,12 @@ class GPTree:
             indices_and_weights.append((i, cum_weight))
         sum_weight = cum_weight
 
-        # if the sum weight is 0 or inf, just return random candidate
+        # if the sum weight is 0 or inf, just return random candidates
         if sum_weight == 0 or sum_weight == math.inf:
-            return random.sample(population, n)
+            selected = []
+            for _ in range(n):
+                selected.append(random.choice(population))
+            return selected
 
         # calculate interval length
         interval_length = sum_weight / n
