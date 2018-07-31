@@ -494,6 +494,41 @@ class SelectionFunction:
                 selected.append(random.choice(population))
             return selected
 
+        elif self.type == 'stochastic_universal_sampling':
+            # normalize the weights, if necessary
+            normalized_weights = list(p.fitness for p in population)
+            min_weight = min(normalized_weights)
+            if min_weight < 0:
+                for i in range(len(normalized_weights)):
+                    normalized_weights[i] -= min_weight
+
+            # build a list of the indices and cumulative selection weights
+            indices_and_weights = []
+            cum_weight = 0
+            for i in range(len(population)):
+                cum_weight += normalized_weights[i]
+                indices_and_weights.append((i, cum_weight))
+            sum_weight = cum_weight
+
+            # if the sum weight is 0 or inf, just return random candidate
+            if sum_weight == 0 or sum_weight == math.inf:
+                return random.sample(population, n)
+
+            # calculate interval length
+            interval_length = sum_weight / n
+
+            # calculate initial interval offset
+            offset = random.uniform(0, interval_length)
+
+            # select population members at interval points
+            selected = []
+            for i, w in indices_and_weights:
+                while offset < w:
+                    selected.append(population[i])
+                    offset += interval_length
+
+            return selected
+
         else:
             print('PARENT SELECTION {0} NOT FOUND'.format(self.type))
 
