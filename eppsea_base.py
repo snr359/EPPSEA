@@ -1021,6 +1021,15 @@ class Eppsea:
             self.time_elapsed = time.time() - self.start_time
             self.log('Time elapsed: {0}'.format(self.time_elapsed), 'INFO')
 
+        # force selection function settings, if configured to
+        for p in self.new_population:
+            if self.force_selection_type is not None:
+                p.gp_trees[0].selection_type = self.force_selection_type
+            if self.force_reusing_parents is not None:
+                p.gp_trees[0].reusing_parents = self.force_reusing_parents
+            if self.force_select_from_subset is not None:
+                p.gp_trees[0].select_from_subset = self.force_select_from_subset
+
         return
 
     def check_gp_population_uniqueness(self, population, warning_threshold):
