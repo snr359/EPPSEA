@@ -243,15 +243,19 @@ class FitnessFunction:
         elif self.genome_type == 'float':
             while evals < max_evals:
                 climbing = False
+                # the max perturbation is equal to the greatest absolute value in the genome
+                max_perturbation = max(abs(c) for c in current_genome)
+
                 for i in random.sample(range(self.genome_length), self.genome_length):
+
                     # copy the genome
                     new_genome = current_genome[:]
 
                     # generate a positive perturbation
-                    perturbation = random.uniform(1.0, 1.01)
+                    perturbation = random.triangular(0.0, max_perturbation, 0.0)
 
                     # apply the perturbation
-                    new_genome[i] = perturbation * new_genome[i]
+                    new_genome[i] += perturbation
 
                     # rate the genome. If it is better, replace the current, and start perturbing bits in a new order
                     new_fitness = self.evaluate(new_genome)
@@ -266,10 +270,10 @@ class FitnessFunction:
 
                     # if a positive perturbation didn't increase fitness, try a negative one
                     else:
-                        perturbation = random.uniform(0.99, 1.0)
+                        perturbation = random.triangular(-1 * max_perturbation, 0.0, 0.0)
 
                         # apply the perturbation
-                        new_genome[i] = perturbation * new_genome[i]
+                        new_genome[i] += perturbation
 
                         # rate the genome. If it is better, replace the current, and start perturbing bits in a new order
                         new_fitness = self.evaluate(new_genome)
