@@ -295,7 +295,8 @@ class GPTree:
         if sum_weight == 0 or sum_weight == math.inf:
             selected = []
             for _ in range(n):
-                selected.append(random.choice(population))
+                selected_index = random.choice(selectable_indices)
+                selected.append(population[selected_index])
             return selected
 
         # calculate interval length
