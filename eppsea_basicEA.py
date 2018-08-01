@@ -19,7 +19,7 @@ import find_optimal_tournament_k
 try:
     import cocoex
 except ImportError:
-    print('BBOB COCO not found. COCO benchmarks will not be availbale')
+    print('BBOB COCO not found. COCO benchmarks will not be available')
 
 
 def postprocess(final_results_paths, results_directory):
