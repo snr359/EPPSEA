@@ -17,7 +17,7 @@
 # Exit with 0 if no error, with 1 in case of error
 ###############################################################################
 EXE="/usr/bin/python3"
-FIXED_PARAMS="--base_config ../config/basicEA/configtest.cfg"
+FIXED_PARAMS="--base_config ../config/basicEA/config5.cfg"
 
 CONFIG_ID=$1
 INSTANCE_ID=$2
