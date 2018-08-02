@@ -15,8 +15,8 @@ import uuid
 class GPNode:
     numeric_terminals = ['constant', 'random']
     data_terminals = ['fitness', 'fitness_rank', 'population_size', 'sum_fitness', 'min_fitness', 'max_fitness', 'relative_fitness', 'birth_generation', 'generation_number']
-    non_terminals = ['+', '-', '*', '/', 'step', 'absolute']
-    child_count = {'+': 2, '-': 2, '*': 2, '/': 2, 'step': 2, 'absolute': 1}
+    non_terminals = ['+', '-', '*', '/', 'step', 'absolute', 'min', 'max']
+    child_count = {'+': 2, '-': 2, '*': 2, '/': 2, 'step': 2, 'absolute': 1, 'min': 2, 'max': 2}
 
     def __init__(self, constant_min, constant_max, random_min, random_max):
         self.operation = None
@@ -67,6 +67,12 @@ class GPNode:
 
         elif self.operation == 'absolute':
             return abs(self.children[0].get(terminal_values))
+
+        elif self.operation == 'min':
+            return min(self.children[0].get(terminal_values), self.children[1].get(terminal_values))
+
+        elif self.operation == 'max':
+            return max(self.children[0].get(terminal_values), self.children[1].get(terminal_values))
 
         elif self.operation in GPNode.data_terminals:
             return terminal_values[self.operation]
