@@ -360,7 +360,10 @@ class GPTree:
             terminal_values['sum_fitness'] = sum_fitness
             terminal_values['min_fitness'] = min_fitness
             terminal_values['max_fitness'] = max_fitness
-            terminal_values['relative_fitness'] = (sorted_candidates[i].fitness - min_fitness) / (max_fitness - min_fitness)
+            if max_fitness == min_fitness:
+                terminal_values['relative_fitness'] = 1
+            else:
+                terminal_values['relative_fitness'] = (sorted_candidates[i].fitness - min_fitness) / (max_fitness - min_fitness)
             terminal_values['population_size'] = population_size
             terminal_values['birth_generation'] = sorted_candidates[i].birth_generation
 
