@@ -310,6 +310,12 @@ class FitnessFunction:
         # return best fitness and genome
         return results, best_genome
 
+    def fitness_target_hit(self):
+        if self.fitness_function_name == 'coco':
+            return self.coco_function.final_target_hit
+        else:
+            return False
+
     def rosenbrock(self, x, a):
         result = 0
         n = len(x)
@@ -543,9 +549,10 @@ class EA:
 
         self.mutation_rate = config.getfloat('EA', 'mutation rate')
         self.max_evals = config.getint('EA', 'maximum evaluations')
-        self.convergence_termination = config.getboolean('EA', 'terminate on convergence')
-        self.convergence_generations = config.getint('EA', 'generations to convergence')
-        self.target_termination = config.getboolean('EA', 'terminate at target fitness')
+        self.terminate_on_convergence = config.getboolean('EA', 'terminate on convergence')
+        self.generations_to_convergence = config.getint('EA', 'generations to convergence')
+        self.terminate_at_target_fitness = config.getboolean('EA', 'terminate at target fitness')
+        self.use_custom_target_fitness = config.getboolean('EA', 'use custom target fitness')
         self.target_fitness = config.getfloat('EA', 'target fitness')
         self.survival_selection = config.get('EA', 'survival selection')
 
@@ -656,9 +663,6 @@ class EA:
 
             population.extend(children)
 
-            if self.target_termination and any(p.fitness >= self.target_fitness for p in population):
-                break
-
             if self.survival_selection == 'random':
                 population = random.sample(population, self.mu)
             elif self.survival_selection == 'elitist_random':
@@ -681,12 +685,20 @@ class EA:
 
             generation_number += 1
 
+            if self.terminate_at_target_fitness:
+                if self.use_custom_target_fitness:
+                    if any(p.fitness >= self.target_fitness for p in population):
+                        break
+                else:
+                    if self.fitness_function.fitness_target_hit():
+                        break
+
             if best_fitness > previous_best_fitness:
                 previous_best_fitness = best_fitness
                 generations_since_best_fitness_improvement = 0
             else:
                 generations_since_best_fitness_improvement += 1
-                if self.convergence_termination and generations_since_best_fitness_improvement >= self.convergence_generations:
+                if self.terminate_on_convergence and generations_since_best_fitness_improvement >= self.generations_to_convergence:
                     break
 
         self.fitness_function.finish()
