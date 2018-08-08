@@ -549,11 +549,13 @@ class EA:
 
         self.mutation_rate = config.getfloat('EA', 'mutation rate')
         self.max_evals = config.getint('EA', 'maximum evaluations')
-        self.terminate_on_convergence = config.getboolean('EA', 'terminate on convergence')
+        self.terminate_on_fitness_convergence = config.getboolean('EA', 'terminate on fitness convergence')
         self.generations_to_convergence = config.getint('EA', 'generations to convergence')
         self.terminate_at_target_fitness = config.getboolean('EA', 'terminate at target fitness')
         self.use_custom_target_fitness = config.getboolean('EA', 'use custom target fitness')
         self.target_fitness = config.getfloat('EA', 'target fitness')
+        self.terminate_on_population_convergence = config.getboolean('EA', 'terminate on population convergence')
+        self.population_convergence_threshold = config.getfloat('EA', 'population convergence threshold')
         self.survival_selection = config.get('EA', 'survival selection')
 
         self.fitness_function = fitness_function
@@ -693,12 +695,17 @@ class EA:
                     if self.fitness_function.fitness_target_hit():
                         break
 
+            if self.terminate_on_population_convergence:
+                num_unique_genomes = len(set(str(p.genome) for p in population))
+                if num_unique_genomes < self.population_convergence_threshold * self.mu:
+                    break
+
             if best_fitness > previous_best_fitness:
                 previous_best_fitness = best_fitness
                 generations_since_best_fitness_improvement = 0
             else:
                 generations_since_best_fitness_improvement += 1
-                if self.terminate_on_convergence and generations_since_best_fitness_improvement >= self.generations_to_convergence:
+                if self.terminate_on_fitness_convergence and generations_since_best_fitness_improvement >= self.generations_to_convergence:
                     break
 
         self.fitness_function.finish()
