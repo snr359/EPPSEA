@@ -759,7 +759,7 @@ class Eppsea:
         self.terminate_max_evals = config.getboolean('metaEA', 'terminate on maximum evals')
         self.terminate_no_avg_fitness_change = config.getboolean('metaEA', 'terminate on no improvement in average fitness')
         self.terminate_no_best_fitness_change = config.getboolean('metaEA', 'terminate on no improvement in best fitness')
-        self.no_change_termination_generations = config.get('metaEA', 'generations to termination for no improvement')
+        self.no_change_termination_generations = config.getint('metaEA', 'generations to termination for no improvement')
 
         self.restart_no_avg_fitness_change = config.getboolean('metaEA', 'restart on no improvement in average fitness')
         self.restart_no_best_fitness_change = config.getboolean('metaEA', 'restart on no improvement in best fitness')
