@@ -109,3 +109,11 @@ basicEA_results/
 
 # papers
 papers/
+
+# cython compiled files
+*.pyx
+*.c
+*.so
+
+# error output
+error.txt
