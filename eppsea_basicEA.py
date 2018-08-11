@@ -14,7 +14,6 @@ import pickle
 import json
 
 import eppsea_base
-import find_optimal_tournament_k
 
 try:
     import cocoex
