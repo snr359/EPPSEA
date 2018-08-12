@@ -30,11 +30,11 @@ class GPNode:
         self.random_min = random_min
         self.random_max = random_max
 
-    def grow(self, depth_limit, parent):
-        if depth_limit == 0:
+    def grow(self, depth_limit, terminal_node_generation_chance, parent):
+        if depth_limit == 0 or random.random() < terminal_node_generation_chance:
             self.operation = random.choice(GPNode.numeric_terminals + GPNode.data_terminals)
         else:
-            self.operation = random.choice(GPNode.numeric_terminals + GPNode.data_terminals + GPNode.non_terminals)
+            self.operation = random.choice(GPNode.non_terminals)
 
         if self.operation == 'constant':
             self.data = random.uniform(self.constant_min, self.constant_max)
@@ -42,7 +42,7 @@ class GPNode:
             self.children = []
             for i in range(GPNode.child_count[self.operation]):
                 new_child_node = GPNode(self.constant_min, self.constant_max, self.random_min, self.random_max)
-                new_child_node.grow(depth_limit - 1, self)
+                new_child_node.grow(depth_limit - 1, terminal_node_generation_chance, self)
                 self.children.append(new_child_node)
         self.parent = parent
 
@@ -84,6 +84,7 @@ class GPNode:
             return random.uniform(self.random_min, self.random_max)
 
     def get_string(self):
+        result = ''
         if self.operation in GPNode.non_terminals:
             if self.child_count[self.operation] == 2:
                 result = "(" + self.children[0].get_string() + " " + self.operation + " " + self.children[1].get_string() + ")"
@@ -182,6 +183,7 @@ class GPTree:
         self.random_max = None
 
         self.initial_gp_depth_limit = None
+        self.gp_terminal_node_generation_chance = None
         self.initial_selection_subset_size = None
 
         self.id = None
@@ -501,7 +503,7 @@ class GPTree:
 
         # randomly generate a new subtree
         new_subtree = GPNode(self.constant_min, self.constant_max, self.random_min, self.random_max)
-        new_subtree.grow(3, None)
+        new_subtree.grow(3, self.gp_terminal_node_generation_chance, None)
 
         # insert the new subtree
         self.replace_node(insertion_point, new_subtree)
@@ -546,7 +548,7 @@ class GPTree:
     def randomize(self):
         if self.root is None:
             self.root = GPNode(self.constant_min, self.constant_max, self.random_min, self.random_max)
-        self.root.grow(self.initial_gp_depth_limit, None)
+        self.root.grow(self.initial_gp_depth_limit, self.gp_terminal_node_generation_chance, None)
 
         self.selection_type = random.choice(self.selection_types)
         self.reusing_parents = bool(random.random() < 0.5)
@@ -633,6 +635,7 @@ class EppseaSelectionFunction:
             self.random_max = other.random_max
 
             self.initial_gp_depth_limit = other.initial_gp_depth_limit
+            self.gp_terminal_node_generation_chance = other.gp_terminal_node_generation_chance
             self.initial_selection_subset_size = other.initial_selection_subset_size
         else:
             self.fitness = None
@@ -644,6 +647,7 @@ class EppseaSelectionFunction:
             self.random_max = None
 
             self.initial_gp_depth_limit = None
+            self.gp_terminal_node_generation_chance = None
             self.initial_selection_subset_size = None
 
         # the id should never be copied, and should instead be reassigned with assign_id
@@ -667,6 +671,7 @@ class EppseaSelectionFunction:
         new_gp_tree.random_max = self.random_max
 
         new_gp_tree.initial_gp_depth_limit = self.initial_gp_depth_limit
+        new_gp_tree.gp_terminal_node_generation_chance = self.gp_terminal_node_generation_chance
         new_gp_tree.initial_selection_subset_size = self.initial_selection_subset_size
 
         new_gp_tree.randomize()
@@ -752,6 +757,7 @@ class Eppsea:
         self.gp_lambda = config.getint('metaEA', 'metaEA lambda')
         self.max_gp_evals = config.getint('metaEA', 'metaEA maximum fitness evaluations')
         self.initial_gp_depth_limit = config.getint('metaEA', 'metaEA GP tree initialization depth limit')
+        self.gp_terminal_node_generation_chance = config.getfloat('metaEA', 'metaEA GP tree terminal node generation chance')
         self.gp_k_tournament_k = config.getint('metaEA', 'metaEA k-tournament size')
         self.gp_survival_selection = config.get('metaEA', 'metaEA survival selection')
         self.gp_parsimony_pressure = config.getfloat('metaEA', 'parsimony pressure')
@@ -859,6 +865,7 @@ class Eppsea:
             new_selection_function.random_min = self.random_min
             new_selection_function.random_max = self.random_max
             new_selection_function.initial_gp_depth_limit = self.initial_gp_depth_limit
+            new_selection_function.gp_terminal_node_generation_chance = self.gp_terminal_node_generation_chance
             new_selection_function.initial_selection_subset_size = self.initial_selection_subset_size
 
             # randomize the selection function and add it to the population
