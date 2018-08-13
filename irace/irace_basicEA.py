@@ -7,9 +7,9 @@ sys.path.insert(0, '../')
 
 import argparse
 import configparser
-import statistics
+import pickle
 
-from eppsea_basicEA import *
+from eppsea_basicEA import SelectionFunction, FitnessFunction, EA
 
 
 def get_args():
