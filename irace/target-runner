@@ -50,11 +50,11 @@ error() {
 
 # # This may be used to introduce a delay if there are filesystem
 # # issues.
-# SLEEPTIME=1
-# while [ ! -s "${STDOUT}" ]; do
-#     sleep $SLEEPTIME
-#     let "SLEEPTIME += 1"
-# done
+SLEEPTIME=.05
+while [ ! -s "${STDOUT}" ]; do
+    sleep $SLEEPTIME
+    let "SLEEPTIME += .05"
+done
 
 # This is an example of reading a number from the output.
 # It assumes that the objective value is the first number in
