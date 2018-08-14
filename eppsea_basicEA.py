@@ -861,11 +861,11 @@ class EppseaBasicEA:
     def prepare_basic_selection_functions(self, config):
         self.basic_selection_functions = []
         selection_configs = config.items('basic selection function configs')
-        for _, config_path in selection_configs:
-            config = configparser.ConfigParser()
-            config.read(config_path)
+        for _, selection_config_path in selection_configs:
+            selection_config = configparser.ConfigParser()
+            selection_config.read(selection_config_path)
             basic_selection_function = SelectionFunction()
-            basic_selection_function.generate_from_config(config)
+            basic_selection_function.generate_from_config(selection_config)
             self.basic_selection_functions.append(basic_selection_function)
 
     def log(self, message):
