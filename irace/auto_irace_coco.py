@@ -5,6 +5,7 @@ import subprocess
 import sys
 import multiprocessing
 
+sys.path.insert(0, '../')
 import eppsea_basicEA
 
 def irace_call(irace_path, training_instance_path, output_file_path):
