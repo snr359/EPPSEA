@@ -34,7 +34,6 @@ def run_irace(irace_path, eval_count, training_instances_directory):
     config.read('irace_config.cfg')
 
     config['EA']['maximum evaluations'] = str(eval_count)
-    config['EA']['terminate on fitness convergence'] = 'false'
 
     with open('irace_config.cfg', 'w') as file:
         config.write(file)
@@ -85,7 +84,7 @@ def significant_difference(sample1, sample2):
 def main(irace_path):
     # does an exponential search to find the maximum number of evals for basicEA, beyond which no benefit is found
     print('Starting exponential search for maximum basicEA evals needed')
-    start_evals = 500
+    start_evals = 200
     config = configparser.ConfigParser()
     config.read('irace_config.cfg')
     training_instances_directory = config['EA']['fitness function training instances directory']
@@ -96,8 +95,10 @@ def main(irace_path):
     best_command_line_args = get_irace_result_commands(irace_output)
 
     evals_results = dict()
+    evals_irace_commands = dict()
     print('Testing basicEA with {0} evals'.format(start_evals))
     evals_results[start_evals] = test_parameters(best_command_line_args, 30, training_instances_directory)
+    evals_irace_commands[start_evals] = best_command_line_args
 
     ceiling_found = False
     previous_evals = start_evals
@@ -110,6 +111,7 @@ def main(irace_path):
         best_command_line_args = get_irace_result_commands(irace_output)
         print('Testing basicEA with {0} evals'.format(new_evals))
         evals_results[new_evals] = test_parameters(best_command_line_args, 30, training_instances_directory)
+        evals_irace_commands[new_evals] = best_command_line_args
 
         # check if the results for any of the training instances are significantly different
         any_different = False
@@ -139,13 +141,14 @@ def main(irace_path):
         best_command_line_args = get_irace_result_commands(irace_output)
         print('Testing basicEA with {0} evals'.format(new_evals))
         evals_results[new_evals] = test_parameters(best_command_line_args, 30, training_instances_directory)
+        evals_irace_commands[new_evals] = best_command_line_args
 
         # check if the results for any of the training instances are significantly different
         any_different = False
         for training_instance in os.listdir(training_instances_directory):
-            previous_results = evals_results[previous_evals][training_instance]
+            floor_results = evals_results[floor][training_instance]
             new_results = evals_results[new_evals][training_instance]
-            if significant_difference(previous_results, new_results):
+            if significant_difference(floor_results, new_results):
                 any_different = True
                 break
 
@@ -158,7 +161,9 @@ def main(irace_path):
             ceiling = new_evals
 
     # print the final ceiling as the eval count
-    print('Final ceiling found is {0} evals'.format(ceiling))
+    print('Final eval count found is {0} evals'.format(ceiling))
+    print('Final command line args for final ceiling:')
+    print(evals_irace_commands[ceiling])
 
 
 if __name__ == '__main__':
