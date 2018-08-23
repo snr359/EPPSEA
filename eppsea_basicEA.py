@@ -36,6 +36,17 @@ def run_hill_climber(fitness_function, iterations):
     result = fitness_function.hill_climber(iterations)
     return result
 
+class EAResult:
+    # a class for holding the results of a single run of an EA
+    def __init__(self):
+        self.eval_counts = []
+        self.average_fitness = dict()
+        self.best_fitnesses = dict()
+        self.final_average_fitness = None
+        self.final_best_fitness = None
+        self.termination_reason = None
+
+
 class ResultHolder:
     # a class for holding the results of eppsea runs
     def __init__(self):
@@ -617,9 +628,12 @@ class EA:
         popi.fitness = fitness_function.evaluate(popi.genome)
 
     def one_run(self):
+        # does a single ea run, and returns an EAResult
         generation_number = 0
+        termination_reason = None
         self.fitness_function.start()
 
+        # initialize the population
         population = list()
         for _ in range(self.mu):
             new_child = self.Popi()
@@ -628,8 +642,10 @@ class EA:
             self.evaluate_child(new_child, self.fitness_function)
             population.append(new_child)
 
+        # record the initial evaluation count
         evals = self.mu
 
+        # set up data holders and store information
         average_fitnesses = dict()
         average_fitnesses[evals] = statistics.mean(p.fitness for p in population)
 
@@ -641,29 +657,37 @@ class EA:
 
         generation_number = 1
 
+        # main ea loop
         while evals <= self.max_evals:
             children = []
+
+            # select parents
             num_parents = self.lam*2
             all_parents = self.selection_function.select(population, num_parents, generation_number)
 
+            # pair up parents and recombine them
             for i in range(0, len(all_parents), 2):
                 parent1 = all_parents[i]
                 parent2 = all_parents[i + 1]
 
                 new_child = parent1.recombine(parent2)
                 new_child.birth_generation = generation_number
+                # chance to mutate each new gene of the child
                 for j in range(new_child.genome_length):
                     if random.random() < self.mutation_rate:
                         new_child.mutate_gene(j)
 
+                # evaluate the new child
                 self.evaluate_child(new_child, self.fitness_function)
 
                 children.append(new_child)
 
                 evals += 1
 
+            # add all the new children to the population
             population.extend(children)
 
+            # perform survival selection
             if self.survival_selection == 'random':
                 population = random.sample(population, self.mu)
             elif self.survival_selection == 'elitist_random':
@@ -678,6 +702,7 @@ class EA:
             else:
                 raise Exception('ERROR: Configuration parameter for survival selection {0} not recognized'.format(self.survival_selection))
 
+            # record average and best fitness
             average_fitness = statistics.mean(p.fitness for p in population)
             average_fitnesses[evals] = average_fitness
 
@@ -686,17 +711,21 @@ class EA:
 
             generation_number += 1
 
+            # check for termination conditions
             if self.terminate_at_target_fitness:
                 if self.use_custom_target_fitness:
                     if any(p.fitness >= self.target_fitness for p in population):
+                        termination_reason = 'hit target fitness'
                         break
                 else:
                     if self.fitness_function.fitness_target_hit():
+                        termination_reason = 'hit target fitness'
                         break
 
             if self.terminate_on_population_convergence:
                 num_unique_genomes = len(set(str(p.genome) for p in population))
                 if num_unique_genomes < self.population_convergence_threshold * self.mu:
+                    termination_reason = 'population convergence'
                     break
 
             if best_fitness > previous_best_fitness:
@@ -705,16 +734,22 @@ class EA:
             else:
                 generations_since_best_fitness_improvement += 1
                 if self.terminate_on_fitness_convergence and generations_since_best_fitness_improvement >= self.generations_to_convergence:
+                    termination_reason = 'fitness convergence'
                     break
+
+        if termination_reason is None:
+            termination_reason = 'maximum evaluations reached'
 
         self.fitness_function.finish()
 
-        run_results = dict()
-        run_results['final_average_fitness'] = statistics.mean(p.fitness for p in population)
-        run_results['final_best_fitness'] = max(p.fitness for p in population)
-        run_results['final_fitness_std_dev'] = statistics.stdev(p.fitness for p in population)
-        run_results['average_fitnesses'] = average_fitnesses
-        run_results['best_fitnesses'] = best_fitnesses
+        # store results in an EAResults object
+        run_results = EAResult()
+        run_results.final_average_fitness = statistics.mean(p.fitness for p in population)
+        run_results.final_best_fitness = max(p.fitness for p in population)
+        run_results.final_fitness_std_dev = statistics.stdev(p.fitness for p in population)
+        run_results.average_fitnesses = average_fitnesses
+        run_results.best_fitnesses = best_fitnesses
+        run_results.termination_reason = termination_reason
 
         return run_results
 
