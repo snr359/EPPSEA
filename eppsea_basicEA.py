@@ -58,9 +58,13 @@ class EAResultCollection:
     # a class for holding the results of several EA runs
     def __init__(self, results=None):
         if results is None:
-            self.results = []
+            self.results = None
+            self.selection_function_ids = None
+            self.fitness_function_ids = None
         else:
             self.results = list(results)
+            self.selection_function_ids = set(r.selection_function_id for r in results)
+            self.fitness_function_ids = set(r.fitness_function_id for r in results)
 
     def get_eval_counts(self):
         all_counts = set()
@@ -187,9 +191,12 @@ class FitnessFunction:
     def hill_climber(self, max_evals):
         # performs a first-ascent hill climb, restarting with random genomes at local optima
         # for real-valued genomes, hill climbing is done with stochastic perturbations and may not settle on the local optima
-        # returns a dictionary with results, and the best genome found
+        # returns an EAResults object with results, and the best genome found
 
         self.start()
+
+        # generate a unique id for the hill climber
+        hill_climber_id = 'HillClimber_' + str(uuid.uuid4())
 
         # generate and evaluate a new genome
         current_genome = self.random_genome()
@@ -299,12 +306,18 @@ class FitnessFunction:
 
         self.finish()
 
-        results = dict()
-        results['best_fitnesses'] = best_fitnesses
-        results['final_best_fitness'] = best_fitness
+        results = EAResult()
+        results.best_fitnesses = best_fitnesses
+        results.final_best_fitness = best_fitness
+
+        results.fitness_function_name = self.name
+        results.fitness_function_id = self.id
+
+        results.selection_function_id = hill_climber_id
+        results.selection_function_name = 'hill_climber'
 
         # return best fitness and genome
-        return results, best_genome
+        return results
 
     def fitness_target_hit(self):
         if self.name == 'coco':
@@ -923,7 +936,7 @@ class EppseaBasicEA:
 
     def run_eas(self, eas, is_testing):
         # runs each of the eas for the configured number of runs, returning one result_holder for each ea
-        results_all_eas = []
+        all_run_results = []
 
         if is_testing:
             runs = self.testing_runs
@@ -945,41 +958,21 @@ class EppseaBasicEA:
                 start = i * runs
                 stop = (i + 1) * runs
 
-                result_holder = ResultHolder()
-                result_holder.selection_function = eas[i].selection_function
-                result_holder.selection_function_name = eas[i].selection_function.name
+                run_results = results[start:stop]
 
-                result_holder.fitness_function = eas[i].fitness_function
-                result_holder.fitness_function_name = eas[i].fitness_function.fitness_function_name
-
-                result_holder.run_results = results[start:stop]
-
-                results_all_eas.append(result_holder)
+                all_run_results.extend(run_results)
 
         else:
             for ea in eas:
-                results = []
                 for r in range(runs):
-                    results.append(run_ea(ea))
+                    all_run_results.append(run_ea(ea))
 
-                result_holder = ResultHolder()
-
-                result_holder.selection_function = ea.selection_function
-                result_holder.selection_function_name = ea.selection_function.name
-
-                result_holder.fitness_function = ea.fitness_function
-                result_holder.fitness_function_name = ea.fitness_function.fitness_function_name
-
-                result_holder.run_results = results
-
-                results_all_eas.append(result_holder)
-
-        return results_all_eas
+        return EAResultCollection(all_run_results)
 
     def run_hill_climbers(self, fitness_functions, iterations, is_testing):
         # runs hill climbers on a set of fitness functions, once for every run
         # runs each of the eas for the configured number of runs, returning one result_holder for each ea
-        results_all_hill_climbers = []
+        all_hill_climber_results = []
 
         if is_testing:
             runs = self.testing_runs
@@ -1001,36 +994,17 @@ class EppseaBasicEA:
                 start = i * runs
                 stop = (i + 1) * runs
 
-                result_holder = ResultHolder()
-                result_holder.selection_function = None
-                result_holder.selection_function_name = 'Hill Climber'
+                hill_climber_results = list(r for r in results[start:stop])
 
-                result_holder.fitness_function = f
-                result_holder.fitness_function_name = f.fitness_function_name
-
-                result_holder.run_results = list(r[0] for r in results[start:stop])
-
-                results_all_hill_climbers.append(result_holder)
+                all_hill_climber_results.append(hill_climber_results)
 
         else:
             for f in fitness_functions:
-                results = []
                 for r in range(runs):
-                    results.append(run_hill_climber(f, iterations)[0])
+                    hill_climber_results = run_hill_climber(f, iterations)
+                    all_hill_climber_results.append(hill_climber_results)
 
-                result_holder = ResultHolder()
-
-                result_holder.selection_function = None
-                result_holder.selection_function_name = 'Hill Climber'
-
-                result_holder.fitness_function = f
-                result_holder.fitness_function_name = f.fitness_function_name
-
-                result_holder.run_results = results
-
-                results_all_hill_climbers.append(result_holder)
-
-        return results_all_hill_climbers
+        return EAResultCollection(all_hill_climber_results)
 
     def evaluate_eppsea_population(self, eppsea_population, is_testing):
         # evaluates a population of eppsea individuals and assigns fitness values to them
@@ -1047,12 +1021,9 @@ class EppseaBasicEA:
 
         eas = self.get_eas(fitness_functions, selection_functions)
         ea_results = self.run_eas(eas, False)
-        for e, s in zip(eppsea_population, selection_functions):
-            fitnesses = (r.get_average_final_best_fitness() for r in ea_results if r.selection_function is s)
-            fitness = statistics.mean(fitnesses)
-            e.fitness = fitness
+        self.assign_eppsea_fitness(selection_functions, ea_results)
 
-    def assign_eppsea_fitness(self, eppsea_population, ea_results):
+    def assign_eppsea_fitness(self, selection_functions, ea_results):
         # takes an EAResultsCollection and uses it to assign fitness values to the eppsea_population
 
         # when Eppsea_basicEA starts, eppsea fitness is assigned by average best fitness reached on the bottom-level EA
@@ -1069,13 +1040,41 @@ class EppseaBasicEA:
                 for p in self.eppsea.population:
                     p.fitness = -math.inf
         if self.eppsea_fitness_assignment_method == 'proportion_hitting_target_fitness':
-            if len(list(r for r in ea_results.results if r.termination_reason == 'target_fitness_hit')) / len(ea_results.results) >= 0.95:
+            if len(list(r for r in ea_results.results if r.termination_reason == 'target_fitness_hit')) / len(ea_results.results) == 1.0:
                 self.eppsea_fitness_assignment_method = 'evals_to_target_fitness'
                 for p in self.eppsea.population:
                     p.fitness = -math.inf
 
-        # assign the fitness based on the chosen method
-        pass
+        # loop through the selection functions containing the eppsea individuals
+        for s in selection_functions:
+            # filter out the ea runs associated with this individual
+            s_results = ea_results.filter(selection_function_id=s.id)
+
+            if self.eppsea_fitness_assignment_method == 'best_fitness_reached':
+                # loop through all fitness functions to get average final best fitnesses
+                average_final_best_fitnesses = []
+                for fitness_function_id in s_results.fitness_function_ids:
+                    fitness_function_results = s_results.filter(fitness_function_id=fitness_function_id)
+                    final_best_fitnesses = (r.final_best_fitness for r in fitness_function_results.results)
+                    average_final_best_fitnesses.append(statistics.mean(final_best_fitnesses))
+                # assign fitness as the average of the average final best fitnesses
+                s.eppsea_selection_function.fitness = statistics.mean(average_final_best_fitnesses)
+
+            elif self.eppsea_fitness_assignment_method == 'proportion_hitting_target_fitness':
+                # assign the fitness as the proportion of runs that hit the target fitness
+                s.eppsea_selection_function.fitness = len(list(r for r in s_results.results if r.termination_reason == 'target_fitness_hit')) / len (s_results.results)
+
+            elif self.eppsea_fitness_assignment_method == 'evals_to_target_fitness':
+                # loop through all fitness functions to get average evals to target fitness
+                all_final_evals = []
+                for fitness_function_id in s_results.fitness_function_ids:
+                    fitness_function_results = s_results.filter(fitness_function_id=fitness_function_id)
+                    final_evals = (max(r.evals) for r in fitness_function_results)
+                    all_final_evals.append(statistics.mean(final_evals))
+                # assign fitness as -1 * the average of final eval counts
+                s.eppsea_selection_function.fitness = statistics.mean(all_final_evals)
+            else:
+                raise Exception('ERROR: fitness assignment method {0} not recognized by eppsea_basicEA'.format(self.eppsea_fitness_assignment_method))
 
     def test_against_basic_selection(self, eppsea_individual):
 
@@ -1103,27 +1102,29 @@ class EppseaBasicEA:
         else:
             hill_climber_results = []
 
-        return ea_results + hill_climber_results
+        full_results = EAResultCollection(ea_results.results + hill_climber_results.results)
+
+        return full_results
 
     def export_run_results(self, final_test_results):
         # takes a list of ResultsHolder objects and exports several json files that are compatible with the post_process
         # script
         results_paths = []
         # get a set of the selection functions tested
-        selection_function_names = set(f.selection_function_name for f in final_test_results)
+        selection_function_names = set(f.selection_function_name for f in final_test_results.results)
         # create a dictionary of results for each selection function
         for s in selection_function_names:
             results_dict = dict()
             results_dict['Name'] = s
             # get the list of results for this particular selection function
-            results = list(f for f in final_test_results if f.selection_function_name == s)
+            results = list(f for f in final_test_results.results if f.selection_function_name == s)
             # check if a log scale needs to be used
             if any(r.fitness_function_name in ['rosenbrock', 'rastrigin', 'coco'] for r in results):
                 results_dict['Log Scale'] = True
             else:
                 results_dict['Log Scale'] = False
             # check if this is the EPPSEA selection function, in which case a t test must be done
-            if s == 'Evolved Selection Function':
+            if s == 'eppsea_selection_function':
                 results_dict['T Test'] = True
             else:
                 results_dict['T Test'] = False
@@ -1131,9 +1132,9 @@ class EppseaBasicEA:
             # enumerate over all fitness functions tested
             for i,f in enumerate(self.testing_fitness_functions):
                 # get the result holder corresponding to the runs for this fitness function
-                fitness_function_result = next(r for r in results if r.fitness_function is f)
+                fitness_function_result = next(r for r in results if r.fitness_function_id == f.id)
                 # get the mappings of evaluations to best fitnesses for all runs of this fitness function
-                run_results = list(r['best_fitnesses'] for r in fitness_function_result.run_results)
+                run_results = list(r['best_fitnesses'] for r in fitness_function_result)
 
                 fitness_function_name = f.fitness_function_name
                 results_dict['Fitness Functions'][i] = {'Name':fitness_function_name, 'Runs':run_results}
