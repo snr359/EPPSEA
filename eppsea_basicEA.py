@@ -12,6 +12,7 @@ import time
 import datetime
 import pickle
 import json
+import uuid
 
 import eppsea_base
 
@@ -46,68 +47,47 @@ class EAResult:
         self.final_best_fitness = None
         self.termination_reason = None
 
-
-class ResultHolder:
-    # a class for holding the results of eppsea runs
-    def __init__(self):
-        self.selection_function = None
         self.selection_function_name = None
-
-        self.fitness_function = None
+        self.selection_function_id = None
+        
         self.fitness_function_name = None
+        self.fitness_function_id = None
 
-        self.run_results = []
+
+class EAResultCollection:
+    # a class for holding the results of several EA runs
+    def __init__(self, results=None):
+        if results is None:
+            self.results = []
+        else:
+            self.results = list(results)
 
     def get_eval_counts(self):
         all_counts = set()
-        for r in self.run_results:
-            counts = r['best_fitnesses'].keys()
+        for r in self.results:
+            counts = r.eval_counts
             all_counts.update(counts)
         return sorted(list(all_counts))
 
-    def get_average_average_fitness(self):
-        average_average_fitnesses = []
-        for m in self.get_eval_counts():
-            average_fitnesses = []
-            for r in self.run_results:
-                if m in r['average_fitnesses']:
-                    average_fitnesses.append(r['average_fitnesses'][m])
-                # if this run terminated early, use the final average fitness
-                elif all(m > rm for rm in r['average_fitnesses'].keys()):
-                    average_fitnesses.append(r['final_average_fitness'])
-            average_average_fitness = statistics.mean(average_fitnesses)
-            average_average_fitnesses.append(average_average_fitness)
+    def filter(self, selection_function_id=None, fitness_function_id=None):
+        # this returns a new instance of EAResultCollection, with a subset of the EAResults in results
+        # if selection_function_id is provided, it keeps only the results with a matching selection_function_id
+        # if fitness_function_id is provided, it keeps only the results with a matching selection_function_id
+            
+        # filter by selection function id, fitness function id, or both
+        if selection_function_id is not None and fitness_function_id is not None:
+            filtered_results = list(r for r in self.results if r.selection_function_id == selection_function_id
+                                    and r.fitness_function_id == fitness_function_id)
+        elif selection_function_id is not None:
+            filtered_results = list(r for r in self.results if r.selection_function_id == selection_function_id)
+        elif fitness_function_id is not None:
+            filtered_results = list(r for r in self.results if r.fitness_function_id == fitness_function_id)
+        else:
+            filtered_results = list(self.results)
 
-        return average_average_fitnesses
-
-    def get_average_best_fitness(self):
-        average_best_fitnesses = []
-        for m in self.get_eval_counts():
-            best_fitnesses = []
-            for r in self.run_results:
-                if m in r['best_fitnesses']:
-                    best_fitnesses.append(r['best_fitnesses'][m])
-                # if this run terminated early, use the final best fitness
-                elif all(m > rm for rm in r['best_fitnesses'].keys()):
-                    best_fitnesses.append(r['final_best_fitness'])
-            average_best_fitness = statistics.mean(best_fitnesses)
-            average_best_fitnesses.append(average_best_fitness)
-
-        return average_best_fitnesses
-
-    def get_final_average_fitness_all_runs(self):
-        average_fitnesses_all_runs = list(r['final_average_fitness'] for r in self.run_results)
-        return average_fitnesses_all_runs
-
-    def get_final_best_fitness_all_runs(self):
-        best_fitnesses_all_runs = list(r['final_best_fitness'] for r in self.run_results)
-        return best_fitnesses_all_runs
-
-    def get_average_final_best_fitness(self):
-        return statistics.mean(self.get_final_best_fitness_all_runs())
-
-    def get_average_final_average_fitness(self):
-        return statistics.mean(self.get_final_average_fitness_all_runs())
+        # create a new result collection with the filtered results and return it
+        new_collection = EAResultCollection(filtered_results)
+        return new_collection
 
 
 class FitnessFunction:
@@ -121,7 +101,7 @@ class FitnessFunction:
     }
 
     def __init__(self):
-        self.fitness_function_name = None
+        self.name = None
         self.genome_type = None
         self.genome_length = None
         self.max_initial_range = None
@@ -140,11 +120,15 @@ class FitnessFunction:
 
         self.started = False
 
+    def assign_id(self):
+        # assigns a random id to self. Every unique Fitness Function should call this once
+        self.id = '{0}_{1}_{2}'.format('FitnessFunction', str(id(self)), str(uuid.uuid4()))
+
     def generate(self, config):
         # performs all first-time generation for a fitness function. Should be called once per unique fitness function
 
-        self.fitness_function_name = config.get('EA', 'fitness function')
-        self.genome_type = self.genome_types.get(self.fitness_function_name, None)
+        self.name = config.get('EA', 'fitness function')
+        self.genome_type = self.genome_types.get(self.name, None)
 
         self.genome_length = config.getint('fitness function', 'genome length')
         self.fitness_function_a = config.getfloat('fitness function', 'a')
@@ -155,21 +139,23 @@ class FitnessFunction:
 
         self.coco_function_index = config.getint('fitness function', 'coco function index')
 
-        if self.fitness_function_name == 'rastrigin':
+        if self.name == 'rastrigin':
             self.fitness_function_offset = self.generate_offset(self.genome_length)
         else:
             self.fitness_function_offset = None
 
-        if self.fitness_function_name == 'nk_landscape':
+        if self.name == 'nk_landscape':
             self.loci_values, self.epistasis = self.generate_epistatis(self.genome_length, self.epistasis_k)
-        elif self.fitness_function_name == 'mk_landscape':
+        elif self.name == 'mk_landscape':
             self.loci_values, self.epistasis = self.generate_mk_epistatis(self.genome_length, self.epistasis_m, self.epistasis_k)
         else:
             self.loci_values, self.epistasis = None, None
 
+        self.assign_id()
+
     def start(self):
         # should be called once at the start of each search
-        if self.fitness_function_name == 'coco':
+        if self.name == 'coco':
             suite = cocoex.Suite('bbob', '', 'dimensions:{0}, function_indices:{1}'.format(self.genome_length, self.coco_function_index))
             self.coco_function = suite.get_problem(self.coco_function_id)
         self.started = True
@@ -321,7 +307,7 @@ class FitnessFunction:
         return results, best_genome
 
     def fitness_target_hit(self):
-        if self.fitness_function_name == 'coco':
+        if self.name == 'coco':
             return self.coco_function.final_target_hit
         else:
             return False
@@ -417,55 +403,61 @@ class FitnessFunction:
         return loci_values, epistasis
 
     def evaluate(self, genome):
-        if self.fitness_function_name == 'rosenbrock':
+        if self.name == 'rosenbrock':
             fitness = self.rosenbrock(genome, self.fitness_function_a)
-        elif self.fitness_function_name == 'rastrigin':
+        elif self.name == 'rastrigin':
             fitness = self.offset_rastrigin(genome, self.fitness_function_a, self.fitness_function_offset)
-        elif self.fitness_function_name == 'dtrap':
+        elif self.name == 'dtrap':
             fitness = self.dtrap(genome, self.trap_size)
-        elif self.fitness_function_name == 'nk_landscape':
+        elif self.name == 'nk_landscape':
             fitness = self.nk_landscape(genome)
-        elif self.fitness_function_name == 'mk_landscape':
+        elif self.name == 'mk_landscape':
             fitness = self.mk_landscape(genome)
-        elif self.fitness_function_name == 'coco':
+        elif self.name == 'coco':
             fitness = self.coco(genome)
 
         else:
-            raise Exception('EPPSEA BasicEA ERROR: fitness function name {0} not recognized'.format(self.fitness_function_name))
+            raise Exception('EPPSEA BasicEA ERROR: fitness function name {0} not recognized'.format(self.name))
 
         return fitness
 
 
 class SelectionFunction:
     def __init__(self):
-        self.type = None
         self.name = None
+        self.displayName = None
         self.tournament_k = None
         self.eppsea_selection_function = None
+        
+    def assign_id(self):
+        # assigns a random id to self. Every unique Selection Function should call this once
+        self.id = '{0}_{1}_{2}'.format('SelectionFunction', str(id(self)), str(uuid.uuid4()))
 
     def generate_from_config(self, config):
-        self.type = config.get('selection function', 'type')
-        self.name = config.get('selection function', 'name')
+        self.name = config.get('selection function', 'type')
+        self.displayName = config.get('selection function', 'name')
         self.tournament_k = config.getint('selection function', 'tournament k')
-        if self.type == 'eppsea_selection_function':
+        if self.name == 'eppsea_selection_function':
             file_path = config.get('selection function', 'file path (for evolved selection)')
             self.eppsea_selection_function = eppsea_base.GPTree()
             self.eppsea_selection_function.load_from_dict(file_path)
+        self.assign_id()
 
     def generate_from_eppsea_individual(self, eppsea_selection_function):
-        self.type = 'eppsea_selection_function'
-        self.name = 'Evolved Selection Function'
+        self.name = 'eppsea_selection_function'
+        self.displayName = 'Evolved Selection Function'
         self.tournament_k = None
         self.eppsea_selection_function = eppsea_selection_function
+        self.assign_id()
 
     def select(self, population, n, generation_number):
-        if self.type == 'eppsea_selection_function':
+        if self.name == 'eppsea_selection_function':
             return self.eppsea_selection_function.select(population, n, generation_number)
 
-        elif self.type == 'truncation':
+        elif self.name == 'truncation':
             return sorted(population, key=lambda x: x.fitness)[:n]
 
-        elif self.type == 'fitness_rank':
+        elif self.name == 'fitness_rank':
             selected = []
             sorted_population = sorted(population, key=lambda p: p.fitness, reverse=True)
             ranks = list(range(len(population), 0, -1))
@@ -479,7 +471,7 @@ class SelectionFunction:
                 selected.append(population[i])
             return selected
 
-        elif self.type == 'fitness_proportional':
+        elif self.name == 'fitness_proportional':
             selected = []
             min_fitness = min(p.fitness for p in population)
             if min_fitness < 0:
@@ -496,7 +488,7 @@ class SelectionFunction:
                 selected.append(population[i])
             return selected
 
-        elif self.type == 'k_tournament':
+        elif self.name == 'k_tournament':
             selected = []
             for _ in range(n):
                 tournament = random.sample(population, self.tournament_k)
@@ -504,13 +496,13 @@ class SelectionFunction:
                 selected.append(winner)
             return selected
 
-        elif self.type == 'random':
+        elif self.name == 'random':
             selected = []
             for _ in range(n):
                 selected.append(random.choice(population))
             return selected
 
-        elif self.type == 'stochastic_universal_sampling':
+        elif self.name == 'stochastic_universal_sampling':
             # normalize the weights, if necessary
             normalized_weights = list(p.fitness for p in population)
             min_weight = min(normalized_weights)
@@ -549,7 +541,7 @@ class SelectionFunction:
             return selected
 
         else:
-            print('PARENT SELECTION {0} NOT FOUND'.format(self.type))
+            print('PARENT SELECTION {0} NOT FOUND'.format(self.name))
 
 
 class EA:
@@ -715,17 +707,17 @@ class EA:
             if self.terminate_at_target_fitness:
                 if self.use_custom_target_fitness:
                     if any(p.fitness >= self.target_fitness for p in population):
-                        termination_reason = 'hit target fitness'
+                        termination_reason = 'hit_target_fitness'
                         break
                 else:
                     if self.fitness_function.fitness_target_hit():
-                        termination_reason = 'hit target fitness'
+                        termination_reason = 'hit_target_fitness'
                         break
 
             if self.terminate_on_population_convergence:
                 num_unique_genomes = len(set(str(p.genome) for p in population))
                 if num_unique_genomes < self.population_convergence_threshold * self.mu:
-                    termination_reason = 'population convergence'
+                    termination_reason = 'population_convergence'
                     break
 
             if best_fitness > previous_best_fitness:
@@ -734,11 +726,11 @@ class EA:
             else:
                 generations_since_best_fitness_improvement += 1
                 if self.terminate_on_fitness_convergence and generations_since_best_fitness_improvement >= self.generations_to_convergence:
-                    termination_reason = 'fitness convergence'
+                    termination_reason = 'fitness_convergence'
                     break
 
         if termination_reason is None:
-            termination_reason = 'maximum evaluations reached'
+            termination_reason = 'maximum_evaluations_reached'
 
         self.fitness_function.finish()
 
@@ -750,6 +742,9 @@ class EA:
         run_results.average_fitnesses = average_fitnesses
         run_results.best_fitnesses = best_fitnesses
         run_results.termination_reason = termination_reason
+
+        run_results.selection_function_id = self.selection_function.id
+        run_results.fitness_function_id = self.fitness_function.id
 
         return run_results
 
@@ -788,12 +783,16 @@ class EppseaBasicEA:
         self.training_fitness_functions = None
         self.testing_fitness_functions = None
 
+        self.eppsea = None
+
         self.prepare_fitness_functions(config)
 
         self.basic_selection_functions = None
         self.prepare_basic_selection_functions(config)
 
         self.basic_results = None
+
+        self.eppsea_fitness_assignment_method = 'best_fitness_reached'
 
     def prepare_fitness_functions(self, config):
         # generates the fitness functions to be used in the EAs
@@ -1053,6 +1052,31 @@ class EppseaBasicEA:
             fitness = statistics.mean(fitnesses)
             e.fitness = fitness
 
+    def assign_eppsea_fitness(self, eppsea_population, ea_results):
+        # takes an EAResultsCollection and uses it to assign fitness values to the eppsea_population
+
+        # when Eppsea_basicEA starts, eppsea fitness is assigned by average best fitness reached on the bottom-level EA
+        # if we are currently assigning eppsea fitness by looking at average best fitness reached, and at least 10% of
+        # the runs are reaching the fitness goal, switch to assigning eppsea fitness by proportion of time
+        # the fitness goal is found
+        # if we are currently assigning by that, and at least 95% of the runs are reaching the fitness goal, switch
+        # to assigning by number of evals needed to reach the fitness goal
+        # in the case of either switch, all population members' fitnesses become -infinity before fitness assignment
+        # this effectively sets the fitness of all old eppsea population members to -infinity
+        if self.eppsea_fitness_assignment_method == 'best_fitness_reached':
+            if len(list(r for r in ea_results.results if r.termination_reason == 'target_fitness_hit')) / len (ea_results.results) >= 0.1:
+                self.eppsea_fitness_assignment_method = 'proportion_hitting_target_fitness'
+                for p in self.eppsea.population:
+                    p.fitness = -math.inf
+        if self.eppsea_fitness_assignment_method == 'proportion_hitting_target_fitness':
+            if len(list(r for r in ea_results.results if r.termination_reason == 'target_fitness_hit')) / len(ea_results.results) >= 0.95:
+                self.eppsea_fitness_assignment_method = 'evals_to_target_fitness'
+                for p in self.eppsea.population:
+                    p.fitness = -math.inf
+
+        # assign the fitness based on the chosen method
+        pass
+
     def test_against_basic_selection(self, eppsea_individual):
 
         selection_functions = self.basic_selection_functions
@@ -1128,6 +1152,7 @@ class EppseaBasicEA:
 
         eppsea_config = self.config.get('EA', 'base eppsea config path')
         eppsea = eppsea_base.Eppsea(eppsea_config)
+        self.eppsea = eppsea
 
         eppsea.start_evolution()
 
