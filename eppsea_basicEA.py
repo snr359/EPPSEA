@@ -1006,7 +1006,7 @@ class EppseaBasicEA:
 
                 hill_climber_results = list(r for r in results[start:stop])
 
-                all_hill_climber_results.append(hill_climber_results)
+                all_hill_climber_results.extend(hill_climber_results)
 
         else:
             for f in fitness_functions:
