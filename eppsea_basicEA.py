@@ -21,13 +21,11 @@ try:
 except ImportError:
     print('BBOB COCO not found. COCO benchmarks will not be available')
 
+import scipy.stats
 
-def postprocess(final_results_paths, results_directory):
-    # calls the postprocessing script on a pickled dictionary mapping fitness functions to ResultHolder objects
-    params = ['python3', 'post_process.py', results_directory] + final_results_paths
-    result = subprocess.run(params, stdout=subprocess.PIPE, universal_newlines=True)
-
-    return result.stdout
+import matplotlib
+matplotlib.use('Agg')
+from matplotlib import pyplot as plt
 
 def run_ea(ea):
     result = ea.one_run()
@@ -53,18 +51,28 @@ class EAResult:
         self.fitness_function_name = None
         self.fitness_function_id = None
 
-
 class EAResultCollection:
     # a class for holding the results of several EA runs
     def __init__(self, results=None):
-        if results is None:
-            self.results = None
-            self.selection_function_ids = None
-            self.fitness_function_ids = None
-        else:
-            self.results = list(results)
-            self.selection_function_ids = set(r.selection_function_id for r in results)
-            self.fitness_function_ids = set(r.fitness_function_id for r in results)
+        self.results = []
+        self.selection_function_ids = set()
+        self.fitness_function_ids = set()
+
+        self.selection_id_to_name = dict()
+        self.fitness_id_to_name = dict()
+
+        if results is not None:
+            self.add(results)
+
+    def add(self, new_results):
+        # adds a list of new results to the result collection
+        self.results.extend(new_results)
+        self.selection_function_ids.update(r.selection_function_id for r in new_results)
+        self.fitness_function_ids.update(r.fitness_function_id for r in new_results)
+
+        for r in new_results:
+            self.selection_id_to_name[r.selection_function_id] = r.selection_function_name
+            self.fitness_id_to_name[r.fitness_function_id] = r.fitness_function_name
 
     def get_eval_counts(self):
         all_counts = set()
@@ -195,9 +203,6 @@ class FitnessFunction:
 
         self.start()
 
-        # generate a unique id for the hill climber
-        hill_climber_id = 'HillClimber_' + str(uuid.uuid4())
-
         # generate and evaluate a new genome
         current_genome = self.random_genome()
         current_fitness = self.evaluate(current_genome)
@@ -307,13 +312,14 @@ class FitnessFunction:
         self.finish()
 
         results = EAResult()
+        results.eval_counts = list(best_fitnesses.keys())
         results.best_fitnesses = best_fitnesses
         results.final_best_fitness = best_fitness
 
         results.fitness_function_name = self.name
         results.fitness_function_id = self.id
 
-        results.selection_function_id = hill_climber_id
+        results.selection_function_id = 'HillClimber'
         results.selection_function_name = 'hill_climber'
 
         # return best fitness and genome
@@ -749,6 +755,7 @@ class EA:
 
         # store results in an EAResults object
         run_results = EAResult()
+        run_results.eval_counts = list(average_fitnesses.keys())
         run_results.final_average_fitness = statistics.mean(p.fitness for p in population)
         run_results.final_best_fitness = max(p.fitness for p in population)
         run_results.final_fitness_std_dev = statistics.stdev(p.fitness for p in population)
@@ -757,7 +764,10 @@ class EA:
         run_results.termination_reason = termination_reason
 
         run_results.selection_function_id = self.selection_function.id
+        run_results.selection_function_name = self.selection_function.name
+
         run_results.fitness_function_id = self.fitness_function.id
+        run_results.fitness_function_name = self.fitness_function.name
 
         return run_results
 
@@ -1146,6 +1156,110 @@ class EppseaBasicEA:
             results_paths.append(results_path)
         return results_paths
 
+    def postprocess(self, results):
+        # runs postprocessing on an EAResultCollection results
+        output = ''
+        # Analyze results for each fitness function
+        for fitness_function_id in results.fitness_function_ids:
+            plt.clf()
+            output += 'Analyzing results for fitness function with id {0} ---------------------------------\n'.format(
+                fitness_function_id)
+            output += 'Plotting figure\n'
+            # Get the name of the fitness function from one of the result files
+            fitness_function_name = results.fitness_id_to_name[fitness_function_id]
+
+            # filter out the results for this fitness function
+            fitness_function_results = results.filter(fitness_function_id=fitness_function_id)
+
+            # Set the plot to use Log Scale if any of the result files require it
+            if any(s in fitness_function_name for s in ['rastrigin', 'rosenbrock', 'coco']):
+                plt.yscale('symlog')
+
+            # Plot results for each selection function
+            for selection_function_id in fitness_function_results.selection_function_ids:
+                selection_function_results = fitness_function_results.filter(selection_function_id=selection_function_id)
+                selection_function_name = fitness_function_results.selection_id_to_name[selection_function_id]
+                mu = selection_function_results.get_eval_counts()
+                average_best_fitnesses = []
+                for m in mu:
+                    average_best_fitnesses.append(statistics.mean(r.best_fitnesses[m] for r in selection_function_results.results if m in r.best_fitnesses))
+
+                plt.plot(mu, average_best_fitnesses, label=selection_function_name)
+
+            plt.xlabel('Evaluations')
+            plt.ylabel('Best Fitness')
+            plt.legend(loc=(1.02, 0))
+            plt.savefig('{0}/figure_{1}.png'.format(self.results_directory, fitness_function_id),
+                        bbox_inches='tight')
+
+            output += 'Plotting boxplot\n'
+            final_best_fitnesses_list = []
+            selection_name_list = []
+
+            # Set the plot to use Log Scale if any of the result files require it
+            if any(s in fitness_function_name for s in ['rastrigin', 'rosenbrock', 'coco']):
+                plt.yscale('symlog')
+
+            for selection_function_id in fitness_function_results.selection_function_ids:
+                selection_function_results = fitness_function_results.filter(selection_function_id=selection_function_id)
+                selection_function_name = fitness_function_results.selection_id_to_name[selection_function_id]
+                selection_name_list.append(selection_function_name)
+                final_best_fitnesses = list(r.final_best_fitness for r in selection_function_results.results)
+                final_best_fitnesses_list.append(final_best_fitnesses)
+            plt.boxplot(final_best_fitnesses_list, labels=selection_name_list)
+
+            plt.xlabel('Evaluations')
+            plt.xticks(rotation=90)
+            plt.ylabel('Final Best Fitness')
+            legend = plt.legend([])
+            legend.remove()
+            plt.savefig('{0}/boxplot_{1}.png'.format(self.results_directory, fitness_function_id),
+                        bbox_inches='tight')
+
+            output += 'Doing t-tests\n'
+            for selection_function_id1 in fitness_function_results.selection_function_ids:
+                selection_function_name1 = fitness_function_results.selection_id_to_name[selection_function_id1]
+                if selection_function_name1 == 'eppsea_selection_function':
+                    selection_function_results1 = fitness_function_results.filter(selection_function_id=selection_function_id1)
+                    final_best_fitnesses1 = list(r.final_best_fitness for r in selection_function_results1.results)
+                    final_evals1 = list(max(r.eval_counts) for r in selection_function_results1.results)
+                    # round means to 5 decimal places for cleaner display
+                    average_final_best_fitness1 = round(statistics.mean(final_best_fitnesses1), 5)
+                    average_final_evals1 = round(statistics.mean(final_evals1), 5)
+                    output += 'Mean performance of {0}: {1}, in {2} evals\n'.format(selection_function_name1, average_final_best_fitness1, final_evals1)
+                    for selection_function_id2 in fitness_function_results.selection_function_ids:
+                        if selection_function_id2 != selection_function_name1:
+                            selection_function_results2 = fitness_function_results.filter(selection_function_id=selection_function_id2)
+                            selection_function_name2 = fitness_function_results.selection_id_to_name[selection_function_id2]
+                            final_best_fitnesses2 = list(r.final_best_fitness for r in selection_function_results2.results)
+                            final_evals2 = list(max(r.eval_counts) for r in selection_function_results2.results)
+                            average_final_best_fitness2 = round(statistics.mean(final_best_fitnesses2), 5)
+                            average_final_evals2 = round(statistics.mean(final_evals2), 5)
+                            _, p_fitness = scipy.stats.ttest_rel(final_best_fitnesses1, final_best_fitnesses2)
+                            _, p_evals = scipy.stats.ttest_rel(final_evals1, final_evals2)
+                            mean_difference_fitness = round(average_final_best_fitness1 - average_final_best_fitness2, 5)
+                            mean_difference_evals = round(average_final_evals1 - average_final_evals2, 5)
+
+                            output += '\tMean performance of {0}: {1}, in {2} evals\n'.format(selection_function_name2, average_final_best_fitness2, average_final_evals2)
+
+                            if p_fitness < 0.05:
+                                if mean_difference_fitness > 0:
+                                    output += '\t\t{0} performed {1} better | p-value: {2}\n'.format(selection_function_name1, mean_difference_fitness, p_fitness)
+                                else:
+                                    output += '\t\t{0} performed {1} worse | p-value: {2}\n'.format(selection_function_name1, mean_difference_fitness, p_fitness)
+                            else:
+                                output += '\t\t{0} performance difference is insignificant | p-value: {1}\n'.format(selection_function_name1, p_fitness)
+
+                            if p_evals < 0.05:
+                                if mean_difference_evals < 0:
+                                    output += '\t\t{0} used {1} fewer evals | p-value: {2}\n'.format(selection_function_name1, mean_difference_evals, p_evals)
+                                else:
+                                    output += '\t\t{0} used {1} more evals | p-value: {2}\n'.format(selection_function_name1, mean_difference_evals, p_evals)
+                            else:
+                                output += '\t\t{0} eval count difference is insignificant | p-value: {1}\n'.format(selection_function_name1, p_evals)
+
+        return output
+
 
     def run_eppsea_basicea(self):
         print('Now starting EPPSEA')
@@ -1167,16 +1281,10 @@ class EppseaBasicEA:
         end_time = time.time() - start_time
         self.log('Total time elapsed: {0}'.format(end_time))
 
-        print('Exporting Run Results')
-        result_file_paths = self.export_run_results(final_test_results)
-
         print('Running Postprocessing')
-        try:
-            postprocess_results = postprocess(result_file_paths, self.results_directory)
-            self.log('Postprocess results:')
-            self.log(postprocess_results)
-        except Exception:
-            self.log('Postprocessing failed. Run postprocessing directly at {0}'.format(self.results_directory))
+        postprocess_results = self.postprocess(final_test_results)
+        self.log('Postprocess results:')
+        self.log(postprocess_results)
 
         eppsea_base_results_path = eppsea.results_directory
         shutil.copytree(eppsea_base_results_path, self.results_directory + '/base')
