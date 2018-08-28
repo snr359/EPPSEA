@@ -5,6 +5,8 @@ import subprocess
 import os
 import sys
 
+import tune_basicea_evals
+
 sys.path.insert(0, '../')
 import eppsea_basicEA
 
@@ -25,6 +27,13 @@ def main(irace_path):
         eppsea_basicea_object = eppsea_basicEA.EppseaBasicEA(new_config)
         eppsea_basicea_object.prepare_fitness_functions(new_config)
 
+        # write the config to irace.cfg and tune the eval count for it
+        irace_config_file_path = 'irace_config.cfg'
+        with open(irace_config_file_path, 'w') as irace_config_file:
+            new_config.write(irace_config_file)
+
+        tune_basicea_evals.main(irace_path)
+
         # edit the path before saving the config file
         new_config['EA']['fitness function training instances directory'] = new_config['EA']['fitness function training instances directory'].replace('../', '')
         new_config['EA']['fitness function testing instances directory'] = new_config['EA']['fitness function testing instances directory'].replace('../', '')
@@ -32,24 +41,6 @@ def main(irace_path):
         new_config_file_path = '../config/basicEA/config5_f{0}_d10.cfg'.format(i)
         with open(new_config_file_path, 'w') as new_config_file:
             new_config.write(new_config_file)
-
-        # set up the irace arguments and call irace
-        # get the number of processes
-        try:
-            num_processes = len(os.sched_getaffinity(0))
-        # os.sched_getaffinity may not be available. Fallback to os.cpu_count
-        except AttributeError:
-            num_processes = os.cpu_count()
-        # if os.cpu_count returned none, default to 4
-        if num_processes is None:
-            num_processes = 4
-
-        train_instances_path = '../fitness_functions/coco_f{0}_d10/training'.format(i)
-        process_args = [irace_path, '--train-instances-dir', train_instances_path, '--parallel', str(num_processes)]
-        output_file_path = 'irace_coco_f{0}_d10.txt'.format(i)
-
-        with open(output_file_path, 'w') as output_file:
-            subprocess.run(process_args, stdout=output_file)
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:

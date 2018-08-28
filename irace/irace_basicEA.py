@@ -79,7 +79,7 @@ def main():
     result = ea.one_run()
 
     # print the mean of the average final best fitnesses, times -1 (so i_race can minimize it)
-    print(-1 * result['final_best_fitness'])
+    print(-1 * result.final_best_fitness)
 
 if __name__ == '__main__':
     main()
