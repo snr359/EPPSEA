@@ -146,9 +146,9 @@ def main(irace_path):
         # check if the results for any of the training instances are significantly different
         any_different = False
         for training_instance in os.listdir(training_instances_directory):
-            floor_results = evals_results[floor][training_instance]
+            ceil_results = evals_results[ceiling][training_instance]
             new_results = evals_results[new_evals][training_instance]
-            if significant_difference(floor_results, new_results):
+            if significant_difference(ceil_results, new_results):
                 any_different = True
                 break
 
