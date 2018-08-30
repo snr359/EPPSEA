@@ -107,9 +107,6 @@ ENV/
 results/
 basicEA_results/
 
-# papers
-papers/
-
 # cython compiled files
 *.pyx
 *.c
