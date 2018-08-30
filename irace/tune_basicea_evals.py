@@ -77,9 +77,9 @@ def test_parameters(command_line_params, num_runs, training_instance_directory):
     return results
 
 def significant_difference(sample1, sample2):
-    # returns true if a t-test between list_a and list_b indicates they are significantly different, with p<.01
+    # returns true if a t-test between list_a and list_b indicates they are significantly different, with p<.05
     _, p = scipy.stats.ttest_rel(sample1, sample2)
-    return p < 0.01
+    return p < 0.05
 
 def main(irace_path):
     # does an exponential search to find the maximum number of evals for basicEA, beyond which no benefit is found
@@ -127,12 +127,12 @@ def main(irace_path):
             print('Results for at least one training instance are significantly different')
             previous_evals = new_evals
         else:
-            print('No results for any training instance are significantly different. Ceiling found at {0} evals'.format(new_evals))
+            ceiling = previous_evals
+            print('No results for any training instance are significantly different. Ceiling found at {0} evals'.format(ceiling))
             ceiling_found = True
 
     # now do a binary search to find the resulting eval count that produces no different (within a window of 100 evals)
-    floor = previous_evals
-    ceiling = new_evals
+    floor = ceiling/2
 
     while ceiling - floor > 100:
         new_evals = int((ceiling + floor) / 2)
