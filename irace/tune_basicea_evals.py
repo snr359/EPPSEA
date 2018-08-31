@@ -79,6 +79,14 @@ def test_parameters(command_line_params, num_runs, training_instance_directory):
 def significant_difference(sample1, sample2):
     # returns true if a t-test between list_a and list_b indicates they are significantly different, with p<.05
     _, p = scipy.stats.ttest_rel(sample1, sample2)
+    print('\tPerforming t test')
+    print('\tSample 1:')
+    print('\t' + str(sample1))
+    print('\tsample 1 mean: {0}'.format(sum(sample1)/len(sample1)))
+    print('\tSample 2:')
+    print('\t' + str(sample2))
+    print('\tsample 2 mean: {0}'.format(sum(sample2)/len(sample2)))
+    print('\tp-value: {0}'.format(p))
     return p < 0.05
 
 def main(irace_path):
