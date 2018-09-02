@@ -18,7 +18,7 @@
 
 ## Directory where tuning instances are located, either absolute path or
 ## relative to current directory.
-trainInstancesDir = "../fitness_functions/coco/training"
+# trainInstancesDir = "../fitness_functions/coco_f9_d10/training"
 
 ## File with a list of instances and (optionally) parameters.
 ## If empty or NULL, do not use a file.

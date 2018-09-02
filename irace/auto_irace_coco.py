@@ -5,8 +5,6 @@ import subprocess
 import os
 import sys
 
-import tune_basicea_evals
-
 sys.path.insert(0, '../')
 import eppsea_basicEA
 
@@ -32,7 +30,26 @@ def main(irace_path):
         with open(irace_config_file_path, 'w') as irace_config_file:
             new_config.write(irace_config_file)
 
-        tune_basicea_evals.main(irace_path)
+        # set up the irace arguments and call irace
+        # get the number of processes
+        try:
+            num_processes = len(os.sched_getaffinity(0))
+        # os.sched_getaffinity may not be available. Fallback to os.cpu_count
+        except AttributeError:
+            num_processes = os.cpu_count()
+        # if os.cpu_count returned none, default to 4
+        if num_processes is None:
+            num_processes = 4
+
+        training_instances_directory = new_config['EA']['fitness function training instances directory']
+
+        process_args = [irace_path, '--train-instances-dir', training_instances_directory, '--parallel',
+                        str(num_processes)]
+        irace_output = subprocess.run(process_args, stdout=subprocess.PIPE, universal_newlines=True).stdout
+
+        # save the irace output
+        with open('coco_f{0}_d10.txt', 'w') as output_file:
+            output_file.write(irace_output)
 
         # edit the path before saving the config file
         new_config['EA']['fitness function training instances directory'] = new_config['EA']['fitness function training instances directory'].replace('../', '')
