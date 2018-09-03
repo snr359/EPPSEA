@@ -48,7 +48,7 @@ def main(irace_path):
         irace_output = subprocess.run(process_args, stdout=subprocess.PIPE, universal_newlines=True).stdout
 
         # save the irace output
-        with open('coco_f{0}_d10.txt', 'w') as output_file:
+        with open('coco_f{0}_d10.txt'.format(i), 'w') as output_file:
             output_file.write(irace_output)
 
         # edit the path before saving the config file
