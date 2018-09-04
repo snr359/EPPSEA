@@ -761,6 +761,7 @@ class Eppsea:
         self.gp_k_tournament_k = config.getint('metaEA', 'metaEA k-tournament size')
         self.gp_survival_selection = config.get('metaEA', 'metaEA survival selection')
         self.gp_parsimony_pressure = config.getfloat('metaEA', 'parsimony pressure')
+        self.use_relative_parsimony_pressure = config.getboolean('metaEA', 'use relative parsimony pressure')
 
         self.terminate_max_evals = config.getboolean('metaEA', 'terminate on maximum evals')
         self.terminate_no_avg_fitness_change = config.getboolean('metaEA', 'terminate on no improvement in average fitness')
@@ -919,7 +920,12 @@ class Eppsea:
 
         # apply parsimony pressure
         for p in self.new_population:
-            p.fitness -= self.gp_parsimony_pressure * p.gp_trees_size()
+            if self.use_relative_parsimony_pressure:
+                max_fitness = max(p.fitness for p in self.population)
+                min_fitness = min(p.fitness for p in self.population)
+                p.fitness -= (max_fitness - min_fitness) * self.gp_parsimony_pressure * p.gp_trees_size()
+            else:
+                p.fitness -= self.gp_parsimony_pressure * p.gp_trees_size()
 
         # Update results
         average_fitness = statistics.mean(p.fitness for p in self.population)

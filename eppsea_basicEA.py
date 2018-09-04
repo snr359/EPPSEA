@@ -1047,6 +1047,7 @@ class EppseaBasicEA:
         # the counters for average/best fitness change at the eppsea level are also manually reset, since this counts as a fitness improvement
         if self.eppsea_fitness_assignment_method == 'best_fitness_reached':
             if len(list(r for r in ea_results.results if r.termination_reason == 'target_fitness_hit')) / len (ea_results.results) >= 0.1:
+                self.log('At eval count {0}, eppsea fitness assignment changed to proportion_hitting_target_fitness'.format(self.eppsea.gp_evals))
                 self.eppsea_fitness_assignment_method = 'proportion_hitting_target_fitness'
                 for p in self.eppsea.population:
                     p.fitness = -math.inf
@@ -1056,6 +1057,7 @@ class EppseaBasicEA:
                 self.eppsea.highest_best_fitness = -math.inf
         if self.eppsea_fitness_assignment_method == 'proportion_hitting_target_fitness':
             if len(list(r for r in ea_results.results if r.termination_reason == 'target_fitness_hit')) / len(ea_results.results) == 1.0:
+                self.log('At eval count {0}, eppsea fitness assignment changed to evals_to_target_fitness'.format(self.eppsea.gp_evals))
                 self.eppsea_fitness_assignment_method = 'evals_to_target_fitness'
                 for p in self.eppsea.population:
                     p.fitness = -math.inf
