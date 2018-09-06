@@ -566,7 +566,10 @@ class GPTree:
                 assert(n in n.parent.children)
 
     def get_string(self):
-        return self.root.get_string() + ' | selection type: {0} | reusing parents: {1} | select from subset: {2} | selection_subset_size: {3}'.format(self.selection_type, self.reusing_parents, self.select_from_subset, self.selection_subset_size)
+        result = self.root.get_string() + ' | selection type: {0} | reusing parents: {1} | select from subset: {2}'.format(self.selection_type, self.reusing_parents, self.select_from_subset)
+        if self.select_from_subset:
+            result += ' | selection subset size: {0}'.format(self.selection_subset_size)
+        return result
 
     def get_code(self):
         return self.root.get_code()
