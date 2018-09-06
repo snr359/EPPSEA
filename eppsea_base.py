@@ -10,6 +10,7 @@ import shutil
 import pickle
 import statistics
 import uuid
+import numpy
 
 
 class GPNode:
@@ -765,6 +766,7 @@ class Eppsea:
         self.gp_survival_selection = config.get('metaEA', 'metaEA survival selection')
         self.gp_parsimony_pressure = config.getfloat('metaEA', 'parsimony pressure')
         self.use_relative_parsimony_pressure = config.getboolean('metaEA', 'use relative parsimony pressure')
+        self.kill_bad_individuals = config.getboolean('metaEA', 'kill bad individuals')
 
         self.terminate_max_evals = config.getboolean('metaEA', 'terminate on maximum evals')
         self.terminate_no_avg_fitness_change = config.getboolean('metaEA', 'terminate on no improvement in average fitness')
@@ -921,7 +923,13 @@ class Eppsea:
         # increment evaluation counter
         self.gp_evals += len(self.new_population)
 
-        # apply parsimony pressure
+        # kill bad population members, if configured to
+        # bad population members are those with a fitness less than the first quartile minus 3 * the interquartile range
+        fitnesses = list(p.fitness for p in self.population)
+        threshold = numpy.percentile(fitnesses, 25) - 3 * (numpy.percentile(fitnesses, 75) - numpy.percentile(fitnesses, 25))
+        self.population = list(p for p in self.population if p.fitness >= threshold)
+
+        # apply parsimony pressure to newly evaluated individuals
         for p in self.new_population:
             if self.use_relative_parsimony_pressure:
                 max_fitness = max(p.fitness for p in self.population)
