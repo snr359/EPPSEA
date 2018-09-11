@@ -630,8 +630,9 @@ class EppseaSelectionFunction:
         # if other is provided, copy variable values. Otherwise, initialize them all to none
         if other is not None:
             self.fitness = other.fitness
+            self.mo_fitnesses = other.mo_fitnesses
+            self.pareto_tier = other.pareto_tier
             self.gp_trees = other.gp_trees[:]
-
 
             self.constant_min = other.constant_min
             self.constant_max = other.constant_max
@@ -643,6 +644,8 @@ class EppseaSelectionFunction:
             self.initial_selection_subset_size = other.initial_selection_subset_size
         else:
             self.fitness = None
+            self.mo_fitnesses = None
+            self.pareto_tier = None
             self.gp_trees = None
 
             self.constant_min = None
@@ -655,7 +658,7 @@ class EppseaSelectionFunction:
             self.initial_selection_subset_size = None
 
         # the id should never be copied, and should instead be reassigned with assign_id
-        self.id = None
+        self.assign_id()
 
     def assign_id(self):
         # assigns a random id to self. Every unique EPPSEA individual should call this once
@@ -697,9 +700,9 @@ class EppseaSelectionFunction:
             new_gptree = gp_tree1.recombine(gp_tree2)
             new_selection_function.gp_trees.append(new_gptree)
 
-        # clear the fitness rating and assign a new id
-        new_selection_function.assign_id()
+        # clear the fitness rating
         new_selection_function.fitness = None
+        new_selection_function.mo_fitnesses = None
         return new_selection_function
 
     def select(self, population, n=1, generation_number=None):
@@ -767,6 +770,8 @@ class Eppsea:
         self.gp_parsimony_pressure = config.getfloat('metaEA', 'parsimony pressure')
         self.use_relative_parsimony_pressure = config.getboolean('metaEA', 'use relative parsimony pressure')
         self.kill_bad_individuals = config.getboolean('metaEA', 'kill bad individuals')
+        self.multiobjective = config.getboolean('metaEA', 'multiobjective')
+        self.number_of_objectives = config.getint('metaEA', 'number of objectives')
 
         self.terminate_max_evals = config.getboolean('metaEA', 'terminate on maximum evals')
         self.terminate_no_avg_fitness_change = config.getboolean('metaEA', 'terminate on no improvement in average fitness')
@@ -907,14 +912,20 @@ class Eppsea:
         self.gens_since_avg_fitness_improvement = 0
         self.gens_since_best_fitness_improvement = 0
         self.highest_average_fitness = -math.inf
+        self.mo_highest_average_fitnesses = [-math.inf] * self.number_of_objectives
         self.highest_best_fitness = -math.inf
+        self.mo_highest_best_fitnesses = [-math.inf] * self.number_of_objectives
         self.restarting = False
 
     def next_generation(self):
         # make sure all population members have been assigned fitness values
-        if not all(p.fitness is not None for p in self.population):
+        if self.multiobjective and not all(p.mo_fitnesses is not None for p in self.population):
+            self.log('Attempting to advance to next generation before assigning fitnesses to all members', 'ERROR')
+            return
+        if not self.multiobjective and not all(p.fitness is not None for p in self.population):
             self.log('Attempting to advance to next generation before assigning fitness to all members', 'ERROR')
             return
+
 
         # log and increment generation
         self.log('Finished generation {0}'.format(self.gen_number), 'INFO')
@@ -925,26 +936,49 @@ class Eppsea:
 
         # kill bad population members, if configured to
         # bad population members are those with a fitness less than the first quartile minus 3 * the interquartile range
-        fitnesses = list(p.fitness for p in self.population)
-        threshold = numpy.percentile(fitnesses, 25) - 3 * (numpy.percentile(fitnesses, 75) - numpy.percentile(fitnesses, 25))
-        self.population = list(p for p in self.population if p.fitness >= threshold)
+        if self.multiobjective:
+            to_be_removed = []
+            for i in range(self.number_of_objectives):
+                fitnesses = list(p.mo_fitnesses[i] for p in self.population)
+                threshold = numpy.percentile(fitnesses, 25) - 3 * (numpy.percentile(fitnesses, 75) - numpy.percentile(fitnesses, 25))
+                to_be_removed.extend(p for p in self.population if p.mo_fitnesses[i] < threshold)
+            self.population = list(p for p in self.population if p not in to_be_removed)
+
+        else:
+            fitnesses = list(p.fitness for p in self.population)
+            threshold = numpy.percentile(fitnesses, 25) - 3 * (numpy.percentile(fitnesses, 75) - numpy.percentile(fitnesses, 25))
+            self.population = list(p for p in self.population if p.fitness >= threshold)
 
         # apply parsimony pressure to newly evaluated individuals
         for p in self.new_population:
-            if self.use_relative_parsimony_pressure:
-                max_fitness = max(p.fitness for p in self.population)
-                min_fitness = min(p.fitness for p in self.population)
-                p.fitness -= (max_fitness - min_fitness) * self.gp_parsimony_pressure * p.gp_trees_size()
+            if self.multiobjective:
+                for i in range(self.number_of_objectives):
+                    if self.use_relative_parsimony_pressure:
+                        max_fitness = max(p.mo_fitnesses[i] for p in self.population)
+                        min_fitness = min(p.mo_fitnesses[i] for p in self.population)
+                        p.mo_fitnesses[i] -= (max_fitness - min_fitness) * self.gp_parsimony_pressure * p.gp_trees_size()
+                    else:
+                        p.mo_fitnesses[i] -= self.gp_parsimony_pressure * p.gp_trees_size()
             else:
-                p.fitness -= self.gp_parsimony_pressure * p.gp_trees_size()
+                if self.use_relative_parsimony_pressure:
+                    max_fitness = max(p.fitness for p in self.population)
+                    min_fitness = min(p.fitness for p in self.population)
+                    p.fitness -= (max_fitness - min_fitness) * self.gp_parsimony_pressure * p.gp_trees_size()
+                else:
+                    p.fitness -= self.gp_parsimony_pressure * p.gp_trees_size()
 
         # Update results
-        average_fitness = statistics.mean(p.fitness for p in self.population)
-        best_fitness = max(p.fitness for p in self.population)
-
         self.results['eval_counts'].append(self.gp_evals)
-        self.results['average_fitness'].append(average_fitness)
-        self.results['best_fitness'].append(best_fitness)
+        if self.multiobjective:
+            mo_average_fitnesses = list(statistics.mean(p.mo_fitnesses[i] for p in self.population) for i in range(self.number_of_objectives))
+            mo_best_fitnesses = list(max(p.mo_fitnesses[i] for p in self.population) for i in range(self.number_of_objectives))
+            self.results['average_fitness'].append(mo_average_fitnesses)
+            self.results['best_fitness'].append(mo_best_fitnesses)
+        else:
+            average_fitness = statistics.mean(p.fitness for p in self.population)
+            best_fitness = max(p.fitness for p in self.population)
+            self.results['average_fitness'].append(average_fitness)
+            self.results['best_fitness'].append(best_fitness)
 
         # pickle the population, if configured to
         if self.pickle_every_population:
@@ -955,31 +989,7 @@ class Eppsea:
                 pickle.dump(self.population, pickle_file)
 
         # check termination and restart conditions
-        if average_fitness > self.highest_average_fitness:
-            self.highest_average_fitness = average_fitness
-            self.gens_since_avg_fitness_improvement = 0
-        else:
-            self.gens_since_avg_fitness_improvement += 1
-            if self.terminate_no_avg_fitness_change and self.gens_since_avg_fitness_improvement >= self.no_change_termination_generations:
-                self.log('Terminating evolution due to no improvement in average fitness', 'INFO')
-                self.evolution_finished = True
-            elif self.restart_no_avg_fitness_change and self.gens_since_avg_fitness_improvement >= self.no_change_restart_generations:
-                self.log('Restarting evolution due to no improvement in average fitness', 'INFO')
-                self.restarting = True
-        if best_fitness > self.highest_best_fitness:
-            self.highest_best_fitness = best_fitness
-            self.gens_since_best_fitness_improvement = 0
-        else:
-            self.gens_since_best_fitness_improvement += 1
-            if self.terminate_no_best_fitness_change and self.gens_since_best_fitness_improvement >= self.no_change_termination_generations:
-                self.log('Terminating evolution due to no improvement in best fitness', 'INFO')
-                self.evolution_finished = True
-            elif self.restart_no_best_fitness_change and self.gens_since_best_fitness_improvement >= self.no_change_restart_generations:
-                self.log('Restarting evolution due to no improvement in best fitness', 'INFO')
-                self.restarting = True
-        if self.terminate_max_evals and self.gp_evals >= self.max_gp_evals:
-            self.log('Terminating evolution due to max evaluations reached', 'INFO')
-            self.evolution_finished = True
+        self.check_termination_and_restart_conditions()
 
         if not self.evolution_finished:
 
@@ -990,24 +1000,37 @@ class Eppsea:
                 self.gens_since_avg_fitness_improvement = 0
                 self.gens_since_best_fitness_improvement = 0
                 self.highest_average_fitness = -math.inf
+                self.mo_highest_average_fitnesses = [-math.inf]*self.number_of_objectives
                 self.highest_best_fitness = -math.inf
+                self.mo_highest_best_fitnesses = [-math.inf] * self.number_of_objectives
                 self.restarting = False
 
             # otherwise, do survival selection and generate the next generation
             else:
+                if self.multiobjective:
+                    self.pareto_sort_population()
+
                 # survival selection
                 if self.gp_survival_selection == 'random':
                     self.population = random.sample(self.population, self.gp_mu)
                 elif self.gp_survival_selection == 'truncation':
-                    self.population.sort(key=lambda p: p.fitness, reverse=True)
-                    self.population = self.population[:self.gp_mu]
+                    if self.multiobjective:
+                        self.population.sort(key=lambda p: p.pareto_rank)
+                        self.population = self.population[:self.gp_mu]
+                    else:
+                        self.population.sort(key=lambda p: p.fitness, reverse=True)
+                        self.population = self.population[:self.gp_mu]
 
                 # parent selection and new child generation
                 self.new_population = []
                 while len(self.new_population) < self.gp_lambda:
                     # parent selection (k tournament)
-                    parent1 = max(random.sample(self.population, self.gp_k_tournament_k), key=lambda p: p.fitness)
-                    parent2 = max(random.sample(self.population, self.gp_k_tournament_k), key=lambda p: p.fitness)
+                    if self.multiobjective:
+                        parent1 = min(random.sample(self.population, self.gp_k_tournament_k), key=lambda p: p.pareto_rank)
+                        parent2 = min(random.sample(self.population, self.gp_k_tournament_k), key=lambda p: p.pareto_rank)
+                    else:
+                        parent1 = max(random.sample(self.population, self.gp_k_tournament_k), key=lambda p: p.fitness)
+                        parent2 = max(random.sample(self.population, self.gp_k_tournament_k), key=lambda p: p.fitness)
                     # recombination/mutation
                     new_child = parent1.recombine(parent2)
                     if random.random() < self.gp_mutation_rate or (
@@ -1046,10 +1069,18 @@ class Eppsea:
                 result_writer.writerow(self.results['average_fitness'])
                 result_writer.writerow(self.results['best_fitness'])
 
-            # find the best population member, log its string, and expose it
-            self.final_best_member = max(self.population, key=lambda p: p.fitness)
-            final_best_member_string = self.final_best_member.get_string()
-            self.log('String form of best Popi: {0}'.format(final_best_member_string), 'INFO')
+            # find the best population member(s), log its string, and expose it/them
+            if self.multiobjective:
+                self.pareto_sort_population()
+                self.final_best_members = list(p for p in self.population if p.pareto_rank == 0)
+                self.log('String form of best members:', 'INFO')
+                for p in self.final_best_members:
+                    self.log(p.get_string(), 'INFO')
+
+            else:
+                self.final_best_member = max(self.population, key=lambda p: p.fitness)
+                final_best_member_string = self.final_best_member.get_string()
+                self.log('String form of best Popi: {0}'.format(final_best_member_string), 'INFO')
 
             # log time elapsed
             self.time_elapsed = time.time() - self.start_time
@@ -1072,6 +1103,99 @@ class Eppsea:
         uniqueness = len(unique_strings) / len(population_strings)
         if uniqueness <= warning_threshold:
             self.log('GP population uniqueness is at {0}%. Consider increasing mutation rate.'.format(round(uniqueness*100)), 'WARNING')
+
+    def check_termination_and_restart_conditions(self):
+        # this function checks whether the population needs to restart or terminate
+        # it logs the reason and sets the self.restarting or self.evolution_finished
+
+        average_fitness_improved = False
+        best_fitness_improved = False
+
+        if self.multiobjective:
+            # iterate through all objectives to check if the average or best fitness for any objective has improved
+            for i in range(self.number_of_objectives):
+                average_fitness = statistics.mean(p.mo_fitnesses[i] for p in self.population)
+                best_fitness = max(p.mo_fitnesses[i] for p in self.population)
+
+                if average_fitness > self.mo_highest_average_fitnesses[i]:
+                    average_fitness_improved = True
+                    self.mo_highest_average_fitnesses[i] = average_fitness
+                if best_fitness > self.mo_highest_best_fitnesses[i]:
+                    best_fitness_improved = True
+                    self.mo_highest_best_fitnesses[i]= best_fitness
+
+        else:
+            # caluclate the average and best fitnesses to see if they have improved
+            average_fitness = statistics.mean(p.fitness for p in self.population)
+            best_fitness = max(p.fitness for p in self.population)
+
+            if average_fitness > self.highest_average_fitness:
+                self.highest_average_fitness = average_fitness
+                average_fitness_improved = True
+            if best_fitness > self.highest_best_fitness:
+                self.highest_best_fitness = best_fitness
+                best_fitness_improved = True
+
+        # increment or reset the counters for generations since fitness improvement, and check if termination/restarting is necessary
+        if average_fitness_improved:
+            self.gens_since_avg_fitness_improvement = 0
+        else:
+            self.gens_since_avg_fitness_improvement += 1
+            if self.terminate_no_avg_fitness_change and self.gens_since_avg_fitness_improvement >= self.no_change_termination_generations:
+                self.evolution_finished = True
+            elif self.restart_no_avg_fitness_change and self.gens_since_avg_fitness_improvement >= self.no_change_restart_generations:
+                self.log('Restarting evolution due to no improvement in average fitness', 'INFO')
+                self.restarting = True
+
+        if best_fitness_improved:
+            self.gens_since_best_fitness_improvement = 0
+        else:
+            self.gens_since_best_fitness_improvement += 1
+            if self.terminate_no_best_fitness_change and self.gens_since_best_fitness_improvement >= self.no_change_termination_generations:
+                self.log('Terminating evolution due to no improvement in best fitness', 'INFO')
+                self.evolution_finished = True
+            elif self.restart_no_best_fitness_change and self.gens_since_best_fitness_improvement >= self.no_change_restart_generations:
+                self.log('Restarting evolution due to no improvement in best fitness', 'INFO')
+                self.restarting = True
+
+        if self.terminate_max_evals and self.gp_evals >= self.max_gp_evals:
+            self.log('Terminating evolution due to max evaluations reached', 'INFO')
+            self.evolution_finished = True
+
+    def pareto_optimal(self, x, y):
+        # returns true if x is pareto dominant of y, and false otherwise
+        if all(xf >= yf for xf,yf in zip(x.mo_fitnesses, y.mo_fitnesses)) and any(xf > yf for xf,yf in zip(x.mo_fitnesses, y.mo_fitnesses)):
+            return True
+        else:
+            return False
+
+    def pareto_sort_population(self):
+        # sorts the population into a pareto optimal heirarchy, and assigns a pareto rank to each population member
+        # build the pareto heirarchy
+        pareto_heirarchy = []
+        for p in self.population:
+            self.insert_into_pareto_heirarchy(p, pareto_heirarchy)
+        # assign tier numbers of population members
+        for i, tier in enumerate(pareto_heirarchy):
+            for p in tier:
+                p.pareto_rank = i
+
+    def insert_into_pareto_heirarchy(self, x, pareto_heirarchy, tier_num=0):
+        # inserts x into the pareto heirarchy at tier_num. Recursively inserts x into lower tiers if it is dominated, or moves dominated members to lower tiers
+        # if x is being inserted at the bottom of the heirarchy, create a new tier for it
+        if tier_num >= len(pareto_heirarchy):
+            pareto_heirarchy.append([x])
+        # otherwise, only insert x into the current tier if it is non-dominated, and move any members it dominates to a lower tier
+        else:
+            for p in list(pareto_heirarchy[tier_num]):
+                if self.pareto_optimal(x, p):
+                    pareto_heirarchy[tier_num].remove(p)
+                    self.insert_into_pareto_heirarchy(p, pareto_heirarchy, tier_num+1)
+                elif self.pareto_optimal(p, x):
+                    self.insert_into_pareto_heirarchy(x, pareto_heirarchy, tier_num+1)
+                    return
+                # if this point is reached, x is pareto cooptimal with the whole tier, so insert it
+                pareto_heirarchy[tier_num].append(x)
 
     def generate_default_config(self, file_path):
         # generates a default configuration file and writes it to file_path

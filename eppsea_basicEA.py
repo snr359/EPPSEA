@@ -463,14 +463,14 @@ class SelectionFunction:
         self.assign_id()
 
     def generate_from_eppsea_individual(self, eppsea_selection_function):
-        self.name = 'eppsea_selection_function'
+        self.name = 'eppsea_selection_function ' + eppsea_selection_function.id
         self.displayName = 'Evolved Selection Function'
         self.tournament_k = None
         self.eppsea_selection_function = eppsea_selection_function
         self.assign_id()
 
     def select(self, population, n, generation_number):
-        if self.name == 'eppsea_selection_function':
+        if 'eppsea_selection_function' in self.name:
             return self.eppsea_selection_function.select(population, n, generation_number)
 
         elif self.name == 'truncation':
@@ -800,6 +800,7 @@ class EppseaBasicEA:
         self.test_hill_climber = config.getboolean('EA', 'test hill climber')
         self.hill_climber_iterations = config.getint('EA', 'hill climber iterations')
         self.fitness_function_name = config.get('EA', 'fitness function')
+        self.use_multiobjective_ea = config.getboolean('EA', 'use multiobjective ea')
 
         self.num_training_fitness_functions = None
         self.num_testing_fitness_functions = None
@@ -1078,8 +1079,11 @@ class EppseaBasicEA:
                     fitness_function_results = s_results.filter(fitness_function_id=fitness_function_id)
                     final_best_fitnesses = (r.final_best_fitness for r in fitness_function_results.results)
                     average_final_best_fitnesses.append(statistics.mean(final_best_fitnesses))
-                # assign fitness as the average of the average final best fitnesses
-                s.eppsea_selection_function.fitness = statistics.mean(average_final_best_fitnesses)
+                # assign fitness as the average of the average final best fitnesses or, if multiobjective ea is on, the list of average final best fitnesses
+                if self.use_multiobjective_ea:
+                    s.eppsea_selection_function.mo_fitnesses = average_final_best_fitnesses
+                else:
+                    s.eppsea_selection_function.fitness = statistics.mean(average_final_best_fitnesses)
 
             elif self.eppsea_fitness_assignment_method == 'proportion_hitting_target_fitness':
                 # assign the fitness as the proportion of runs that hit the target fitness
@@ -1097,7 +1101,7 @@ class EppseaBasicEA:
             else:
                 raise Exception('ERROR: fitness assignment method {0} not recognized by eppsea_basicEA'.format(self.eppsea_fitness_assignment_method))
 
-    def test_against_basic_selection(self, eppsea_individual):
+    def test_against_basic_selection(self, eppsea_individuals):
 
         selection_functions = self.basic_selection_functions
         if self.config.getint('EA', 'offspring size') > self.config.getint('EA', 'population size') * 2:
@@ -1105,9 +1109,12 @@ class EppseaBasicEA:
                 if s.type == 'truncation':
                     selection_functions.remove(s)
 
-        eppsea_selection_function = SelectionFunction()
-        eppsea_selection_function.generate_from_eppsea_individual(eppsea_individual)
-        selection_functions.append(eppsea_selection_function)
+        eppsea_selection_functions = []
+
+        for eppsea_individual in eppsea_individuals:
+            eppsea_selection_function = SelectionFunction()
+            eppsea_selection_function.generate_from_eppsea_individual(eppsea_individual)
+            selection_functions.append(eppsea_selection_function)
 
         if self.test_generalization:
             fitness_functions = self.testing_fitness_functions
@@ -1230,7 +1237,7 @@ class EppseaBasicEA:
             output += 'Doing t-tests\n'
             for selection_function_id1 in fitness_function_results.selection_function_ids:
                 selection_function_name1 = fitness_function_results.selection_id_to_name[selection_function_id1]
-                if selection_function_name1 == 'eppsea_selection_function':
+                if 'eppsea_selection_function' in selection_function_name1:
                     selection_function_results1 = fitness_function_results.filter(selection_function_id=selection_function_id1)
                     final_best_fitnesses1 = list(r.final_best_fitness for r in selection_function_results1.results)
                     final_evals1 = list(max(r.eval_counts) for r in selection_function_results1.results)
@@ -1239,7 +1246,7 @@ class EppseaBasicEA:
                     average_final_evals1 = round(statistics.mean(final_evals1), 5)
                     output += 'Mean performance of {0}: {1}, in {2} evals\n'.format(selection_function_name1, average_final_best_fitness1, final_evals1)
                     for selection_function_id2 in fitness_function_results.selection_function_ids:
-                        if selection_function_id2 != selection_function_name1:
+                        if selection_function_id2 != selection_function_id1:
                             selection_function_results2 = fitness_function_results.filter(selection_function_id=selection_function_id2)
                             selection_function_name2 = fitness_function_results.selection_id_to_name[selection_function_id2]
                             final_best_fitnesses2 = list(r.final_best_fitness for r in selection_function_results2.results)
@@ -1286,9 +1293,12 @@ class EppseaBasicEA:
             self.evaluate_eppsea_population(eppsea.new_population, False)
             eppsea.next_generation()
 
-        best_selection_function = eppsea.final_best_member
+        if self.use_multiobjective_ea:
+            best_selection_functions = eppsea.final_best_members
+        else:
+            best_selection_functions = [eppsea.final_best_member]
         print('Running final tests')
-        final_test_results = self.test_against_basic_selection(best_selection_function)
+        final_test_results = self.test_against_basic_selection(best_selection_functions)
         end_time = time.time() - start_time
         self.log('Total time elapsed: {0}'.format(end_time))
 
