@@ -1195,7 +1195,7 @@ class Eppsea:
                     self.insert_into_pareto_heirarchy(x, pareto_heirarchy, tier_num+1)
                     return
                 # if this point is reached, x is pareto cooptimal with the whole tier, so insert it
-                pareto_heirarchy[tier_num].append(x)
+            pareto_heirarchy[tier_num].append(x)
 
     def generate_default_config(self, file_path):
         # generates a default configuration file and writes it to file_path
