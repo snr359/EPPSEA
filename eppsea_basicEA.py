@@ -22,6 +22,7 @@ except ImportError:
     print('BBOB COCO not found. COCO benchmarks will not be available')
 
 import scipy.stats
+import numpy as np
 
 import matplotlib
 matplotlib.use('Agg')
@@ -590,22 +591,18 @@ class EA:
                 self.genome_length = None
                 self.fitness = None
             else:
-                self.genome = list(other.genome)
+                self.genome = np.copy(other.genome)
                 self.genome_type = other.genome_type
                 self.genome_length = other.genome_length
 
         def randomize(self, n, max_range, genome_type):
-            self.genome = list()
             self.genome_length = n
-
             if genome_type == 'bool':
                 self.genome_type = 'bool'
-                for i in range(n):
-                    self.genome.append(bool(random.random() > 0.5))
+                self.genome = np.random.random(n) > 0.5
             elif genome_type == 'float':
                 self.genome_type = 'float'
-                for i in range(n):
-                    self.genome.append(random.uniform(-max_range, max_range))
+                self.genome = np.random.uniform(-max_range, max_range, n)
 
         def mutate_gene(self, gene):
             if self.genome_type == 'bool':
@@ -629,9 +626,8 @@ class EA:
                     if random.random() > 0.5:
                         new_child.genome[i] = parent2.genome[i]
             elif self.genome_type == 'float':
-                for i in range(self.genome_length):
-                    a = random.random()
-                    new_child.genome[i] = a*self.genome[i] + (1-a)*parent2.genome[i]
+                a = np.random.random(self.genome_length)
+                new_child.genome = a*self.genome + (1-a)*parent2.genome
 
             return new_child
 

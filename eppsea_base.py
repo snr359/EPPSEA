@@ -355,27 +355,25 @@ class GPTree:
         max_fitness = max(c.fitness for c in sorted_candidates)
 
         # calculate selectabilities
-        selectabilities = []
-        for i in range(len(sorted_candidates)):
-            terminal_values = dict()
-            terminal_values['fitness'] = sorted_candidates[i].fitness
-            terminal_values['fitness_rank'] = i+1
-            terminal_values['sum_fitness'] = sum_fitness
-            terminal_values['min_fitness'] = min_fitness
-            terminal_values['max_fitness'] = max_fitness
-            if max_fitness == min_fitness:
-                terminal_values['relative_fitness'] = 1
-            else:
-                terminal_values['relative_fitness'] = (sorted_candidates[i].fitness - min_fitness) / (max_fitness - min_fitness)
-            terminal_values['population_size'] = population_size
-            terminal_values['birth_generation'] = sorted_candidates[i].birth_generation
+        terminal_values = dict()
+        terminal_values['fitness'] = numpy.array(c.fitness for c in sorted_candidates)
+        terminal_values['fitness_rank'] = numpy.arange(1, len(sorted_candidates))
+        terminal_values['sum_fitness'] = sum_fitness
+        terminal_values['min_fitness'] = min_fitness
+        terminal_values['max_fitness'] = max_fitness
+        if max_fitness == min_fitness:
+            terminal_values['relative_fitness'] = 1
+        else:
+            terminal_values['relative_fitness'] = numpy.array(((c.fitness - min_fitness) / (max_fitness - min_fitness)) for c in sorted_candidates)
+        terminal_values['population_size'] = population_size
+        terminal_values['birth_generation'] = numpy.array(c.birth_generation for c in sorted_candidates)
 
-            if generation_number is not None:
-                terminal_values['generation_number'] = generation_number
-            else:
-                terminal_values['generation_number'] = 0
+        if generation_number is not None:
+            terminal_values['generation_number'] = generation_number
+        else:
+            terminal_values['generation_number'] = 0
 
-            selectabilities.append(self.get(terminal_values))
+        selectabilities = self.get(terminal_values)
 
         # zip the candidates and selectabilities, and return
         return zip(sorted_candidates, selectabilities)
