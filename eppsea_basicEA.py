@@ -730,7 +730,8 @@ class EA:
                         break
 
             if self.terminate_on_population_convergence:
-                num_unique_genomes = len(set(str(p.genome) for p in population))
+                genomes = np.stack(p.genome for p in population)
+                num_unique_genomes = len(np.unique(genomes, axis=0))
                 if num_unique_genomes < self.population_convergence_threshold * self.mu:
                     termination_reason = 'population_convergence'
                     break
