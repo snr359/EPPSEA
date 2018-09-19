@@ -1001,7 +1001,7 @@ class Eppsea:
                     self.population = random.sample(self.population, self.gp_mu)
                 elif self.gp_survival_selection == 'truncation':
                     if self.multiobjective:
-                        self.population.sort(key=lambda p: p.pareto_rank)
+                        self.population.sort(key=lambda p: p.pareto_tier)
                         self.population = self.population[:self.gp_mu]
                     else:
                         self.population.sort(key=lambda p: p.fitness, reverse=True)
@@ -1012,8 +1012,8 @@ class Eppsea:
                 while len(self.new_population) < self.gp_lambda:
                     # parent selection (k tournament)
                     if self.multiobjective:
-                        parent1 = min(random.sample(self.population, self.gp_k_tournament_k), key=lambda p: p.pareto_rank)
-                        parent2 = min(random.sample(self.population, self.gp_k_tournament_k), key=lambda p: p.pareto_rank)
+                        parent1 = min(random.sample(self.population, self.gp_k_tournament_k), key=lambda p: p.pareto_tier)
+                        parent2 = min(random.sample(self.population, self.gp_k_tournament_k), key=lambda p: p.pareto_tier)
                     else:
                         parent1 = max(random.sample(self.population, self.gp_k_tournament_k), key=lambda p: p.fitness)
                         parent2 = max(random.sample(self.population, self.gp_k_tournament_k), key=lambda p: p.fitness)
@@ -1058,7 +1058,7 @@ class Eppsea:
             # find the best population member(s), log its string, and expose it/them
             if self.multiobjective:
                 self.pareto_sort_population()
-                self.final_best_members = list(p for p in self.population if p.pareto_rank == 0)
+                self.final_best_members = list(p for p in self.population if p.pareto_tier == 0)
                 self.log('String form of best members:', 'INFO')
                 for p in self.final_best_members:
                     self.log(p.get_string(), 'INFO')
@@ -1164,7 +1164,7 @@ class Eppsea:
         # assign tier numbers of population members
         for i, tier in enumerate(pareto_heirarchy):
             for p in tier:
-                p.pareto_rank = i
+                p.pareto_tier = i
 
     def insert_into_pareto_heirarchy(self, x, pareto_heirarchy, tier_num=0):
         # inserts x into the pareto heirarchy at tier_num. Recursively inserts x into lower tiers if it is dominated, or moves dominated members to lower tiers
