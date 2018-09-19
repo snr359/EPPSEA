@@ -15,7 +15,11 @@ import numpy
 
 class GPNode:
     numeric_terminals = ['constant', 'random']
-    data_terminals = ['fitness', 'fitness_rank', 'population_size', 'sum_fitness', 'min_fitness', 'max_fitness', 'relative_fitness', 'birth_generation', 'generation_number']
+    population_data_terminals = ['fitness', 'fitness_rank', 'relative_fitness', 'birth_generation']
+    single_data_terminals = ['population_size', 'min_fitness', 'sum_fitness', 'max_fitness', 'generation_number']
+
+    terminals = numeric_terminals + population_data_terminals + single_data_terminals
+
     non_terminals = ['+', '-', '*', '/', 'step', 'absolute', 'min', 'max']
     child_count = {'+': 2, '-': 2, '*': 2, '/': 2, 'step': 2, 'absolute': 1, 'min': 2, 'max': 2}
 
@@ -33,7 +37,7 @@ class GPNode:
 
     def grow(self, depth_limit, terminal_node_generation_chance, parent):
         if depth_limit == 0 or random.random() < terminal_node_generation_chance:
-            self.operation = random.choice(GPNode.numeric_terminals + GPNode.data_terminals)
+            self.operation = random.choice(GPNode.numeric_terminals + GPNode.population_data_terminals + GPNode.single_data_terminals)
         else:
             self.operation = random.choice(GPNode.non_terminals)
 
@@ -55,34 +59,36 @@ class GPNode:
         elif self.operation == '*':
             return self.children[0].get(terminal_values) * self.children[1].get(terminal_values)
         elif self.operation == '/':
-            denom = self.children[1].get(terminal_values)
-            if denom == 0:
-                denom = 0.00001
-            return self.children[0].get(terminal_values) / denom
+            # division by 0 will result in Inf, which is handled by the GPTree
+            numpy.seterr(divide='ignore')
+            return self.children[0].get(terminal_values) / self.children[1].get(terminal_values)
 
         elif self.operation == 'step':
-            if self.children[0].get(terminal_values) >= self.children[1].get(terminal_values):
-                return 1
-            else:
-                return 0
+            return numpy.array(self.children[0].get(terminal_values) >= self.children[1].get(terminal_values), dtype=int)
 
         elif self.operation == 'absolute':
-            return abs(self.children[0].get(terminal_values))
+            return numpy.absolute(self.children[0].get(terminal_values))
 
         elif self.operation == 'min':
-            return min(self.children[0].get(terminal_values), self.children[1].get(terminal_values))
+            return numpy.amin(numpy.stack((self.children[0].get(terminal_values), self.children[1].get(terminal_values))), axis=0)
 
         elif self.operation == 'max':
-            return max(self.children[0].get(terminal_values), self.children[1].get(terminal_values))
+            return numpy.amax(numpy.stack((self.children[0].get(terminal_values), self.children[1].get(terminal_values))), axis=0)
 
-        elif self.operation in GPNode.data_terminals:
+        elif self.operation in GPNode.population_data_terminals:
             return terminal_values[self.operation]
 
+        elif self.operation in GPNode.single_data_terminals:
+            population_size = terminal_values['population_size']
+            return numpy.repeat(terminal_values[self.operation], population_size)
+
         elif self.operation == 'constant':
-            return self.data
+            population_size = terminal_values['population_size']
+            return numpy.repeat(self.data, population_size)
 
         elif self.operation == 'random':
-            return random.uniform(self.random_min, self.random_max)
+            population_size = terminal_values['population_size']
+            return numpy.random.uniform(self.random_min, self.random_max, population_size)
 
     def get_string(self):
         result = ''
@@ -95,29 +101,6 @@ class GPNode:
             result = str(self.data)
         else:
             result = self.operation
-        return result
-
-    def get_code(self):
-        # Returns executable python code for getting the selection chance from a population member p
-        result = ''
-        if self.operation in GPNode.non_terminals:
-            if len(self.children) == 2:
-                if self.operation in ('+', '-', '*'):
-                    result = '(' + self.children[0].get_code() + self.operation + self.children[1].get_code() + ')'
-                elif self.operation == '/':
-                    result = '(' + self.children[0].get_code() + self.operation + '(0.000001+' + self.children[1].get_code() + '))'
-                elif self.operation == 'step':
-                    result = '(int(' + self.children[0].get_code() + '>=' + self.children[1].get_code() + '))'
-                elif self.operation == 'absolute':
-                    result = 'abs( '+ self.children[0].get_code() +' )'
-
-        elif self.operation in GPNode.data_terminals:
-            result = '(p.' + self.operation + ')'
-
-        elif self.operation == 'constant':
-            result = '(' + str(self.data) + ')'
-        elif self.operation == 'random':
-            result = '(random.random({0}, {1}))'.format(self.random_min, self.random_max)
         return result
 
     def get_all_nodes(self):
@@ -356,17 +339,17 @@ class GPTree:
 
         # calculate selectabilities
         terminal_values = dict()
-        terminal_values['fitness'] = numpy.array(c.fitness for c in sorted_candidates)
-        terminal_values['fitness_rank'] = numpy.arange(1, len(sorted_candidates))
+        terminal_values['fitness'] = numpy.array(list(c.fitness for c in sorted_candidates))
+        terminal_values['fitness_rank'] = numpy.arange(1, len(sorted_candidates)+1)
         terminal_values['sum_fitness'] = sum_fitness
         terminal_values['min_fitness'] = min_fitness
         terminal_values['max_fitness'] = max_fitness
         if max_fitness == min_fitness:
             terminal_values['relative_fitness'] = 1
         else:
-            terminal_values['relative_fitness'] = numpy.array(((c.fitness - min_fitness) / (max_fitness - min_fitness)) for c in sorted_candidates)
+            terminal_values['relative_fitness'] = numpy.array(list(((c.fitness - min_fitness) / (max_fitness - min_fitness)) for c in sorted_candidates))
         terminal_values['population_size'] = population_size
-        terminal_values['birth_generation'] = numpy.array(c.birth_generation for c in sorted_candidates)
+        terminal_values['birth_generation'] = numpy.array(list(c.birth_generation for c in sorted_candidates))
 
         if generation_number is not None:
             terminal_values['generation_number'] = generation_number
@@ -518,7 +501,12 @@ class GPTree:
         self.selection_subset_size = max(1, round((self.selection_subset_size + random.randint(-5, 5)) * random.uniform(0.9, 1.1)))
         
     def get(self, terminal_values):
-        return self.root.get(terminal_values)
+        values = self.root.get(terminal_values)
+        # if only a single value was returned, expand it into an array of repeated numbers
+        if not(type(values) is numpy.ndarray):
+            population_length = len(terminal_values['fitness'])
+            values = numpy.repeat(values, population_length)
+        return values
     
     def get_all_nodes(self):
         result = self.root.get_all_nodes()
