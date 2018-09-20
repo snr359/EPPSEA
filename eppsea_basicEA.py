@@ -491,15 +491,15 @@ class SelectionFunction:
         if self.eppsea_selection_function is not None:
             return self.eppsea_selection_function.select_parents(population, n, generation_number)
         else:
-            return self.basic_selection(population, n, self.parent_selection_type)
+            return self.basic_selection(population, n, self.parent_selection_type, self.parent_selection_tournament_k)
         
     def survival_selection(self, population, n, generation_number):
         if self.eppsea_selection_function is not None:
             return self.eppsea_selection_function.select_survivors(population, n, generation_number)
         else:
-            return self.basic_selection(population, n, self.survival_selection_type)
+            return self.basic_selection(population, n, self.survival_selection_type, self.survival_selection_tournament_k)
 
-    def basic_selection(self, population, n, type):
+    def basic_selection(self, population, n, type, tournament_k):
         if type == 'truncation':
             return sorted(population, key=lambda x: x.fitness)[:n]
 
@@ -537,7 +537,7 @@ class SelectionFunction:
         elif type == 'k_tournament':
             selected = []
             for _ in range(n):
-                tournament = random.sample(population, self.tournament_k)
+                tournament = random.sample(population, tournament_k)
                 winner = max(tournament, key=lambda p: p.fitness)
                 selected.append(winner)
             return selected
