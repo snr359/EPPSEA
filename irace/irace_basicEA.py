@@ -20,18 +20,19 @@ def get_args():
     parser.add_argument('--population_size', type=int)
     parser.add_argument('--offspring_size', type=int)
     parser.add_argument('--mutation_rate', type=float)
-    parser.add_argument('--survival_selection')
     parser.add_argument('--parent_selection')
     parser.add_argument('--parent_selection_tournament_k', type=int, required=False)
+    parser.add_argument('--survival_selection')
+    parser.add_argument('--survival_selection_tournament_k', type=int, required=False)
 
     args = parser.parse_args()
 
-    if args.survival_selection not in ('random', 'elitist_random', 'truncation'):
-        print('ERROR: survival_selection {0} not recognized'.format(args.survival_selection))
-        exit(1)
-
     if args.parent_selection == 'k_tournament' and args.parent_selection_tournament_k is None:
         print('ERROR: parent_selection isk_tournament but parent_selection_tournament_k is not defined')
+        exit(1)
+        
+    if args.survival_selection == 'k_tournament' and args.survival_selection_tournament_k is None:
+        print('ERROR: survival_selection isk_tournament but survival_selection_tournament_k is not defined')
         exit(1)
 
     return args
@@ -53,20 +54,29 @@ def main():
     eppsea_ea_config.set('EA', 'survival selection', args.survival_selection)
 
     # create a config object for the parent selection
-    parent_selection_config = configparser.ConfigParser()
+    selection_config = configparser.ConfigParser()
 
     # set the values of the parent selection config
-    parent_selection_config.add_section('selection function')
-    parent_selection_config.set('selection function', 'type', args.parent_selection)
-    parent_selection_config.set('selection function', 'name', args.parent_selection)
+    selection_config.add_section('selection function')
+    selection_config.set('selection function', 'evolved', 'False')
+    selection_config.set('selection function', 'file path (for evolved selection)', 'none')
+    selection_config.set('selection function', 'display name', '')
+
+    selection_config.set('selection function', 'parent selection type', args.parent_selection)
     if args.parent_selection == 'k_tournament':
-        parent_selection_config.set('selection function', 'tournament k', str(args.parent_selection_tournament_k))
+        selection_config.set('selection function', 'parent selection tournament k', str(args.parent_selection_tournament_k))
     else:
-        parent_selection_config.set('selection function', 'tournament k', '0')
+        selection_config.set('selection function', 'parent selection tournament k', '0')
+
+    selection_config.set('selection function', 'survival selection type', args.survival_selection)
+    if args.survival_selection == 'k_tournament':
+        selection_config.set('selection function', 'survival selection tournament k', str(args.survival_selection_tournament_k))
+    else:
+        selection_config.set('selection function', 'survival selection tournament k', '0')
 
     # create a selection function from the created config
     selection_function = SelectionFunction()
-    selection_function.generate_from_config(parent_selection_config)
+    selection_function.generate_from_config(selection_config)
 
     # load the fitness function from the fitness function path
     with open(args.fitness_function_path, 'rb') as fitness_function_file:

@@ -24,6 +24,6 @@ if __name__ == '__main__':
             population = pickle.load(file)
         for p in population:
             p_string = p.get_string()
-            p_fitness = p.fitness
+            p_fitness = p.mo_fitnesses
             print('{0} ||| fitness: {1}'.format(p_string, p_fitness))
 

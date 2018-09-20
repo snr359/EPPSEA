@@ -607,11 +607,11 @@ class GPTree:
             d = pickle.load(pickleFile)
             self.build_from_dict(d)
 
-    def is_clone(self, population):
+    def is_clone(self, all_trees):
         # returns true if this GPTree is a clone of any members of the given population
         # uses the get_string() function of the GPTree, so there may be some false negatives, but no false positives
-        for p in population:
-            if self is not p and self.get_string() == p.get_string():
+        for t in all_trees:
+            if self is not t and self.get_string() == t.get_string():
                 return True
         return False
 
@@ -661,20 +661,21 @@ class EppseaSelectionFunction:
         # clear the gp_trees
         self.gp_trees = []
 
-        # create each new tree (only one for now)
-        new_gp_tree = GPTree()
+        # create each new tree (one for parent selection, one for survival selection)
+        for _ in range(2):
+            new_gp_tree = GPTree()
 
-        new_gp_tree.constant_min = self.constant_min
-        new_gp_tree.constant_max = self.constant_max
-        new_gp_tree.random_min = self.random_min
-        new_gp_tree.random_max = self.random_max
+            new_gp_tree.constant_min = self.constant_min
+            new_gp_tree.constant_max = self.constant_max
+            new_gp_tree.random_min = self.random_min
+            new_gp_tree.random_max = self.random_max
 
-        new_gp_tree.initial_gp_depth_limit = self.initial_gp_depth_limit
-        new_gp_tree.gp_terminal_node_generation_chance = self.gp_terminal_node_generation_chance
-        new_gp_tree.initial_selection_subset_size = self.initial_selection_subset_size
+            new_gp_tree.initial_gp_depth_limit = self.initial_gp_depth_limit
+            new_gp_tree.gp_terminal_node_generation_chance = self.gp_terminal_node_generation_chance
+            new_gp_tree.initial_selection_subset_size = self.initial_selection_subset_size
 
-        new_gp_tree.randomize()
-        self.gp_trees.append(new_gp_tree)
+            new_gp_tree.randomize()
+            self.gp_trees.append(new_gp_tree)
 
     def mutate(self):
         # mutates each gp tree
@@ -697,17 +698,25 @@ class EppseaSelectionFunction:
         new_selection_function.mo_fitnesses = None
         return new_selection_function
 
-    def select(self, population, n=1, generation_number=None):
+    def select_parents(self, population, n=1, generation_number=None):
         return self.gp_trees[0].select(population, n, generation_number)
+
+    def select_survivors(self, population, n=1, generation_number=None):
+        return self.gp_trees[1].select(population, n, generation_number)
 
     def is_clone(self, population):
         # returns true if this selection function is a clone of any other selection function in the population
-        trees = (p.gp_trees[0] for p in population)
-        return self.gp_trees[0].is_clone(trees)
+        for i in range(2):
+            all_trees = list(p.gp_trees[i] for p in population)
+            for p in population:
+                if p is not self and p.gp_trees[i].is_clone(all_trees):
+                    return True
+        return False
+
 
     def get_string(self):
         # for now, just gets the string of the only gp_tree
-        return self.gp_trees[0].get_string()
+        return 'Parent Selection: {0} |||| Survival Selection: {1}'.format(self.gp_trees[0].get_string(), self.gp_trees[1].get_string())
 
     def gp_trees_size(self):
         # returns the size of all gp_trees
