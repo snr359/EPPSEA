@@ -26,9 +26,11 @@
 ##    condition is satisfied, FALSE otherwise.
 
 # 1:            2:                   3: 4:      5:
-population_size          "--population_size "          i  (2, 500)
-offspring_size          "--offspring_size "          i  (2, 500)
+population_size          "--population_size "          i  (2, 100)
+offspring_size          "--offspring_size "          i  (2, 100)
 mutation_rate        "--mutation_rate "        r (0,1)
 survival_selection  "--survival_selection " c ("random")
 parent_selection "--parent_selection " c ("truncation", "k_tournament", "fitness_proportional", "fitness_rank", "stochastic_universal_sampling")
+survival_selection "--survival_selection " c ("truncation", "k_tournament", "fitness_proportional", "fitness_rank", "stochastic_universal_sampling")
 parent_selection_tournament_k "--parent_selection_tournament_k " i (2,2000) | parent_selection %in% ("k_tournament")
+survival_selection_tournament_k "--survival_selection_tournament_k " i (2,2000) | survival_selection %in% ("k_tournament")
