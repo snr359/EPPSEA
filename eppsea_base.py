@@ -11,11 +11,12 @@ import pickle
 import statistics
 import uuid
 import numpy
+import scipy.spatial
 
 
 class GPNode:
     numeric_terminals = ['constant', 'random']
-    population_data_terminals = ['fitness', 'fitness_rank', 'relative_fitness', 'birth_generation']
+    population_data_terminals = ['fitness', 'fitness_rank', 'relative_fitness', 'birth_generation', 'relative_uniqueness']
     single_data_terminals = ['population_size', 'min_fitness', 'sum_fitness', 'max_fitness', 'generation_number']
 
     terminals = numeric_terminals + population_data_terminals + single_data_terminals
@@ -355,6 +356,11 @@ class GPTree:
             terminal_values['generation_number'] = generation_number
         else:
             terminal_values['generation_number'] = 0
+
+        all_genomes = numpy.stack(list(c.genome for c in sorted_candidates))
+        average_genome = numpy.average(all_genomes, axis=0)
+        distances_from_average_genome = numpy.array(list(scipy.spatial.distance.euclidean(g, average_genome) for g in all_genomes))
+        terminal_values['relative_uniqueness'] = distances_from_average_genome / numpy.max(distances_from_average_genome)
 
         selectabilities = self.get(terminal_values)
 
