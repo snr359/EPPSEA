@@ -60,9 +60,9 @@ class GPNode:
         elif self.operation == '*':
             return self.children[0].get(terminal_values) * self.children[1].get(terminal_values)
         elif self.operation == '/':
-            # division by 0 will result in Inf, which is handled by the GPTree
-            numpy.seterr(divide='ignore')
-            return self.children[0].get(terminal_values) / self.children[1].get(terminal_values)
+            numerator = self.children[0].get(terminal_values)
+            denominator = self.children[1].get(terminal_values)
+            return numpy.divide(numerator, denominator, where=denominator!=0)
 
         elif self.operation == 'step':
             return numpy.array(self.children[0].get(terminal_values) >= self.children[1].get(terminal_values), dtype=int)
