@@ -470,11 +470,11 @@ class SelectionFunction:
         else:
             self.parent_selection_type = config.get('selection function', 'parent selection type')
             if self.parent_selection_type == 'k_tournament':
-                self.parent_selection_tournament_k = config.getint('function', 'parent selection tournament k')
+                self.parent_selection_tournament_k = config.getint('selection function', 'parent selection tournament k')
     
             self.survival_selection_type = config.get('selection function', 'survival selection type')
             if self.survival_selection_type == 'k_tournament':
-                self.survival_selection_tournament_k = config.getint('function', 'survival selection tournament k')
+                self.survival_selection_tournament_k = config.getint('selection function', 'survival selection tournament k')
             
         self.display_name = config.get('selection function', 'display name')
         
