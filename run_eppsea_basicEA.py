@@ -4,6 +4,7 @@
 import traceback
 import sys
 import os
+import datetime
 
 import generate_cython
 
@@ -34,6 +35,8 @@ def main(config_paths):
         except :
             print('eppsea_basicEA failed. Printing stacktrace into error.txt ')
             with open('error.txt', 'a') as error_file:
+                present_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                error_file.write('======== STACK TRACE {0} =============\n'.format(present_time))
                 stack_trace = traceback.format_exc()
                 error_file.write(stack_trace)
 
