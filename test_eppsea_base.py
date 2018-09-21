@@ -8,6 +8,7 @@ import sys
 class popi:
     # a dummy population member for testing population-based eppsea functions with
     def __init__(self, fitness=None):
+        self.genome = [0,1,2,3]
         self.fitness = fitness
         self.birth_generation = 0
 

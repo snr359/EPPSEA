@@ -62,6 +62,7 @@ class GPNode:
         elif self.operation == '/':
             numerator = self.children[0].get(terminal_values)
             denominator = self.children[1].get(terminal_values)
+            denominator = numpy.where(denominator!=0, denominator, 0.000001)
             return numpy.divide(numerator, denominator, where=denominator!=0)
 
         elif self.operation == 'step':
@@ -360,7 +361,10 @@ class GPTree:
         all_genomes = numpy.stack(list(c.genome for c in sorted_candidates))
         average_genome = numpy.average(all_genomes, axis=0)
         distances_from_average_genome = numpy.array(list(scipy.spatial.distance.euclidean(g, average_genome) for g in all_genomes))
-        terminal_values['relative_uniqueness'] = distances_from_average_genome / numpy.max(distances_from_average_genome)
+        max_distance = numpy.max(distances_from_average_genome)
+        if max_distance == 0:
+            max_distance = 1
+        terminal_values['relative_uniqueness'] = distances_from_average_genome / max_distance
 
         selectabilities = self.get(terminal_values)
 
