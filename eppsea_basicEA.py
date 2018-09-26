@@ -6,7 +6,6 @@ import sys
 import configparser
 import os
 import shutil
-import subprocess
 import multiprocessing
 import time
 import datetime
