@@ -1138,10 +1138,9 @@ class EppseaBasicEA:
 
         if self.test_hill_climber:
             hill_climber_results = self.run_hill_climbers(self.testing_fitness_functions, self.hill_climber_iterations, True)
+            full_results = EAResultCollection(ea_results.results + hill_climber_results.results)
         else:
-            hill_climber_results = []
-
-        full_results = EAResultCollection(ea_results.results + hill_climber_results.results)
+            full_results = ea_results
 
         return full_results
 
