@@ -803,7 +803,8 @@ class Eppsea:
         except ValueError:
             self.force_select_from_subset = None
 
-        self.initial_selection_subset_size = config.getint('evolved selection', 'initial selection subset size')
+        self.min_initial_selection_subset_size = config.getint('evolved selection', 'minimum initial selection subset size')
+        self.max_initial_selection_subset_size = config.getint('evolved selection', 'maximum initial selection subset size')
 
         self.constant_min = config.getfloat('evolved selection', 'constant min')
         self.constant_max = config.getfloat('evolved selection', 'constant max')
@@ -882,7 +883,7 @@ class Eppsea:
             new_selection_function.random_max = self.random_max
             new_selection_function.initial_gp_depth_limit = self.initial_gp_depth_limit
             new_selection_function.gp_terminal_node_generation_chance = self.gp_terminal_node_generation_chance
-            new_selection_function.initial_selection_subset_size = self.initial_selection_subset_size
+            new_selection_function.initial_selection_subset_size = random.randint(self.min_initial_selection_subset_size, self.max_initial_selection_subset_size)
 
             # randomize the selection function and add it to the population
             new_selection_function.randomize()

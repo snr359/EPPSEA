@@ -1119,11 +1119,10 @@ class EppseaBasicEA:
                 if s.type == 'truncation':
                     selection_functions.remove(s)
 
-        eppsea_selection_functions = []
-
-        for eppsea_individual in eppsea_individuals:
+        for i, eppsea_individual in enumerate(eppsea_individuals):
             eppsea_selection_function = SelectionFunction()
             eppsea_selection_function.generate_from_eppsea_individual(eppsea_individual)
+            eppsea_selection_function.display_name += ' {0}'.format(i)
             selection_functions.append(eppsea_selection_function)
 
         if self.test_generalization:
@@ -1186,6 +1185,10 @@ class EppseaBasicEA:
     def postprocess(self, results):
         # runs postprocessing on an EAResultCollection results
         output = ''
+        # log string forms of eppsea-based selection functions
+        for s in results.selection_functions:
+            if s.eppsea_selection_function is not None:
+                self.log('String form of {0}: {1}'.format(s.display_name, s.eppsea_selection_function.get_string()))
         # Analyze results for each fitness function
         for fitness_function in results.fitness_functions:
             plt.clf()
@@ -1309,17 +1312,16 @@ class EppseaBasicEA:
             best_selection_functions = [eppsea.final_best_member]
         print('Running final tests')
         final_test_results = self.test_against_basic_selection(best_selection_functions)
-        end_time = time.time() - start_time
-        self.log('Total time elapsed: {0}'.format(end_time))
 
-        print('Running Postprocessing')
+        self.log('Running Postprocessing')
         postprocess_results = self.postprocess(final_test_results)
         self.log('Postprocess results:')
         self.log(postprocess_results)
 
         eppsea_base_results_path = eppsea.results_directory
         shutil.copytree(eppsea_base_results_path, self.results_directory + '/base')
-
+        end_time = time.time() - start_time
+        self.log('Total time elapsed: {0}'.format(end_time))
 
 def main(config_path):
     config = configparser.ConfigParser()
