@@ -815,6 +815,16 @@ class EppseaBasicEA:
         self.fitness_function_name = config.get('EA', 'fitness function')
         self.use_multiobjective_ea = config.getboolean('EA', 'use multiobjective ea')
 
+        # if we are using adaptive fitness assignment, start fitness assignment method as best_fitness_reached
+        if config.get('EA', 'eppsea fitness assignment method') == 'best fitness reached' or config.get('EA', 'eppsea fitness assignment') == 'adaptive':
+            self.eppsea_fitness_assignment_method = 'best_fitness_reached'
+        elif config.get('EA', 'eppsea fitness assignment method') == 'proportion hitting target fitness':
+            self.eppsea_fitness_assignment_method = 'proportion_hitting_target_fitness'
+        elif config.get('EA', 'eppsea fitness assignment method') == 'evals to target fitness':
+            self.eppsea_fitness_assignment_method = 'evals_to_target_fitness'
+        else:
+            raise Exception('ERROR: eppsea fitness assignment method {0} not recognized!'.format(config.get('EA', 'eppsea fitness assignment method')))
+
         self.num_training_fitness_functions = None
         self.num_testing_fitness_functions = None
         self.training_fitness_functions = None
@@ -1050,7 +1060,7 @@ class EppseaBasicEA:
     def assign_eppsea_fitness(self, selection_functions, ea_results):
         # takes an EAResultsCollection and uses it to assign fitness values to the eppsea_population
 
-        # when Eppsea_basicEA starts, eppsea fitness is assigned by average best fitness reached on the bottom-level EA
+        # if we are using adaptive fitness assignment, then when Eppsea_basicEA starts, eppsea fitness is assigned by average best fitness reached on the bottom-level EA
         # if we are currently assigning eppsea fitness by looking at average best fitness reached, and at least 10% of
         # the runs are reaching the fitness goal, switch to assigning eppsea fitness by proportion of time
         # the fitness goal is found
@@ -1059,26 +1069,27 @@ class EppseaBasicEA:
         # in the case of either switch, all population members' fitnesses become -infinity before fitness assignment
         # this effectively sets the fitness of all old eppsea population members to -infinity
         # the counters for average/best fitness change at the eppsea level are also manually reset, since this counts as a fitness improvement
-        if self.eppsea_fitness_assignment_method == 'best_fitness_reached':
-            if len(list(r for r in ea_results.results if r.termination_reason == 'target_fitness_hit')) / len (ea_results.results) >= 0.1:
-                self.log('At eval count {0}, eppsea fitness assignment changed to proportion_hitting_target_fitness'.format(self.eppsea.gp_evals))
-                self.eppsea_fitness_assignment_method = 'proportion_hitting_target_fitness'
-                for p in self.eppsea.population:
-                    p.fitness = -math.inf
-                self.eppsea.gens_since_avg_fitness_improvement = 0
-                self.eppsea.gens_since_best_fitness_improvement = 0
-                self.eppsea.highest_average_fitness = -math.inf
-                self.eppsea.highest_best_fitness = -math.inf
-        if self.eppsea_fitness_assignment_method == 'proportion_hitting_target_fitness':
-            if len(list(r for r in ea_results.results if r.termination_reason == 'target_fitness_hit')) / len(ea_results.results) == 1.0:
-                self.log('At eval count {0}, eppsea fitness assignment changed to evals_to_target_fitness'.format(self.eppsea.gp_evals))
-                self.eppsea_fitness_assignment_method = 'evals_to_target_fitness'
-                for p in self.eppsea.population:
-                    p.fitness = -math.inf
-                self.eppsea.gens_since_avg_fitness_improvement = 0
-                self.eppsea.gens_since_best_fitness_improvement = 0
-                self.eppsea.highest_average_fitness = -math.inf
-                self.eppsea.highest_best_fitness = -math.inf
+        if self.config.get('EA', 'eppsea fitness assignment method') == 'adaptive':
+            if self.eppsea_fitness_assignment_method == 'best_fitness_reached':
+                if len(list(r for r in ea_results.results if r.termination_reason == 'target_fitness_hit')) / len (ea_results.results) >= 0.1:
+                    self.log('At eval count {0}, eppsea fitness assignment changed to proportion_hitting_target_fitness'.format(self.eppsea.gp_evals))
+                    self.eppsea_fitness_assignment_method = 'proportion_hitting_target_fitness'
+                    for p in self.eppsea.population:
+                        p.fitness = -math.inf
+                    self.eppsea.gens_since_avg_fitness_improvement = 0
+                    self.eppsea.gens_since_best_fitness_improvement = 0
+                    self.eppsea.highest_average_fitness = -math.inf
+                    self.eppsea.highest_best_fitness = -math.inf
+            if self.eppsea_fitness_assignment_method == 'proportion_hitting_target_fitness':
+                if len(list(r for r in ea_results.results if r.termination_reason == 'target_fitness_hit')) / len(ea_results.results) == 1.0:
+                    self.log('At eval count {0}, eppsea fitness assignment changed to evals_to_target_fitness'.format(self.eppsea.gp_evals))
+                    self.eppsea_fitness_assignment_method = 'evals_to_target_fitness'
+                    for p in self.eppsea.population:
+                        p.fitness = -math.inf
+                    self.eppsea.gens_since_avg_fitness_improvement = 0
+                    self.eppsea.gens_since_best_fitness_improvement = 0
+                    self.eppsea.highest_average_fitness = -math.inf
+                    self.eppsea.highest_best_fitness = -math.inf
 
         # loop through the selection functions containing the eppsea individuals
         for s in selection_functions:
