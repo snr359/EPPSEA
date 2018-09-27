@@ -55,8 +55,8 @@ class EAResultCollection:
     # a class for holding the results of several EA runs
     def __init__(self, results=None):
         self.results = []
-        self.fitness_functions = set()
-        self.selection_functions = set()
+        self.fitness_functions = list()
+        self.selection_functions = list()
 
         if results is not None:
             self.add(results)
@@ -65,8 +65,11 @@ class EAResultCollection:
         # adds a list of new results to the result collection
         self.results.extend(new_results)
         for r in new_results:
-            self.fitness_functions.add(r.fitness_function)
-            self.selection_functions.add(r.selection_function)
+            if not any(r.selection_function.id == s.id for s in self.selection_functions):
+                self.selection_functions.append(r.selection_function)
+            if not any(r.fitness_function.id == f.id for f in self.fitness_functions):
+                self.fitness_functions.append(r.fitness_function)
+
 
     def get_eval_counts(self):
         all_counts = set()
