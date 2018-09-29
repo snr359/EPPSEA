@@ -29,7 +29,7 @@ def get_args():
 
     args = parser.parse_args()
 
-    if args.selection_function_config_path is None and (args.parent_selection is None or args.survivala_selection is None):
+    if args.selection_function_config_path is None and (args.parent_selection is None or args.survival_selection is None):
         print('ERROR: parent and survival selection must be defined by either command line argument or config file')
         exit(1)
 
