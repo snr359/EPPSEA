@@ -1261,6 +1261,9 @@ class EppseaBasicEA:
                         bbox_inches='tight')
 
             output += 'Doing t-tests\n'
+
+            tested_pairs = []
+
             for selection_function1 in fitness_function_results.selection_functions:
                 selection_function_results1 = fitness_function_results.filter(selection_function=selection_function1)
                 selection_function_name1 = selection_function1.display_name
@@ -1270,38 +1273,39 @@ class EppseaBasicEA:
                 average_final_best_fitness1 = round(statistics.mean(final_best_fitnesses1), 5)
                 average_final_evals1 = round(statistics.mean(final_evals1), 5)
                 output += 'Mean performance of {0}: {1}, in {2} evals\n'.format(selection_function_name1, average_final_best_fitness1, final_evals1)
-                # perform a t test with all the other results if this is an evolved selection function
-                if selection_function1.eppsea_selection_function is not None:
-                    for selection_function2 in fitness_function_results.selection_functions:
-                        if selection_function2 is not selection_function1:
-                            selection_function_results2 = fitness_function_results.filter(selection_function=selection_function2)
-                            selection_function_name2 = selection_function2.display_name
-                            final_best_fitnesses2 = list(r.final_best_fitness for r in selection_function_results2.results)
-                            final_evals2 = list(max(r.eval_counts) for r in selection_function_results2.results)
-                            average_final_best_fitness2 = round(statistics.mean(final_best_fitnesses2), 5)
-                            average_final_evals2 = round(statistics.mean(final_evals2), 5)
-                            _, p_fitness = scipy.stats.ttest_rel(final_best_fitnesses1, final_best_fitnesses2)
-                            _, p_evals = scipy.stats.ttest_rel(final_evals1, final_evals2)
-                            mean_difference_fitness = round(average_final_best_fitness1 - average_final_best_fitness2, 5)
-                            mean_difference_evals = round(average_final_evals1 - average_final_evals2, 5)
+                # perform a t test with all the other results that this selection has not yet been tested against
+                for selection_function2 in fitness_function_results.selection_functions:
+                    if selection_function2 is not selection_function1 and (selection_function1, selection_function2) not in tested_pairs and (selection_function2, selection_function1) not in tested_pairs:
+                        selection_function_results2 = fitness_function_results.filter(selection_function=selection_function2)
+                        selection_function_name2 = selection_function2.display_name
+                        final_best_fitnesses2 = list(r.final_best_fitness for r in selection_function_results2.results)
+                        final_evals2 = list(max(r.eval_counts) for r in selection_function_results2.results)
+                        average_final_best_fitness2 = round(statistics.mean(final_best_fitnesses2), 5)
+                        average_final_evals2 = round(statistics.mean(final_evals2), 5)
+                        _, p_fitness = scipy.stats.ttest_rel(final_best_fitnesses1, final_best_fitnesses2)
+                        _, p_evals = scipy.stats.ttest_rel(final_evals1, final_evals2)
+                        mean_difference_fitness = round(average_final_best_fitness1 - average_final_best_fitness2, 5)
+                        mean_difference_evals = round(average_final_evals1 - average_final_evals2, 5)
 
-                            output += '\tMean performance of {0}: {1}, in {2} evals\n'.format(selection_function_name2, average_final_best_fitness2, average_final_evals2)
+                        output += '\tMean performance of {0}: {1}, in {2} evals\n'.format(selection_function_name2, average_final_best_fitness2, average_final_evals2)
 
-                            if p_fitness < 0.05:
-                                if mean_difference_fitness > 0:
-                                    output += '\t\t{0} performed {1} better | p-value: {2}\n'.format(selection_function_name1, mean_difference_fitness, p_fitness)
-                                else:
-                                    output += '\t\t{0} performed {1} worse | p-value: {2}\n'.format(selection_function_name1, mean_difference_fitness, p_fitness)
+                        if p_fitness < 0.05:
+                            if mean_difference_fitness > 0:
+                                output += '\t\t{0} performed {1} better | p-value: {2}\n'.format(selection_function_name1, mean_difference_fitness, p_fitness)
                             else:
-                                output += '\t\t{0} performance difference is insignificant | p-value: {1}\n'.format(selection_function_name1, p_fitness)
+                                output += '\t\t{0} performed {1} worse | p-value: {2}\n'.format(selection_function_name1, mean_difference_fitness, p_fitness)
+                        else:
+                            output += '\t\t{0} performance difference is insignificant | p-value: {1}\n'.format(selection_function_name1, p_fitness)
 
-                            if p_evals < 0.05:
-                                if mean_difference_evals < 0:
-                                    output += '\t\t{0} used {1} fewer evals | p-value: {2}\n'.format(selection_function_name1, mean_difference_evals, p_evals)
-                                else:
-                                    output += '\t\t{0} used {1} more evals | p-value: {2}\n'.format(selection_function_name1, mean_difference_evals, p_evals)
+                        if p_evals < 0.05:
+                            if mean_difference_evals < 0:
+                                output += '\t\t{0} used {1} fewer evals | p-value: {2}\n'.format(selection_function_name1, mean_difference_evals, p_evals)
                             else:
-                                output += '\t\t{0} eval count difference is insignificant | p-value: {1}\n'.format(selection_function_name1, p_evals)
+                                output += '\t\t{0} used {1} more evals | p-value: {2}\n'.format(selection_function_name1, mean_difference_evals, p_evals)
+                        else:
+                            output += '\t\t{0} eval count difference is insignificant | p-value: {1}\n'.format(selection_function_name1, p_evals)
+
+                        tested_pairs.append((selection_function1, selection_function2))
 
         return output
 
