@@ -1,9 +1,5 @@
-# This script runs irace (http://iridia.ulb.ac.be/irace/) to find the optimal parameters for the EA used in
-# the eppsea_basicEA script. It takes as a paramater an eppsea_basicEA configuration, from which it determines
-# some EA settings, and uses irace to find values for other settings.
-
-import sys
-sys.path.insert(0, '../')
+# This script runs the EA in eppsea_basicEA.py for one run, using parameters passed in from the command line
+# It prints the final best fitness achieved by the population, and nothing else
 
 import argparse
 import configparser

@@ -1,0 +1,3 @@
+parent_selection == "truncation" & offspring_size*2 >  population_size
+parent_selection == "k_tournament" & parent_selection_tournament_k > population_size
+survival_selection == "k_tournament" & survival_selection_tournament_k > population_size
