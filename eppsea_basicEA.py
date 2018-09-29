@@ -1349,9 +1349,28 @@ def main(config_path):
     shutil.copy(config_path, '{0}/config.cfg'.format(evaluator.results_directory))
     evaluator.run_eppsea_basicea()
 
-    pickle_path = '{0}/EppseaBasicEA'.format(evaluator.results_directory)
-    with open(pickle_path, 'wb') as pickle_file:
+    # pickle the entire eppsea_basicEA object, and separately the base selection function found and a config file for it
+    evaluator_pickle_path = '{0}/EppseaBasicEA'.format(evaluator.results_directory)
+    with open(evaluator_pickle_path, 'wb') as pickle_file:
         pickle.dump(evaluator, pickle_file)
+    
+    if not evaluator.use_multiobjective_ea:
+        selection_function_pickle_path = '{0}/EvolvedSelectionFunction'.format(evaluator.results_directory)
+        with open(selection_function_pickle_path, 'wb') as pickle_file:
+            pickle.dump(evaluator.eppsea.final_best_member, pickle_file)
+        selection_function_config_path = '{0}/EvolvedSelectionFunction.cfg'.format(evaluator.results_directory)
+        selection_function_config = configparser.ConfigParser()
+        selection_function_config.add_section('selection function')
+        selection_function_config['selection function']['evolved'] = 'True'
+        selection_function_config['selection function']['file path (for evolved selection)'] = selection_function_pickle_path
+        selection_function_config['selection function']['display name'] = 'Evolved Selection Function'
+        selection_function_config['selection function']['parent selection type'] = 'none'
+        selection_function_config['selection function']['parent selection tournament k'] = '0'
+        selection_function_config['selection function']['survival selection type'] = 'none'
+        selection_function_config['selection function']['survival selection tournament k'] = '0'
+        with open(selection_function_config_path, 'w') as selection_function_config_file:
+            selection_function_config.write(selection_function_config_file)
+        
 
 if __name__ == '__main__':
 
