@@ -1,0 +1,3 @@
+parameterFile = "./irace_evolved_parameters.txt"
+targetRunner = "./irace_evolved_target_runner"
+maxExperiments = 2000

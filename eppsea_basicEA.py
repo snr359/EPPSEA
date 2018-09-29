@@ -465,9 +465,9 @@ class SelectionFunction:
 
     def generate_from_config(self, config):
         if config.getboolean('selection function', 'evolved'):
-            file_path = config.get('survival selection function', 'file path (for evolved selection)')
-            self.eppsea_selection_function = eppsea_base.GPTree()
-            self.eppsea_selection_function.load_from_dict(file_path)
+            file_path = config.get('selection function', 'file path (for evolved selection)')
+            with open(file_path, 'rb') as file:
+                self.eppsea_selection_function = pickle.load(file)
             
         else:
             self.parent_selection_type = config.get('selection function', 'parent selection type')
