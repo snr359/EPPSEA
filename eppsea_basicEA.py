@@ -1329,10 +1329,10 @@ class EppseaBasicEA:
         else:
             best_selection_functions = [eppsea.final_best_member]
         print('Running final tests')
-        final_test_results = self.test_against_basic_selection(best_selection_functions)
+        self.final_test_results = self.test_against_basic_selection(best_selection_functions)
 
         self.log('Running Postprocessing')
-        postprocess_results = self.postprocess(final_test_results)
+        postprocess_results = self.postprocess(self.final_test_results)
         self.log('Postprocess results:')
         self.log(postprocess_results)
 
@@ -1349,7 +1349,7 @@ def main(config_path):
     shutil.copy(config_path, '{0}/config.cfg'.format(evaluator.results_directory))
     evaluator.run_eppsea_basicea()
 
-    # pickle the entire eppsea_basicEA object, and separately the base selection function found and a config file for it
+    # pickle the entire eppsea_basicEA object, and separately the base selection function found and a config file for it, and the final test results
     evaluator_pickle_path = '{0}/EppseaBasicEA'.format(evaluator.results_directory)
     with open(evaluator_pickle_path, 'wb') as pickle_file:
         pickle.dump(evaluator, pickle_file)
@@ -1370,7 +1370,9 @@ def main(config_path):
         selection_function_config['selection function']['survival selection tournament k'] = '0'
         with open(selection_function_config_path, 'w') as selection_function_config_file:
             selection_function_config.write(selection_function_config_file)
-        
+
+    with open('{0}/FinalTestResults'.format(evaluator.results_directory), 'wb') as pickle_file:
+        pickle.dump(evaluator.final_test_results, pickle_file)
 
 if __name__ == '__main__':
 
