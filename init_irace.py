@@ -57,7 +57,7 @@ def main(irace_path, base_config_path, training_instances_directory, using_evolv
     best_configuration = irace_output_lines[-5]
     best_configuration_parameters = best_configuration.split(' ')[1:]
 
-    process_args = ['python3', 'basicEA_cli.py', 'fitness_function_path', '']
+    process_args = ['python3', 'basicEA_cli.py', '--fitness_function_path', '']
     if using_evolved_selection_function:
         process_args.extend(['--selection_function_config_path', '_evolved_selection_function.cfg'])
     process_args.extend(best_configuration_parameters)

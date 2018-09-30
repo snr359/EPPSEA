@@ -91,7 +91,7 @@ def main():
         selection_function.generate_from_config(selection_config)
 
     # if we are only generating configs, then output the configs and exit
-    if args.generate_configs is not None:
+    if args.generate_configs:
         present_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         new_eppsea_ea_config_filepath = 'irace_eppsea_basicea_config_{0}.cfg'.format(present_time)
         with open(new_eppsea_ea_config_filepath, 'w') as new_eppsea_ea_config_file:

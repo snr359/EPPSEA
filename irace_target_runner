@@ -41,7 +41,7 @@ fi
 # Otherwise, save the output to a file, and parse the result from it.
 # (If you wish to ignore segmentation faults you can use '{}' around
 # the command.)
-$EXE  basicEA_cli.py ${FIXED_PARAMS} --fitness_function_path $INSTANCE ${CONFIG_PARAMS} 1> ${STDOUT} 2> ${STDERR}
+$EXE basicEA_cli.py ${FIXED_PARAMS} --fitness_function_path $INSTANCE ${CONFIG_PARAMS} 1> ${STDOUT} 2> ${STDERR}
 
 error() {
     echo "`TZ=UTC date`: error: $@"
@@ -50,10 +50,8 @@ error() {
 
 # # This may be used to introduce a delay if there are filesystem
 # # issues.
-SLEEPTIME=.05
 while [ ! -s "${STDOUT}" ]; do
-    sleep $SLEEPTIME
-    let "SLEEPTIME += .05"
+    sleep 0.05
 done
 
 # This is an example of reading a number from the output.
