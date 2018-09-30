@@ -54,14 +54,18 @@ def main(irace_path, base_config_path, training_instances_directory, using_evolv
 
     # get the final best command line parameters from the irace output
     irace_output_lines = irace_output.split('\n')
-    best_configuration = irace_output_lines[-5]
+    best_configuration = irace_output_lines[-5].strip()
     best_configuration_parameters = best_configuration.split(' ')[1:]
+    while '' in best_configuration_parameters:
+        best_configuration_parameters.remove('')
 
-    process_args = ['python3', 'basicEA_cli.py', '--fitness_function_path', '']
+    process_args = ['python3', 'basicEA_cli.py', '--fitness_function_path', '_', '--base_config', base_config_path]
     if using_evolved_selection_function:
         process_args.extend(['--selection_function_config_path', '_evolved_selection_function.cfg'])
     process_args.extend(best_configuration_parameters)
     process_args.append('--generate_configs')
+
+    print(process_args)
 
     subprocess.run(process_args)
 
