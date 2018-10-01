@@ -26,6 +26,8 @@ def get_args():
     parser.add_argument('--survival_selection_tournament_k', type=int, required=False)
 
     parser.add_argument('--generate_configs', action='store_true', required=False)
+    parser.add_argument('--selection_config_output_path', required=False)
+    parser.add_argument('--eppsea_basicea_config_output_path', required=False)
 
     args = parser.parse_args()
 
@@ -40,6 +42,9 @@ def get_args():
     if args.survival_selection == 'k_tournament' and args.survival_selection_tournament_k is None:
         print('ERROR: survival_selection is k_tournament but survival_selection_tournament_k is not defined')
         exit(1)
+
+    if args.generate_configs and (args.selection_config_output_path is None or args.eppsea_basicea_config_output_path is None):
+        print('ERROR: output paths required to generate config files')
 
     return args
 
@@ -92,13 +97,10 @@ def main():
 
     # if we are only generating configs, then output the configs and exit
     if args.generate_configs:
-        present_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        new_eppsea_ea_config_filepath = 'irace_eppsea_basicea_config_{0}.cfg'.format(present_time)
-        with open(new_eppsea_ea_config_filepath, 'w') as new_eppsea_ea_config_file:
+        with open(args.eppsea_basicea_config_output_path, 'w') as new_eppsea_ea_config_file:
             eppsea_ea_config.write(new_eppsea_ea_config_file)
 
-        new_selection_config_filepath = 'irace_selection_config_{0}.cfg'.format(present_time)
-        with open(new_selection_config_filepath, 'w') as new_selection_config_file:
+        with open(args.selection_config_output_path, 'w') as new_selection_config_file:
             selection_config.write(new_selection_config_file)
 
         exit(0)

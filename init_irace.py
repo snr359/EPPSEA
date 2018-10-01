@@ -6,17 +6,48 @@ import os
 import sys
 import datetime
 import shutil
+import argparse
+import pickle
 
-def main(irace_path, base_config_path, training_instances_directory, using_evolved_selection_function,
-         evolved_selection_path, evolved_selection_config_path):
+from eppsea_basicEA import *
+
+def get_args():
+    # parses the command-line arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--irace_path')
+    parser.add_argument('-c', '--eppsea_config_path')
+    parser.add_argument('-t', '--training_instances_directory')
+
+    parser.add_argument('-e', '--evolved', action='store_true', required=False)
+    parser.add_argument('-s', '--evolved_selection_path', required=False)
+    parser.add_argument('-C', '--evolved_selection_config_path', required=False)
+
+    parser.add_argument('-T', '--test_against_previous_results', action='store_true', required=False)
+    parser.add_argument('-p', '--previous_results_path', required=False)
+
+    args = parser.parse_args()
+
+    if args.evolved and (args.evolved_selection_path is None or args.evolved_selection_config_path is None):
+        print('ERROR: to use evolved selection, path to evolved selection and config must be provided')
+        exit(1)
+
+    if args.test_against_previous_results and args.previous_results_path is None:
+        print('ERROR: to test against previous results, path to previous results must be provided')
+        exit(1)
+
+    return args
+
+def main(irace_path, eppsea_config_path, training_instances_directory, using_evolved_selection_function,
+         evolved_selection_path, evolved_selection_config_path, test_against_previous_results,
+         previous_results_path):
     # first, set up the fitness functions, using config/basicEA/config5 as the base for the coco functions
-    config = configparser.ConfigParser()
-    config.read(base_config_path)
+    eppsea_basicEA_config = configparser.ConfigParser()
+    eppsea_basicEA_config.read(eppsea_config_path)
 
     # write the config to irace.cfg and tune the eval count for it
     irace_config_file_path = 'irace_config.cfg'
     with open(irace_config_file_path, 'w') as irace_config_file:
-        config.write(irace_config_file)
+        eppsea_basicEA_config.write(irace_config_file)
 
     # set up the irace arguments and call irace
     # get the number of processes
@@ -29,19 +60,18 @@ def main(irace_path, base_config_path, training_instances_directory, using_evolv
     if num_processes is None:
         num_processes = 4
 
-
     # if we are using an evolved selection function, copy it into the base directory
     if using_evolved_selection_function:
         shutil.copy(evolved_selection_path, '_evolved_selection_function')
 
         config = configparser.ConfigParser()
         config.read(evolved_selection_config_path)
-        config['selection function', 'file path (for evolved selection)'] = '_evolved_selection_function'
+        config['selection function']['file path (for evolved selection)'] = '_evolved_selection_function'
         with open('_evolved_selection_function.cfg', 'w') as config_file:
             config.write(config_file)
 
         process_args = [irace_path, '--scenario', 'irace_evolved_scenario.txt', '--train-instances-dir', training_instances_directory,
-                        '--selection_function_config_path', '_evolved_selection_function.cfg', '--parallel', str(num_processes)]
+                        '--parallel', str(num_processes)]
     else:
         process_args = [irace_path, '--scenario', 'irace_scenario.txt', '--train-instances-dir', training_instances_directory,
                         '--parallel', str(num_processes)]
@@ -54,38 +84,54 @@ def main(irace_path, base_config_path, training_instances_directory, using_evolv
 
     # get the final best command line parameters from the irace output
     irace_output_lines = irace_output.split('\n')
-    best_configuration = irace_output_lines[-5].strip()
-    best_configuration_parameters = best_configuration.split(' ')[1:]
+    best_configuration_line = irace_output_lines[irace_output_lines.index('# Best configurations as commandlines (first number is the configuration ID; same order as above):') + 1]
+    best_configuration_parameters = best_configuration_line.split(' ')[1:]
     while '' in best_configuration_parameters:
         best_configuration_parameters.remove('')
 
-    process_args = ['python3', 'basicEA_cli.py', '--fitness_function_path', '_', '--base_config', base_config_path]
+    # output configration files for the new eppsea_basicEA parameters and the selection function
+    present_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    new_selection_config_path = 'irace_selection_config_{0}.cfg'.format(present_time)
+    new_eppsea_basicea_config_path = 'irace_eppsea_basicea_config_{0}.cfg'.format(present_time)
+
+    process_args = ['python3', 'basicEA_cli.py', '--fitness_function_path', '_', '--base_config', eppsea_config_path,
+                    '--selection_config_output_path', new_selection_config_path, '--eppsea_basicea_config_output_path',
+                    new_eppsea_basicea_config_path]
     if using_evolved_selection_function:
         process_args.extend(['--selection_function_config_path', '_evolved_selection_function.cfg'])
     process_args.extend(best_configuration_parameters)
     process_args.append('--generate_configs')
 
-    print(process_args)
-
     subprocess.run(process_args)
 
+    # if we are testing against previous eppsea_basicEA results, run the new selection function against the newly
+    # generated config
+    if test_against_previous_results:
+        with open(previous_results_path, 'rb') as file:
+            previous_results = pickle.load(file)
+
+        new_eppsea_basicea_config = configparser.ConfigParser()
+        new_eppsea_basicea_config.read(new_eppsea_basicea_config_path)
+        new_eppsea_basicea_config['EA']['generate new fitness functions'] = 'False'
+
+        eppsea_basicEA = EppseaBasicEA(new_eppsea_basicea_config)
+
+        new_selection_function = SelectionFunction()
+        new_selection_config = configparser.ConfigParser()
+        new_selection_config.read(new_selection_config_path)
+        new_selection_function.generate_from_config(new_selection_config)
+        new_selection_function.display_name = new_selection_function.display_name + ' with irace'
+
+        eas = eppsea_basicEA.get_eas(eppsea_basicEA.testing_fitness_functions, [new_selection_function])
+        ea_results = eppsea_basicEA.run_eas(eas, True)
+
+        ea_results.add(previous_results.results)
+
+        postprocess_results = eppsea_basicEA.postprocess(ea_results)
+        eppsea_basicEA.log(postprocess_results)
+
 if __name__ == '__main__':
-    if len(sys.argv) < 4:
-        print('Please provide the following arguments:')
-        print('Path to irace executable')
-        print('Path to base eppsea_basicEA configuration file')
-        print('Path to irace training instances')
-        print('"evolved" if using eppsea evolved selection function')
-        exit(1)
-    irace_path = sys.argv[1]
-    base_config_path = sys.argv[2]
-    training_instances_path = sys.argv[3]
-    if len(sys.argv) >= 6 and sys.argv[4] == 'evolved':
-        using_evolved_selection_function = True
-        evolved_selection_path = sys.argv[5]
-        evolved_selection_config_path = sys.argv[6]
-    else:
-        using_evolved_selection_function = False
-        evolved_selection_path = None
-        evolved_selection_config_path = None
-    main(irace_path, base_config_path, training_instances_path, using_evolved_selection_function, evolved_selection_path, evolved_selection_config_path)
+    args = get_args()
+    main(args.irace_path, args.eppsea_config_path, args.training_instances_directory, args.evolved,
+         args.evolved_selection_path, args.evolved_selection_config_path, args.test_against_previous_results,
+         args.previous_results_path)

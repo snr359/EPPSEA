@@ -70,7 +70,6 @@ class EAResultCollection:
             if not any(r.fitness_function.id == f.id for f in self.fitness_functions):
                 self.fitness_functions.append(r.fitness_function)
 
-
     def get_eval_counts(self):
         all_counts = set()
         for r in self.results:
