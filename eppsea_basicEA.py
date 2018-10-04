@@ -815,7 +815,7 @@ class EppseaBasicEA:
         self.use_multiobjective_ea = config.getboolean('EA', 'use multiobjective ea')
 
         # if we are using adaptive fitness assignment, start fitness assignment method as best_fitness_reached
-        if config.get('EA', 'eppsea fitness assignment method') == 'best fitness reached' or config.get('EA', 'eppsea fitness assignment') == 'adaptive':
+        if config.get('EA', 'eppsea fitness assignment method') == 'best fitness reached' or config.get('EA', 'eppsea fitness assignment method') == 'adaptive':
             self.eppsea_fitness_assignment_method = 'best_fitness_reached'
         elif config.get('EA', 'eppsea fitness assignment method') == 'proportion hitting target fitness':
             self.eppsea_fitness_assignment_method = 'proportion_hitting_target_fitness'
