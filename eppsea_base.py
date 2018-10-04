@@ -636,6 +636,8 @@ class EppseaSelectionFunction:
         else:
             self.fitness = None
             self.mo_fitnesses = None
+            self.fitness_pre_parsimony = None
+            self.mo_fitnesses_pre_parsimony = None
             self.pareto_tier = None
             self.gp_trees = None
 
@@ -937,22 +939,24 @@ class Eppsea:
 
         # kill bad population members, if configured to
         # bad population members are those with a fitness less than the first quartile minus 3 * the interquartile range
-        if self.multiobjective:
-            to_be_removed = []
-            for i in range(self.number_of_objectives):
-                fitnesses = list(p.mo_fitnesses[i] for p in self.population)
-                threshold = numpy.percentile(fitnesses, 25) - 3 * (numpy.percentile(fitnesses, 75) - numpy.percentile(fitnesses, 25))
-                to_be_removed.extend(p for p in self.population if p.mo_fitnesses[i] < threshold)
-            self.population = list(p for p in self.population if p not in to_be_removed)
+        if self.kill_bad_individuals:
+            if self.multiobjective:
+                to_be_removed = []
+                for i in range(self.number_of_objectives):
+                    fitnesses = list(p.mo_fitnesses[i] for p in self.population)
+                    threshold = numpy.percentile(fitnesses, 25) - 3 * (numpy.percentile(fitnesses, 75) - numpy.percentile(fitnesses, 25))
+                    to_be_removed.extend(p for p in self.population if p.mo_fitnesses[i] < threshold)
+                self.population = list(p for p in self.population if p not in to_be_removed)
 
-        else:
-            fitnesses = list(p.fitness for p in self.population)
-            threshold = numpy.percentile(fitnesses, 25) - 3 * (numpy.percentile(fitnesses, 75) - numpy.percentile(fitnesses, 25))
-            self.population = list(p for p in self.population if p.fitness >= threshold)
+            else:
+                fitnesses = list(p.fitness for p in self.population)
+                threshold = numpy.percentile(fitnesses, 25) - 3 * (numpy.percentile(fitnesses, 75) - numpy.percentile(fitnesses, 25))
+                self.population = list(p for p in self.population if p.fitness >= threshold)
 
         # apply parsimony pressure to newly evaluated individuals
         for p in self.new_population:
             if self.multiobjective:
+                p.mo_fitnesses_pre_parsimony = p.mo_fitnesses
                 for i in range(self.number_of_objectives):
                     if self.use_relative_parsimony_pressure:
                         max_fitness = max(p.mo_fitnesses[i] for p in self.population)
@@ -961,6 +965,7 @@ class Eppsea:
                     else:
                         p.mo_fitnesses[i] -= self.gp_parsimony_pressure * p.gp_trees_size()
             else:
+                p.fitness_pre_parsimony = p.fitness
                 if self.use_relative_parsimony_pressure:
                     max_fitness = max(p.fitness for p in self.population)
                     min_fitness = min(p.fitness for p in self.population)
