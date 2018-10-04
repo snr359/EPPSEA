@@ -16,10 +16,9 @@ import scipy.spatial
 
 class GPNode:
     numeric_terminals = ['constant', 'random']
-    population_data_terminals = ['fitness', 'fitness_rank', 'relative_fitness', 'birth_generation', 'relative_uniqueness']
-    single_data_terminals = ['population_size', 'min_fitness', 'sum_fitness', 'max_fitness', 'generation_number']
+    data_terminals = ['fitness', 'fitness_rank', 'relative_fitness', 'birth_generation', 'relative_uniqueness', 'population_size', 'min_fitness', 'sum_fitness', 'max_fitness', 'generation_number']
 
-    terminals = numeric_terminals + population_data_terminals + single_data_terminals
+    terminals = numeric_terminals + data_terminals
 
     non_terminals = ['+', '-', '*', '/', 'step', 'absolute', 'min', 'max']
     child_count = {'+': 2, '-': 2, '*': 2, '/': 2, 'step': 2, 'absolute': 1, 'min': 2, 'max': 2}
@@ -38,7 +37,7 @@ class GPNode:
 
     def grow(self, depth_limit, terminal_node_generation_chance, parent):
         if depth_limit == 0 or random.random() < terminal_node_generation_chance:
-            self.operation = random.choice(GPNode.numeric_terminals + GPNode.population_data_terminals + GPNode.single_data_terminals)
+            self.operation = random.choice(GPNode.terminals)
         else:
             self.operation = random.choice(GPNode.non_terminals)
 
@@ -77,19 +76,15 @@ class GPNode:
         elif self.operation == 'max':
             return numpy.amax(numpy.stack((self.children[0].get(terminal_values), self.children[1].get(terminal_values))), axis=0)
 
-        elif self.operation in GPNode.population_data_terminals:
+        elif self.operation in GPNode.data_terminals:
             return terminal_values[self.operation]
 
-        elif self.operation in GPNode.single_data_terminals:
-            population_size = terminal_values['population_size']
-            return numpy.repeat(terminal_values[self.operation], population_size)
-
         elif self.operation == 'constant':
-            population_size = terminal_values['population_size']
+            population_size = terminal_values['population_size'][0]
             return numpy.repeat(self.data, population_size)
 
         elif self.operation == 'random':
-            population_size = terminal_values['population_size']
+            population_size = terminal_values['population_size'][0]
             return numpy.random.uniform(self.random_min, self.random_max, population_size)
 
     def get_string(self):
@@ -343,20 +338,20 @@ class GPTree:
         terminal_values = dict()
         terminal_values['fitness'] = numpy.array(list(c.fitness for c in sorted_candidates))
         terminal_values['fitness_rank'] = numpy.arange(1, len(sorted_candidates)+1)
-        terminal_values['sum_fitness'] = sum_fitness
-        terminal_values['min_fitness'] = min_fitness
-        terminal_values['max_fitness'] = max_fitness
+        terminal_values['sum_fitness'] = numpy.repeat(sum_fitness, population_size)
+        terminal_values['min_fitness'] = numpy.repeat(min_fitness, population_size)
+        terminal_values['max_fitness'] = numpy.repeat(max_fitness, population_size)
         if max_fitness == min_fitness:
-            terminal_values['relative_fitness'] = 1
+            terminal_values['relative_fitness'] = numpy.repeat(1, population_size)
         else:
             terminal_values['relative_fitness'] = numpy.array(list(((c.fitness - min_fitness) / (max_fitness - min_fitness)) for c in sorted_candidates))
-        terminal_values['population_size'] = population_size
+        terminal_values['population_size'] = numpy.repeat(population_size, population_size)
         terminal_values['birth_generation'] = numpy.array(list(c.birth_generation for c in sorted_candidates))
 
         if generation_number is not None:
-            terminal_values['generation_number'] = generation_number
+            terminal_values['generation_number'] = numpy.repeat(generation_number, population_size)
         else:
-            terminal_values['generation_number'] = 0
+            terminal_values['generation_number'] = numpy.repeat(0, population_size)
 
         all_genomes = numpy.stack(list(c.genome for c in sorted_candidates))
         average_genome = numpy.average(all_genomes, axis=0)

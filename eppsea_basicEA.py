@@ -1129,7 +1129,7 @@ class EppseaBasicEA:
         selection_functions = self.basic_selection_functions
         if self.config.getint('EA', 'offspring size') > self.config.getint('EA', 'population size') * 2:
             for s in list(selection_functions):
-                if s.type == 'truncation':
+                if s.parent_selection_type == 'truncation':
                     selection_functions.remove(s)
 
         for i, eppsea_individual in enumerate(eppsea_individuals):
