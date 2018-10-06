@@ -840,6 +840,9 @@ class Eppsea:
         self.start_time = None
         self.time_elapsed = None
 
+        # make a list for initial population members
+        self.initial_population = []
+
         # seed RNG and record seed
         seed = config.get('experiment', 'seed')
         try:
@@ -866,10 +869,10 @@ class Eppsea:
             log_file.write('\n')
 
     def randomize_population(self):
-        # Fills the population with "mu" randomized individuals
-        self.population = []
+        # Fills the population with "mu" randomized individuals, including initial population members
+        self.population = list(self.initial_population)
 
-        for i in range(self.gp_mu):
+        while len(self.population) < self.gp_mu:
             # generate a new selection function
             new_selection_function = EppseaSelectionFunction()
 
