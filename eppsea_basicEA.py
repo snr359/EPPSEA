@@ -1145,7 +1145,7 @@ class EppseaBasicEA:
             selection_functions.append(eppsea_selection_function)
 
         if self.test_generalization:
-            fitness_functions = self.testing_fitness_functions
+            fitness_functions = self.testing_fitness_functions + self.training_fitness_functions
         else:
             fitness_functions = self.training_fitness_functions
 
@@ -1211,8 +1211,10 @@ class EppseaBasicEA:
         # Analyze results for each fitness function
         for fitness_function in results.fitness_functions:
             plt.clf()
-            output += 'Analyzing results for fitness function with id {0} ---------------------------------\n'.format(
-                fitness_function.id)
+            if fitness_function in self.training_fitness_functions:
+                output += 'Analyzing results for training fitness function with id {0} ---------------------------------\n'.format(fitness_function.id)
+            else:
+                output += 'Analyzing results for testing fitness function with id {0} ---------------------------------\n'.format(fitness_function.id)
             output += 'Plotting figure\n'
             # Get the name of the fitness function from one of the result files
             fitness_function_name = fitness_function.name
