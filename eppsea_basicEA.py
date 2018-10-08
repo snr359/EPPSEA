@@ -1060,35 +1060,37 @@ class EppseaBasicEA:
         # takes an EAResultsCollection and uses it to assign fitness values to the eppsea_population
 
         # if we are using adaptive fitness assignment, then when Eppsea_basicEA starts, eppsea fitness is assigned by average best fitness reached on the bottom-level EA
-        # if we are currently assigning eppsea fitness by looking at average best fitness reached, and at least 10% of
-        # the runs are reaching the fitness goal, switch to assigning eppsea fitness by proportion of time
+        # if we are currently assigning eppsea fitness by looking at average best fitness reached, and at least 50% of
+        # the runs of any one selection function are reaching the fitness goal, switch to assigning eppsea fitness by proportion of time
         # the fitness goal is found
-        # if we are currently assigning by that, and at least 95% of the runs are reaching the fitness goal, switch
+        # if we are currently assigning by that, and at least 95% of the runs runs of any one selection function are reaching the fitness goal, switch
         # to assigning by number of evals needed to reach the fitness goal
         # in the case of either switch, all population members' fitnesses become -infinity before fitness assignment
         # this effectively sets the fitness of all old eppsea population members to -infinity
         # the counters for average/best fitness change at the eppsea level are also manually reset, since this counts as a fitness improvement
-        if self.config.get('EA', 'eppsea fitness assignment method') == 'adaptive':
-            if self.eppsea_fitness_assignment_method == 'best_fitness_reached':
-                if len(list(r for r in ea_results.results if r.termination_reason == 'target_fitness_hit')) / len (ea_results.results) >= 0.1:
-                    self.log('At eval count {0}, eppsea fitness assignment changed to proportion_hitting_target_fitness'.format(self.eppsea.gp_evals))
-                    self.eppsea_fitness_assignment_method = 'proportion_hitting_target_fitness'
-                    for p in self.eppsea.population:
-                        p.fitness = -math.inf
-                    self.eppsea.gens_since_avg_fitness_improvement = 0
-                    self.eppsea.gens_since_best_fitness_improvement = 0
-                    self.eppsea.highest_average_fitness = -math.inf
-                    self.eppsea.highest_best_fitness = -math.inf
-            if self.eppsea_fitness_assignment_method == 'proportion_hitting_target_fitness':
-                if len(list(r for r in ea_results.results if r.termination_reason == 'target_fitness_hit')) / len(ea_results.results) == 1.0:
-                    self.log('At eval count {0}, eppsea fitness assignment changed to evals_to_target_fitness'.format(self.eppsea.gp_evals))
-                    self.eppsea_fitness_assignment_method = 'evals_to_target_fitness'
-                    for p in self.eppsea.population:
-                        p.fitness = -math.inf
-                    self.eppsea.gens_since_avg_fitness_improvement = 0
-                    self.eppsea.gens_since_best_fitness_improvement = 0
-                    self.eppsea.highest_average_fitness = -math.inf
-                    self.eppsea.highest_best_fitness = -math.inf
+        for s in selection_functions:
+            s_results = ea_results.filter(selection_function=s)
+            if self.config.get('EA', 'eppsea fitness assignment method') == 'adaptive':
+                if self.eppsea_fitness_assignment_method == 'best_fitness_reached':
+                    if len(list(r for r in s_results.results if r.termination_reason == 'target_fitness_hit')) / len (s_results.results) >= 0.5:
+                        self.log('At eval count {0}, eppsea fitness assignment changed to proportion_hitting_target_fitness'.format(self.eppsea.gp_evals))
+                        self.eppsea_fitness_assignment_method = 'proportion_hitting_target_fitness'
+                        for p in self.eppsea.population:
+                            p.fitness = -math.inf
+                        self.eppsea.gens_since_avg_fitness_improvement = 0
+                        self.eppsea.gens_since_best_fitness_improvement = 0
+                        self.eppsea.highest_average_fitness = -math.inf
+                        self.eppsea.highest_best_fitness = -math.inf
+                if self.eppsea_fitness_assignment_method == 'proportion_hitting_target_fitness':
+                    if len(list(r for r in s_results.results if r.termination_reason == 'target_fitness_hit')) / len(s_results.results) >= .95:
+                        self.log('At eval count {0}, eppsea fitness assignment changed to evals_to_target_fitness'.format(self.eppsea.gp_evals))
+                        self.eppsea_fitness_assignment_method = 'evals_to_target_fitness'
+                        for p in self.eppsea.population:
+                            p.fitness = -math.inf
+                        self.eppsea.gens_since_avg_fitness_improvement = 0
+                        self.eppsea.gens_since_best_fitness_improvement = 0
+                        self.eppsea.highest_average_fitness = -math.inf
+                        self.eppsea.highest_best_fitness = -math.inf
 
         # loop through the selection functions containing the eppsea individuals
         for s in selection_functions:
@@ -1117,7 +1119,11 @@ class EppseaBasicEA:
                 all_final_evals = []
                 for fitness_function in s_results.fitness_functions:
                     fitness_function_results = s_results.filter(fitness_function=fitness_function)
-                    final_evals = (max(r.evals) for r in fitness_function_results)
+                    final_evals = list(max(r.evals) for r in fitness_function_results if r.termination_reason == 'target_fitness_hit')
+                    # for the runs where the target fitness was not hit, use an eval count equal to twice the maximum count
+                    for r in fitness_function_results:
+                        if r.termination_reason != 'target_fitness_hit':
+                            final_evals.append(2 * max(r.evals) for r in fitness_function_results)
                     all_final_evals.append(statistics.mean(final_evals))
                 # assign fitness as -1 * the average of final eval counts
                 s.eppsea_selection_function.fitness = statistics.mean(all_final_evals)
