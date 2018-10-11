@@ -1409,7 +1409,7 @@ class EppseaBasicEA:
                     survival_selection.root.operation = 'fitness'
 
                     survival_selection.selection_type = 'maximum'
-                    survival_selection.reusing_survivals = False
+                    survival_selection.reusing_parents = False
                     survival_selection.select_from_subset = False
                     survival_selection.selection_subset_size = 0
 
@@ -1417,7 +1417,7 @@ class EppseaBasicEA:
                     survival_selection.root.operation = 'fitness_rank'
 
                     survival_selection.selection_type = 'proportional'
-                    survival_selection.reusing_survivals = True
+                    survival_selection.reusing_parents = True
                     survival_selection.select_from_subset = False
                     survival_selection.selection_subset_size = 0
 
@@ -1425,7 +1425,7 @@ class EppseaBasicEA:
                     survival_selection.root.operation = 'fitness'
 
                     survival_selection.selection_type = 'proportional'
-                    survival_selection.reusing_survivals = True
+                    survival_selection.reusing_parents = True
                     survival_selection.select_from_subset = False
                     survival_selection.selection_subset_size = 0
 
@@ -1433,7 +1433,7 @@ class EppseaBasicEA:
                     survival_selection.root.operation = 'fitness'
 
                     survival_selection.selection_type = 'maximum'
-                    survival_selection.reusing_survivals = True
+                    survival_selection.reusing_parents = True
                     survival_selection.select_from_subset = True
                     survival_selection.selection_subset_size = s.survival_selection_tournament_k
 
@@ -1441,7 +1441,7 @@ class EppseaBasicEA:
                     survival_selection.root.operation = 'constant'
 
                     survival_selection.selection_type = 'proportional'
-                    survival_selection.reusing_survivals = True
+                    survival_selection.reusing_parents = True
                     survival_selection.select_from_subset = False
                     survival_selection.selection_subset_size = 0
                     survival_selection.data = 1
@@ -1450,7 +1450,7 @@ class EppseaBasicEA:
                     survival_selection.root.operation = 'fitness'
 
                     survival_selection.selection_type = 'stochastic_universal_sampling'
-                    survival_selection.reusing_survivals = True
+                    survival_selection.reusing_parents = True
                     survival_selection.select_from_subset = False
                     survival_selection.selection_subset_size = 0
 
