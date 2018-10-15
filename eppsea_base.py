@@ -151,7 +151,7 @@ class GPTree:
     def __init__(self):
         self.root = None
         self.fitness = None
-        self.reusing_parents = None
+        self.select_with_replacement = None
         self.select_from_subset = None
         self.selection_type = None
         self.selection_subset_size = None
@@ -384,7 +384,7 @@ class GPTree:
             self.selected_in_generation[generation_number] = list()
 
         # determine the list of candidates for selection
-        if not self.reusing_parents and generation_number is not None:
+        if not self.select_with_replacement and generation_number is not None:
             candidates = list(p for p in population if p not in self.selected_in_generation[generation_number])
         else:
             candidates = list(population)
@@ -440,7 +440,7 @@ class GPTree:
                     if generation_number is not None:
                         self.selected_in_generation[generation_number].append(selected_member)
 
-                    if not self.reusing_parents:
+                    if not self.select_with_replacement:
                         candidates.pop(selected_index)
                         selectabilities.pop(selected_index)
 
@@ -472,7 +472,7 @@ class GPTree:
         
         # recombine misc options
         new_child.selection_type = random.choice([self.selection_type, parent2.selection_type])
-        new_child.reusing_parents = random.choice([self.reusing_parents, parent2.reusing_parents])
+        new_child.select_with_replacement = random.choice([self.select_with_replacement, parent2.select_with_replacement])
         new_child.select_from_subset = random.choice(([self.select_from_subset, parent2.select_from_subset]))
 
         if self.selection_subset_size > parent2.selection_subset_size:
@@ -499,7 +499,7 @@ class GPTree:
         if random.random() < 0.5:
             self.selection_type = random.choice(self.selection_types)
         if random.random() < 0.5:
-            self.reusing_parents = not self.reusing_parents
+            self.select_with_replacement = not self.select_with_replacement
         if random.random() < 0.5:
             self.select_from_subset = not self.select_from_subset
 
@@ -543,7 +543,7 @@ class GPTree:
         self.root.grow(self.initial_gp_depth_limit, self.gp_terminal_node_generation_chance, None)
 
         self.selection_type = random.choice(self.selection_types)
-        self.reusing_parents = bool(random.random() < 0.5)
+        self.select_with_replacement = bool(random.random() < 0.5)
         self.select_from_subset = bool(random.random() < 0.5)
         self.selection_subset_size = self.initial_selection_subset_size
 
@@ -558,7 +558,7 @@ class GPTree:
                 assert(n in n.parent.children)
 
     def get_string(self):
-        result = self.root.get_string() + ' | selection type: {0} | reusing parents: {1} | select from subset: {2}'.format(self.selection_type, self.reusing_parents, self.select_from_subset)
+        result = self.root.get_string() + ' | selection type: {0} | select w/ replacement: {1} | select from subset: {2}'.format(self.selection_type, self.select_with_replacement, self.select_from_subset)
         if self.select_from_subset:
             result += ' | selection subset size: {0}'.format(self.selection_subset_size)
         return result
@@ -568,7 +568,7 @@ class GPTree:
 
     def get_dict(self):
         result = dict()
-        result['reusing_parents'] = self.reusing_parents
+        result['select_with_replacement'] = self.select_with_replacement
         result['select_from_subset'] = self.select_from_subset
         result['selection_type'] = self.selection_type
         result['selection_subset_size'] = self.selection_subset_size
@@ -584,7 +584,7 @@ class GPTree:
 
     def build_from_dict(self, d):
         self.fitness = None
-        self.reusing_parents = d['reusing_parents']
+        self.select_with_replacement = d['select_with_replacement']
         self.select_from_subset = d['select_from_subset']
         self.selection_type = d['selection_type']
         self.selection_subset_size = d['selection_subset_size']
@@ -791,9 +791,9 @@ class Eppsea:
         self.pickle_final_population = config.getboolean('experiment', 'pickle final population')
 
         try:
-            self.force_reusing_parents = config.getboolean('evolved selection', 'select with replacement')
+            self.force_select_with_replacement = config.getboolean('evolved selection', 'select with replacement')
         except ValueError:
-            self.force_reusing_parents = None
+            self.force_select_with_replacement = None
 
         try:
             self.force_select_from_subset = config.getboolean('evolved selection', 'select from subset')
@@ -892,8 +892,8 @@ class Eppsea:
             # force selection function settings, if configured to
             if self.force_selection_type is not None:
                 new_selection_function.gp_trees[0].selection_type = self.force_selection_type
-            if self.force_reusing_parents is not None:
-                new_selection_function.gp_trees[0].reusing_parents = self.force_reusing_parents
+            if self.force_select_with_replacement is not None:
+                new_selection_function.gp_trees[0].select_with_replacement = self.force_select_with_replacement
             if self.force_select_from_subset is not None:
                 new_selection_function.gp_trees[0].select_from_subset = self.force_select_from_subset
 
@@ -1054,8 +1054,8 @@ class Eppsea:
             for p in self.population:
                 if self.force_selection_type is not None:
                     p.selection_type = self.force_selection_type
-                if self.force_reusing_parents is not None:
-                    p.reusing_parents = self.force_reusing_parents
+                if self.force_select_with_replacement is not None:
+                    p.select_with_replacement = self.force_select_with_replacement
                 if self.force_select_from_subset is not None:
                     p.select_from_subset = self.force_select_from_subset
 
@@ -1099,8 +1099,8 @@ class Eppsea:
         for p in self.new_population:
             if self.force_selection_type is not None:
                 p.gp_trees[0].selection_type = self.force_selection_type
-            if self.force_reusing_parents is not None:
-                p.gp_trees[0].reusing_parents = self.force_reusing_parents
+            if self.force_select_with_replacement is not None:
+                p.gp_trees[0].select_with_replacement = self.force_select_with_replacement
             if self.force_select_from_subset is not None:
                 p.gp_trees[0].select_from_subset = self.force_select_from_subset
 
