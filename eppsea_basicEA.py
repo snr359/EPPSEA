@@ -490,13 +490,13 @@ class SelectionFunction:
         
     def parent_selection(self, population, n, generation_number):
         if self.eppsea_selection_function is not None:
-            return self.eppsea_selection_function.select_parents(population, n, generation_number)
+            return self.eppsea_selection_function.select(population, n, 0, generation_number)
         else:
             return self.basic_selection(population, n, self.parent_selection_type, self.parent_selection_tournament_k)
         
     def survival_selection(self, population, n, generation_number):
         if self.eppsea_selection_function is not None:
-            return self.eppsea_selection_function.select_survivors(population, n, generation_number)
+            return self.eppsea_selection_function.select(population, n, 1, generation_number)
         else:
             return self.basic_selection(population, n, self.survival_selection_type, self.survival_selection_tournament_k)
 
@@ -1326,6 +1326,7 @@ class EppseaBasicEA:
             # otherwise, build a new eppsea selection function with the same behavior
             else:
                 result = eppsea_base.EppseaSelectionFunction()
+                result.number_of_selectors = 2
                 # build the parent selection tree
                 parent_selection = eppsea_base.GPTree()
                 
@@ -1337,7 +1338,7 @@ class EppseaBasicEA:
                 parent_selection.initial_gp_depth_limit = self.eppsea.initial_gp_depth_limit
                 parent_selection.gp_terminal_node_generation_chance = self.eppsea.gp_terminal_node_generation_chance
                 parent_selection.initial_selection_subset_size = random.randint(self.eppsea.min_initial_selection_subset_size, self.eppsea.max_initial_selection_subset_size)
-                
+
                 parent_selection.root = eppsea_base.GPNode(parent_selection.constant_min, parent_selection.constant_max,
                                                            parent_selection.random_min, parent_selection.random_max)
                 

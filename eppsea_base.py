@@ -625,6 +625,7 @@ class EppseaSelectionFunction:
             self.pareto_tier = other.pareto_tier
             self.gp_trees = other.gp_trees[:]
 
+            self.number_of_selectors = other.number_of_selectors
             self.constant_min = other.constant_min
             self.constant_max = other.constant_max
             self.random_min = other.random_min
@@ -633,6 +634,9 @@ class EppseaSelectionFunction:
             self.initial_gp_depth_limit = other.initial_gp_depth_limit
             self.gp_terminal_node_generation_chance = other.gp_terminal_node_generation_chance
             self.initial_selection_subset_size = other.initial_selection_subset_size
+
+            self.force_select_with_replacement = other.force_select_with_replacement
+            self.force_select_from_subset = other.force_select_with_replacement
         else:
             self.fitness = None
             self.mo_fitnesses = None
@@ -641,6 +645,7 @@ class EppseaSelectionFunction:
             self.pareto_tier = None
             self.gp_trees = None
 
+            self.number_of_selectors = None
             self.constant_min = None
             self.constant_max = None
             self.random_min = None
@@ -649,6 +654,9 @@ class EppseaSelectionFunction:
             self.initial_gp_depth_limit = None
             self.gp_terminal_node_generation_chance = None
             self.initial_selection_subset_size = None
+
+            self.force_select_with_replacement = None
+            self.force_select_from_subset = None
 
         # the id should never be copied, and should instead be reassigned with assign_id
         self.assign_id()
@@ -676,6 +684,12 @@ class EppseaSelectionFunction:
             new_gp_tree.initial_selection_subset_size = self.initial_selection_subset_size
 
             new_gp_tree.randomize()
+
+            if self.force_select_with_replacement is not None:
+                new_gp_tree.select_with_replacement = self.force_select_with_replacement
+            if self.force_select_from_subset is not None:
+                new_gp_tree.select_from_subset = self.force_select_from_subset
+
             self.gp_trees.append(new_gp_tree)
 
     def mutate(self):
@@ -683,15 +697,26 @@ class EppseaSelectionFunction:
         for tree in self.gp_trees:
             tree.mutate()
 
+            if self.force_select_with_replacement is not None:
+                tree.select_with_replacement = self.force_select_with_replacement
+            if self.force_select_from_subset is not None:
+                tree.select_from_subset = self.force_select_from_subset
+
     def recombine(self, parent2):
         # recombines each gp_tree belonging to this selection function
         # make a new selection function
-        new_selection_function = EppseaSelectionFunction()
+        new_selection_function = EppseaSelectionFunction(self)
 
         # clear the list of gp_trees and recombine them
         new_selection_function.gp_trees = []
         for gp_tree1, gp_tree2 in zip(self.gp_trees, parent2.gp_trees):
             new_gptree = gp_tree1.recombine(gp_tree2)
+
+            if self.force_select_with_replacement is not None:
+                new_gptree.select_with_replacement = self.force_select_with_replacement
+            if self.force_select_from_subset is not None:
+                new_gptree.select_from_subset = self.force_select_from_subset
+
             new_selection_function.gp_trees.append(new_gptree)
 
         # clear the fitness rating
@@ -699,25 +724,21 @@ class EppseaSelectionFunction:
         new_selection_function.mo_fitnesses = None
         return new_selection_function
 
-    def select_parents(self, population, n=1, generation_number=None):
-        return self.gp_trees[0].select(population, n, generation_number)
-
-    def select_survivors(self, population, n=1, generation_number=None):
-        return self.gp_trees[1].select(population, n, generation_number)
+    def select(self, population, n=1, selector=0, generation_number=None):
+        return self.gp_trees[selector].select(population, n, generation_number)
 
     def is_clone(self, population):
         # returns true if this selection function is a clone of any other selection function in the population
-        for i in range(2):
+        for i in range(self.number_of_selectors):
             all_trees = list(p.gp_trees[i] for p in population)
             for p in population:
                 if p is not self and p.gp_trees[i].is_clone(all_trees):
                     return True
         return False
 
-
     def get_string(self):
-        # for now, just gets the string of the only gp_tree
-        return 'Parent Selection: {0} |||| Survival Selection: {1}'.format(self.gp_trees[0].get_string(), self.gp_trees[1].get_string())
+        tree_strings = list(tree.get_string() for tree in self.gp_trees)
+        return ' |||| '.join(tree_strings)
 
     def gp_trees_size(self):
         # returns the size of all gp_trees
@@ -790,6 +811,8 @@ class Eppsea:
         self.pickle_every_population = config.getboolean('experiment', 'pickle every population')
         self.pickle_final_population = config.getboolean('experiment', 'pickle final population')
 
+        self.number_of_selectors = config.getint('evolved selection', 'number of selectors')
+
         try:
             self.force_select_with_replacement = config.getboolean('evolved selection', 'select with replacement')
         except ValueError:
@@ -809,14 +832,11 @@ class Eppsea:
         self.random_min = config.getfloat('evolved selection', 'random min')
         self.random_max = config.getfloat('evolved selection', 'random max')
 
-        selection_type = config.get('evolved selection', 'selection type')
-        if selection_type not in GPTree.selection_types and selection_type != 'evolved':
-            self.log('Evolved selection type {0} not found in available selection types. Use one of {1} or "evolved" for selection type'.format(selection_type, str(GPTree.selection_types)), 'ERROR')
-            raise Exception('EPPSEA ERROR: See log file')
-        elif selection_type != 'evolved':
-            self.force_selection_type = selection_type
-        else:
-            self.force_selection_type = None
+        selection_types = config.get('evolved selection', 'selection type').strip().split(',')
+        for s in list(GPTree.selection_types):
+            if s not in selection_types:
+                GPTree.selection_types.remove(s)
+
 
         # create a dictionary for the results
         self.results = dict()
@@ -877,6 +897,7 @@ class Eppsea:
             new_selection_function = EppseaSelectionFunction()
 
             # set parameters for new selection function
+            new_selection_function.number_of_selectors = self.number_of_selectors
             new_selection_function.constant_min = self.constant_min
             new_selection_function.constant_max = self.constant_max
             new_selection_function.random_min = self.random_min
@@ -885,17 +906,12 @@ class Eppsea:
             new_selection_function.gp_terminal_node_generation_chance = self.gp_terminal_node_generation_chance
             new_selection_function.initial_selection_subset_size = random.randint(self.min_initial_selection_subset_size, self.max_initial_selection_subset_size)
 
+            new_selection_function.force_select_with_replacement = self.force_select_with_replacement
+            new_selection_function.force_select_from_subset = self.force_select_from_subset
+
             # randomize the selection function and add it to the population
             new_selection_function.randomize()
             self.population.append(new_selection_function)
-
-            # force selection function settings, if configured to
-            if self.force_selection_type is not None:
-                new_selection_function.gp_trees[0].selection_type = self.force_selection_type
-            if self.force_select_with_replacement is not None:
-                new_selection_function.gp_trees[0].select_with_replacement = self.force_select_with_replacement
-            if self.force_select_from_subset is not None:
-                new_selection_function.gp_trees[0].select_from_subset = self.force_select_from_subset
 
         # mark the entire population as new
         self.new_population = self.population
@@ -1052,8 +1068,6 @@ class Eppsea:
 
             # force selection function settings, if configured to
             for p in self.population:
-                if self.force_selection_type is not None:
-                    p.selection_type = self.force_selection_type
                 if self.force_select_with_replacement is not None:
                     p.select_with_replacement = self.force_select_with_replacement
                 if self.force_select_from_subset is not None:
