@@ -838,8 +838,6 @@ class EppseaBasicEA:
 
         self.basic_results = None
 
-        self.eppsea_fitness_assignment_method = 'best_fitness_reached'
-
     def prepare_fitness_functions(self, config):
         # generates the fitness functions to be used in the EAs
 
