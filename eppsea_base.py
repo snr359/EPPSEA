@@ -451,7 +451,6 @@ class GPTree:
 
         # if EPPSEA overflows at any point, just return random choices
         except (OverflowError, FloatingPointError):
-            print('WARNING: EPPSEA Overflow. Returning random selection')
             return random.sample(candidates, n)
 
     def recombine(self, parent2):

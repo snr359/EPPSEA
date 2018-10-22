@@ -26,6 +26,12 @@ def run_cmaes_runner(cmaes_runner):
     result = CMAES_Result()
     result.final_best_fitness = final_cmaes.best
     result.eval_counts = final_cmaes.counteval
+
+    result.fitness_function = cmaes_runner.fitness_function
+    result.fitness_function_id = cmaes_runner.fitness_function.id
+
+    result.selection_function = cmaes_runner.selection_function
+    result.selection_function_id = cmaes_runner.selection_function.id
     return result
 
 
@@ -160,7 +166,7 @@ class FitnessFunction:
     def evaluate(self, genome):
         return self.coco_function(genome)
 
-class ModifiedCMAESRunner(purecma.CMAES):
+class ModifiedCMAES(purecma.CMAES):
     def tell_pop(self, population, selection_function):
         """update the evolution paths and the distribution parameters m,
         sigma, and C within CMA-ES.
@@ -224,6 +230,23 @@ class ModifiedCMAESRunner(purecma.CMAES):
         cn, sum_square_ps = par.cs / par.damps, sum(x**2 for x in self.ps)
         self.sigma *= purecma.exp(min(1, cn * (sum_square_ps / N - 1) / 2))
 
+    def stop(self):
+        res = {}
+        if self.counteval <= 0:
+            return res
+        if self.counteval >= self.maxfevals:
+            res['maxfevals'] = self.maxfevals
+        if self.ftarget is not None and len(self.fitvals) > 0 and self.fitvals[0] <= self.ftarget:
+            res['ftarget'] = self.ftarget
+        if self.C.condition_number > 1e14:
+            res['condition'] = self.C.condition_number
+        if len(self.fitvals) > 1 and (self.fitvals[0] == float('inf') or self.fitvals[-1] - self.fitvals[0] < 1e-12):
+            res['tolfun'] = 1e-12
+        if self.sigma * max(self.C.eigenvalues)**0.5 < 1e-11:
+            # remark: max(D) >= max(diag(C))**0.5
+            res['tolx'] = 1e-11
+        return res
+
 class CMAES_runner:
     def __init__(self, config, fitness_function, selection_function):
         self.config = config
@@ -241,7 +264,7 @@ class CMAES_runner:
         init_sigma = 0.5
         max_evals = 100000
 
-        es = ModifiedCMAESRunner(start, init_sigma, maxfevals=max_evals)
+        es = ModifiedCMAES(start, init_sigma, maxfevals=max_evals)
 
         self.fitness_function.start()
 
@@ -250,8 +273,6 @@ class CMAES_runner:
         while not es.stop():
             X = es.ask()  # get a list of sampled candidate solutions
             fitness_values = list(self.fitness_function.evaluate(x) for x in X)
-            if any (f == math.inf for f in fitness_values):
-                break
             population = []
             for x, fit in zip(X, fitness_values):
                 new_popi = self.Popi()
