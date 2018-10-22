@@ -341,7 +341,8 @@ class GPTree:
         terminal_values['sum_fitness'] = numpy.repeat(sum_fitness, population_size)
         terminal_values['min_fitness'] = numpy.repeat(min_fitness, population_size)
         terminal_values['max_fitness'] = numpy.repeat(max_fitness, population_size)
-        if max_fitness == min_fitness:
+        numpy.seterr(all='raise')
+        if max_fitness == min_fitness or max_fitness == math.inf or min_fitness == math.inf:
             terminal_values['relative_fitness'] = numpy.repeat(1, population_size)
         else:
             terminal_values['relative_fitness'] = numpy.array(list(((c.fitness - min_fitness) / (max_fitness - min_fitness)) for c in sorted_candidates))
@@ -449,7 +450,7 @@ class GPTree:
             return selected_members
 
         # if EPPSEA overflows at any point, just return random choices
-        except OverflowError:
+        except (OverflowError, FloatingPointError):
             print('WARNING: EPPSEA Overflow. Returning random selection')
             return random.sample(candidates, n)
 
