@@ -22,9 +22,9 @@ import eppsea_base
 from pycma.cma import purecma
 
 def run_cmaes_runner(cmaes_runner):
-    final_best, final_cmaes = cmaes_runner.one_run()
+    final_best, final_cmaes, term_conditions = cmaes_runner.one_run()
     result = CMAES_Result()
-    result.final_best_fitness = final_cmaes.best
+    result.final_best_fitness = final_cmaes.best.f
     result.eval_counts = final_cmaes.counteval
 
     result.fitness_function = cmaes_runner.fitness_function
@@ -32,6 +32,14 @@ def run_cmaes_runner(cmaes_runner):
 
     result.selection_function = cmaes_runner.selection_function
     result.selection_function_id = cmaes_runner.selection_function.id
+
+    if 'ftarget' in term_conditions:
+        result.termination_reason = 'hit_target_fitness'
+    elif 'maxfevals' in term_conditions:
+        result.termination_reason = 'maximum_evaluations_reached'
+    elif 'tolfun' in term_conditions or 'tolx' in term_conditions:
+        result.termination_reason = 'fitness_convergence'
+
     return result
 
 
@@ -236,8 +244,8 @@ class ModifiedCMAES(purecma.CMAES):
             return res
         if self.counteval >= self.maxfevals:
             res['maxfevals'] = self.maxfevals
-        if self.ftarget is not None and len(self.fitvals) > 0 and self.fitvals[0] <= self.ftarget:
-            res['ftarget'] = self.ftarget
+        if self.fitness_function.coco_function.final_target_hit:
+            res['ftarget'] = self.fitvals[0]
         if self.C.condition_number > 1e14:
             res['condition'] = self.C.condition_number
         if len(self.fitvals) > 1 and (self.fitvals[0] == float('inf') or self.fitvals[-1] - self.fitvals[0] < 1e-12):
@@ -260,11 +268,12 @@ class CMAES_runner:
             self.birth_generation = None
 
     def one_run(self):
-        start = list(random.uniform(-5, 5) for _ in range(10))
+        start = list(random.uniform(-5, 5) for _ in range(self.fitness_function.genome_length))
         init_sigma = 0.5
-        max_evals = 100000
+        max_evals = self.config.getint('CMAES', 'maximum evaluations')
 
         es = ModifiedCMAES(start, init_sigma, maxfevals=max_evals)
+        es.fitness_function = self.fitness_function
 
         self.fitness_function.start()
 
@@ -284,14 +293,15 @@ class CMAES_runner:
             generation += 1
 
         es.disp(1)
-        print('termination by', es.stop())
+        term_conditions = es.stop()
+        print('termination by', term_conditions)
         print('best f-value =', es.result[1])
         print('solution =', es.result[0])
 
         if es.best.f < self.fitness_function.evaluate(es.xmean):
-            result = [es.best.x, es]
+            result = [es.best.x, es, term_conditions]
         else:
-            result = [es.xmean, es]
+            result = [es.xmean, es, term_conditions]
 
         self.fitness_function.finish()
 
@@ -319,6 +329,15 @@ class EppseaCMAES:
         self.num_testing_fitness_functions = None
         self.training_fitness_functions = None
         self.testing_fitness_functions = None
+
+        if config.get('CMAES', 'eppsea fitness assignment method') == 'best fitness reached' or config.get('CMAES', 'eppsea fitness assignment method') == 'adaptive':
+            self.eppsea_fitness_assignment_method = 'best_fitness_reached'
+        elif config.get('CMAES', 'eppsea fitness assignment method') == 'proportion hitting target fitness':
+            self.eppsea_fitness_assignment_method = 'proportion_hitting_target_fitness'
+        elif config.get('CMAES', 'eppsea fitness assignment method') == 'evals to target fitness':
+            self.eppsea_fitness_assignment_method = 'evals_to_target_fitness'
+        else:
+            raise Exception('ERROR: eppsea fitness assignment method {0} not recognized!'.format(config.get('EA', 'eppsea fitness assignment method')))
 
         self.eppsea = None
 
@@ -493,7 +512,7 @@ class EppseaCMAES:
     def assign_eppsea_fitness(self, selection_functions, ea_results):
         for s in selection_functions:
             s_results = ea_results.filter(selection_function=s)
-            if self.config.get('EA', 'eppsea fitness assignment method') == 'adaptive':
+            if self.config.get('CMAES', 'eppsea fitness assignment method') == 'adaptive':
                 if self.eppsea_fitness_assignment_method == 'best_fitness_reached':
                     if len(list(r for r in s_results.results if r.termination_reason == 'target_fitness_hit')) / len (s_results.results) >= 0.5:
                         self.log('At eval count {0}, eppsea fitness assignment changed to proportion_hitting_target_fitness'.format(self.eppsea.gp_evals))
@@ -520,15 +539,35 @@ class EppseaCMAES:
             # filter out the ea runs associated with this individual
             s_results = ea_results.filter(selection_function=s)
 
-            # loop through all fitness functions to get average evals to target fitness
-            all_final_evals = []
-            for fitness_function in s_results.fitness_functions:
-                fitness_function_results = s_results.filter(fitness_function=fitness_function)
-                final_evals = list(max(r.evals) for r in fitness_function_results)
-                # for the runs where the target fitness was not hit, use an eval count equal to twice the maximum count
-                all_final_evals.append(statistics.mean(final_evals))
-            # assign fitness as -1 * the average of final eval counts
-            s.eppsea_selection_function.fitness = statistics.mean(all_final_evals)
+            if self.eppsea_fitness_assignment_method == 'best_fitness_reached':
+                # loop through all fitness functions to get average final best fitnesses
+                average_final_best_fitnesses = []
+                for fitness_function in s_results.fitness_functions:
+                    fitness_function_results = s_results.filter(fitness_function=fitness_function)
+                    final_best_fitnesses = (r.final_best_fitness for r in fitness_function_results.results)
+                    average_final_best_fitnesses.append(statistics.mean(final_best_fitnesses))
+                # assign fitness as -1 times the average of the average final best fitnesses or, if multiobjective ea is on, the list of average final best fitnesses
+                s.eppsea_selection_function.fitness = -1 * statistics.mean(average_final_best_fitnesses)
+
+            elif self.eppsea_fitness_assignment_method == 'proportion_hitting_target_fitness':
+                # assign the fitness as the proportion of runs that hit the target fitness
+                s.eppsea_selection_function.fitness = len(list(r for r in s_results.results if r.termination_reason == 'target_fitness_hit')) / len (s_results.results)
+
+            elif self.eppsea_fitness_assignment_method == 'evals_to_target_fitness':
+                # loop through all fitness functions to get average evals to target fitness
+                all_final_evals = []
+                for fitness_function in s_results.fitness_functions:
+                    fitness_function_results = s_results.filter(fitness_function=fitness_function)
+                    final_evals = list(max(r.evals) for r in fitness_function_results if r.termination_reason == 'target_fitness_hit')
+                    # for the runs where the target fitness was not hit, use an eval count equal to twice the maximum count
+                    for r in fitness_function_results:
+                        if r.termination_reason != 'target_fitness_hit':
+                            final_evals.append(2 * max(r.evals) for r in fitness_function_results)
+                    all_final_evals.append(statistics.mean(final_evals))
+                # assign fitness as -1 * the average of final eval counts
+                s.eppsea_selection_function.fitness = statistics.mean(all_final_evals)
+            else:
+                raise Exception('ERROR: fitness assignment method {0} not recognized by eppsea_basicEA'.format(self.eppsea_fitness_assignment_method))
 
     def run_eppsea_cmaes(self):
         print('Now starting EPPSEA')
