@@ -231,8 +231,8 @@ class ModifiedCMAES(purecma.CMAES):
         for k, wk in enumerate(par.weights):  # so-called rank-mu update
             if wk < 0:  # guaranty positive definiteness
                 wk *= N * (self.sigma / self.C.mahalanobis_norm(purecma.minus(arx[k], xold)))**2
-            self.C.addouter(purecma.minus(arx[k], xold),  # C += wk * cmu * dx * dx^T
-                            wk * par.cmu / self.sigma**2)
+            self.C.addouter(purecma.minus(arx[k], xold), wk * par.cmu / self.sigma**2)  # C += wk * cmu * dx * dx^T
+
 
         ### Adapt step-size sigma
         cn, sum_square_ps = par.cs / par.damps, sum(x**2 for x in self.ps)
@@ -248,6 +248,8 @@ class ModifiedCMAES(purecma.CMAES):
             res['ftarget'] = self.fitvals[0]
         if self.C.condition_number > 1e14:
             res['condition'] = self.C.condition_number
+        if self.sigma > 1e140:
+            res['sigma'] = self.sigma
         if len(self.fitvals) > 1 and (self.fitvals[0] == float('inf') or self.fitvals[-1] - self.fitvals[0] < 1e-12):
             res['tolfun'] = 1e-12
         if self.sigma * max(self.C.eigenvalues)**0.5 < 1e-11:
@@ -272,7 +274,7 @@ class CMAES_runner:
         init_sigma = 0.5
         max_evals = self.config.getint('CMAES', 'maximum evaluations')
 
-        es = ModifiedCMAES(start, init_sigma, maxfevals=max_evals)
+        es = ModifiedCMAES(start, init_sigma, maxfevals=max_evals, popsize=100)
         es.fitness_function = self.fitness_function
 
         self.fitness_function.start()
