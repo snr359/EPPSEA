@@ -1202,6 +1202,7 @@ class EppseaBasicEA:
     def postprocess(self, results):
         # runs postprocessing on an EAResultCollection results
         output = ''
+        np.seterr(all='warn')
         # log string forms of eppsea-based selection functions
         for s in results.selection_functions:
             if s.eppsea_selection_function is not None:
