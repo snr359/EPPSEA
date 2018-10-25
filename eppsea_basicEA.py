@@ -1325,6 +1325,15 @@ class EppseaBasicEA:
             else:
                 result = eppsea_base.EppseaSelectionFunction()
                 result.number_of_selectors = 2
+                result.min_tournament_size = self.eppsea.min_tournament_size
+                result.max_tournament_no_replacement_size = self.eppsea.max_tournament_no_replacement_size
+                result.max_tournament_size = self.eppsea.max_tournament_size
+
+                result.constant_min = self.eppsea.constant_min
+                result.constant_max = self.eppsea.constant_max
+                result.random_min = self.eppsea.random_min
+                result.random_max = self.eppsea.random_max
+
                 # build the parent selection tree
                 parent_selection = eppsea_base.GPTree()
                 
@@ -1335,7 +1344,10 @@ class EppseaBasicEA:
 
                 parent_selection.initial_gp_depth_limit = self.eppsea.initial_gp_depth_limit
                 parent_selection.gp_terminal_node_generation_chance = self.eppsea.gp_terminal_node_generation_chance
-                parent_selection.initial_selection_subset_size = random.randint(self.eppsea.min_initial_selection_subset_size, self.eppsea.max_initial_selection_subset_size)
+
+                parent_selection.min_tournament_size = self.eppsea.min_tournament_size
+                parent_selection.max_tournament_no_replacement_size = self.eppsea.max_tournament_no_replacement_size
+                parent_selection.max_tournament_size = self.eppsea.max_tournament_size
 
                 parent_selection.root = eppsea_base.GPNode(parent_selection.constant_min, parent_selection.constant_max,
                                                            parent_selection.random_min, parent_selection.random_max)
@@ -1343,51 +1355,39 @@ class EppseaBasicEA:
                 if s.parent_selection_type == 'truncation':
                     parent_selection.root.operation = 'fitness'
                     
-                    parent_selection.selection_type = 'maximum'
-                    parent_selection.select_with_replacement = False
-                    parent_selection.select_from_subset = False
-                    parent_selection.selection_subset_size = 0
+                    parent_selection.selection_type = 'truncation'
+                    parent_selection.tournament_size = 0
                 
                 elif s.parent_selection_type == 'fitness_rank':
                     parent_selection.root.operation = 'fitness_rank'
 
                     parent_selection.selection_type = 'proportional'
-                    parent_selection.select_with_replacement = True
-                    parent_selection.select_from_subset = False
-                    parent_selection.selection_subset_size = 0
+                    parent_selection.tournament_size = 0
                     
                 elif s.parent_selection_type == 'fitness_proportional':
                     parent_selection.root.operation = 'fitness'
 
                     parent_selection.selection_type = 'proportional'
-                    parent_selection.select_with_replacement = True
-                    parent_selection.select_from_subset = False
-                    parent_selection.selection_subset_size = 0
+                    parent_selection.tournament_size = 0
                 
                 elif s.parent_selection_type == 'k_tournament':
                     parent_selection.root.operation = 'fitness'
 
-                    parent_selection.selection_type = 'maximum'
-                    parent_selection.select_with_replacement = True
-                    parent_selection.select_from_subset = True
-                    parent_selection.selection_subset_size = s.parent_selection_tournament_k
+                    parent_selection.selection_type = 'tournament_replacement'
+                    parent_selection.tournament_size = s.parent_selection_tournament_k
                 
                 elif s.parent_selection_type == 'random':
                     parent_selection.root.operation = 'constant'
 
                     parent_selection.selection_type = 'proportional'
-                    parent_selection.select_with_replacement = True
-                    parent_selection.select_from_subset = False
-                    parent_selection.selection_subset_size = 0
+                    parent_selection.tournament_size = 0
                     parent_selection.data = 1
                     
                 elif s.parent_selection_type == 'stochastic_universal_sampling':
                     parent_selection.root.operation = 'fitness'
 
                     parent_selection.selection_type = 'stochastic_universal_sampling'
-                    parent_selection.select_with_replacement = True
-                    parent_selection.select_from_subset = False
-                    parent_selection.selection_subset_size = 0
+                    parent_selection.tournament_size = 0
 
                 # build the survival selection tree
                 survival_selection = eppsea_base.GPTree()
@@ -1399,59 +1399,50 @@ class EppseaBasicEA:
 
                 survival_selection.initial_gp_depth_limit = self.eppsea.initial_gp_depth_limit
                 survival_selection.gp_terminal_node_generation_chance = self.eppsea.gp_terminal_node_generation_chance
-                survival_selection.initial_selection_subset_size = random.randint(self.eppsea.min_initial_selection_subset_size, self.eppsea.max_initial_selection_subset_size)
 
                 survival_selection.root = eppsea_base.GPNode(survival_selection.constant_min, survival_selection.constant_max,
                                                              survival_selection.random_min, survival_selection.random_max)
 
+                survival_selection.min_tournament_size = self.eppsea.min_tournament_size
+                survival_selection.max_tournament_no_replacement_size = self.eppsea.max_tournament_no_replacement_size
+                survival_selection.max_tournament_size = self.eppsea.max_tournament_size
+
                 if s.survival_selection_type == 'truncation':
                     survival_selection.root.operation = 'fitness'
 
-                    survival_selection.selection_type = 'maximum'
-                    survival_selection.select_with_replacement = False
-                    survival_selection.select_from_subset = False
-                    survival_selection.selection_subset_size = 0
+                    survival_selection.selection_type = 'truncation'
+                    survival_selection.tournament_size = 0
 
                 elif s.survival_selection_type == 'fitness_rank':
                     survival_selection.root.operation = 'fitness_rank'
 
                     survival_selection.selection_type = 'proportional'
-                    survival_selection.select_with_replacement = True
-                    survival_selection.select_from_subset = False
-                    survival_selection.selection_subset_size = 0
+                    survival_selection.tournament_size = 0
 
                 elif s.survival_selection_type == 'fitness_proportional':
                     survival_selection.root.operation = 'fitness'
 
                     survival_selection.selection_type = 'proportional'
-                    survival_selection.select_with_replacement = True
-                    survival_selection.select_from_subset = False
-                    survival_selection.selection_subset_size = 0
+                    survival_selection.tournament_size = 0
 
                 elif s.survival_selection_type == 'k_tournament':
                     survival_selection.root.operation = 'fitness'
 
-                    survival_selection.selection_type = 'maximum'
-                    survival_selection.select_with_replacement = True
-                    survival_selection.select_from_subset = True
-                    survival_selection.selection_subset_size = s.survival_selection_tournament_k
+                    survival_selection.selection_type = 'tournament_replacement'
+                    survival_selection.tournament_size = s.survival_selection_tournament_k
 
                 elif s.survival_selection_type == 'random':
                     survival_selection.root.operation = 'constant'
 
                     survival_selection.selection_type = 'proportional'
-                    survival_selection.select_with_replacement = True
-                    survival_selection.select_from_subset = False
-                    survival_selection.selection_subset_size = 0
+                    survival_selection.tournament_size = 0
                     survival_selection.data = 1
 
                 elif s.survival_selection_type == 'stochastic_universal_sampling':
                     survival_selection.root.operation = 'fitness'
 
                     survival_selection.selection_type = 'stochastic_universal_sampling'
-                    survival_selection.select_with_replacement = True
-                    survival_selection.select_from_subset = False
-                    survival_selection.selection_subset_size = 0
+                    survival_selection.tournament_size = 0
 
                 # assign the parent and survival selection trees to the selection function
                 result.gp_trees = [parent_selection, survival_selection]

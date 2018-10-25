@@ -234,7 +234,7 @@ class GPTree:
 
     def tournament_selection(self, population, weights, k):
         # makes a k-tournament selection from the population
-        tournament_indices = random.sample(range(len(population)))
+        tournament_indices = random.sample(range(len(population)), k)
         index = max(tournament_indices, key=lambda i: weights[i])
         selection = population[index]
         return selection, index
@@ -306,7 +306,7 @@ class GPTree:
 
         return fitness_rankings, sum_fitness
 
-    def get_selectabilities(self, candidates, population_size):
+    def get_selectabilities(self, candidates, population_size, generation_number):
         # calculates the selectabilities of the candidates
         # returns a new list of tuples, each of (candidate, selectability)
 
@@ -351,7 +351,7 @@ class GPTree:
         # zip the candidates and selectabilities, and return
         return zip(sorted_candidates, selectabilities)
 
-    def select(self, population, n=1):
+    def select(self, population, n=1, generation_number=None):
         # probabilistically selects n members of the population according to the selectability tree
 
         # raise an error if the population members do not have a fitness attribute
@@ -391,7 +391,7 @@ class GPTree:
             for i in range(n):
                 if self.selection_type in ['proportional_replacement', 'proportional_no_replacement']:
                     selected_member, selected_index = self.proportional_selection(candidates, selectabilities)
-                elif self.selection_type in ['tournament_replacement' 'tournament_no_replacement']:
+                elif self.selection_type in ['tournament_replacement', 'tournament_no_replacement']:
                     selected_member, selected_index = self.tournament_selection(candidates, selectabilities, self.tournament_size)
                 else:
                     raise Exception('EPPSEA ERROR: selection type {0} not found'.format(self.selection_type))
@@ -844,7 +844,10 @@ class Eppsea:
             new_selection_function.random_max = self.random_max
             new_selection_function.initial_gp_depth_limit = self.initial_gp_depth_limit
             new_selection_function.gp_terminal_node_generation_chance = self.gp_terminal_node_generation_chance
-            new_selection_function.initial_tournament_size = random.randint(self.min_tournament_size, self.max_tournament_size)
+
+            new_selection_function.min_tournament_size = self.min_tournament_size
+            new_selection_function.max_tournament_no_replacement_size = self.max_tournament_no_replacement_size
+            new_selection_function.max_tournament_size = self.max_tournament_size
 
             # randomize the selection function and add it to the population
             new_selection_function.randomize()
