@@ -269,7 +269,7 @@ class CMAES_runner:
             self.fitness = None
             self.birth_generation = None
 
-    def one_run(self):
+    def one_run(self, basic=False):
         start = list(random.uniform(-5, 5) for _ in range(self.fitness_function.genome_length))
         init_sigma = 0.5
         max_evals = self.config.getint('CMAES', 'maximum evaluations')
@@ -291,7 +291,10 @@ class CMAES_runner:
                 new_popi.fitness = fit
                 new_popi.birth_generation = generation
                 population.append(new_popi)
-            es.tell_pop(population, self.selection_function)  # update distribution parameters
+            if basic:
+                es.tell(X, fitness_values)
+            else:
+                es.tell_pop(population, self.selection_function)  # update distribution parameters
             generation += 1
 
         es.disp(1)
@@ -308,6 +311,7 @@ class CMAES_runner:
         self.fitness_function.finish()
 
         return result
+
 
 class EppseaCMAES:
     def __init__(self, config):
