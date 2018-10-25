@@ -146,15 +146,20 @@ class GPNode:
 class GPTree:
     # encapsulates a tree made of GPNodes that determine probability of selection, as well as other options relating
     # to parent selection
-    selection_types = ['proportional', 'maximum', 'stochastic_universal_sampling']
+    selection_types = ['proportional_replacement',
+                       'proportional_no_replacement',
+                       'tournament_replacement',
+                       'tournament_no_replacement',
+                       'truncation',
+                       'stochastic_universal_sampling']
+
+    replacement_selections = ['proportional_replacement',
+                              'tournament_replacement']
 
     def __init__(self):
         self.root = None
         self.fitness = None
-        self.select_with_replacement = None
-        self.select_from_subset = None
         self.selection_type = None
-        self.selection_subset_size = None
         self.final = False
         self.selected_in_generation = dict()
 
@@ -165,7 +170,10 @@ class GPTree:
 
         self.initial_gp_depth_limit = None
         self.gp_terminal_node_generation_chance = None
-        self.initial_selection_subset_size = None
+        self.tournament_size = None
+        self.min_tournament_size = None
+        self.max_tournament_no_replacement_size = None
+        self.max_tournament_size = None
 
         self.id = None
 
@@ -173,7 +181,7 @@ class GPTree:
         # assigns a random id to self. Every unique GP Tree should call this once
         self.id = self.id = '{0}_{1}_{2}'.format('GPTree', str(id(self)), str(uuid.uuid4()))
 
-    def proportional_selection(self, population, weights, subset_size):
+    def proportional_selection(self, population, weights):
         # makes a random weighted selection from the population
 
         # raise an error if the lengths of the population and weights are different
@@ -187,24 +195,18 @@ class GPTree:
             for i in range(len(normalized_weights)):
                 normalized_weights[i] -= min_weight
 
-        # determine the indeces of selectable candidates
-        if subset_size is not None:
-            selectable_indices = random.sample(range(len(population)), subset_size)
-        else:
-            selectable_indices = range(len(population))
-
         # build a list of the indices and cumulative selection weights
         indices_and_weights = []
         cum_weight = 0
-        for i in selectable_indices:
-            cum_weight += normalized_weights[i]
+        for i,w in enumerate(normalized_weights):
+            cum_weight += w
             indices_and_weights.append((i, cum_weight))
         sum_weight = cum_weight
 
         # if the sum weight is 0 or inf, just return random candidate
         if sum_weight == 0 or sum_weight == math.inf:
-            selection = random.choice(population)
-            index = population.index(selection)
+            index = random.randrange(len(population))
+            selection = population[index]
             return selection, index
 
         # select a number between 0 and the sum weight
@@ -227,32 +229,24 @@ class GPTree:
         with open(error_directory + '/variables', 'w') as file:
             file.write('min_weight: {0}\n'.format(min_weight))
             file.write('weights: {0}\n'.format(weights))
-            file.write('subset_size: {0}\n'.format(subset_size))
-            file.write('selectable_indices: {0}\n'.format(selectable_indices))
-            file.write('cum_weight: {0}\n'.format(cum_weight))
             file.write('sum_weight: {0}\n'.format(sum_weight))
             file.write('selection_number: {0}\n'.format(selection_number))
 
-    def maximum_selection(self, population, weights, subset_size):
-        # returns the member of the population for which the corresponding entry in weights is maximum
+    def tournament_selection(self, population, weights, k):
+        # makes a k-tournament selection from the population
+        tournament_indices = random.sample(range(len(population)))
+        index = max(tournament_indices, key=lambda i: weights[i])
+        selection = population[index]
+        return selection, index
 
-        # raise an error if the lengths of the population and weights are different
-        if len(population) != len(weights):
-            raise IndexError
+    def truncation_selection(self, population, weights, n):
+        # returns the population truncated to n members by the weights
+        population_and_weights = zip(population, weights)
+        population_and_weights = sorted(population_and_weights, key=lambda p: p[1], reverse=True)
+        population_and_weights = population_and_weights[:n]
+        return list(p[0] for p in population_and_weights)
 
-        # determine the indeces of selectable candidates
-        if subset_size is not None:
-            selectable_indices = list(random.sample(range(len(population)), subset_size))
-        else:
-            selectable_indices = list(range(len(population)))
-
-        # find the index of the weight with the maximum value
-        index_of_max = max(selectable_indices, key=lambda i: weights[i])
-
-        # return the population member at that index
-        return population[index_of_max], index_of_max
-
-    def stochastic_universal_sampling_selection(self, population, weights, subset_size, n):
+    def stochastic_universal_sampling_selection(self, population, weights, n):
         # returns n members of the population selected using universal stochastic sampling
 
         # raise an error if the lengths of the population and weights are different
@@ -266,26 +260,17 @@ class GPTree:
             for i in range(len(normalized_weights)):
                 normalized_weights[i] -= min_weight
 
-        # determine the indeces of selectable candidates
-        if subset_size is not None:
-            selectable_indices = random.sample(range(len(population)), subset_size)
-        else:
-            selectable_indices = range(len(population))
-
         # build a list of the indices and cumulative selection weights
         indices_and_weights = []
         cum_weight = 0
-        for i in selectable_indices:
-            cum_weight += normalized_weights[i]
+        for i,w in enumerate(normalized_weights):
+            cum_weight += w
             indices_and_weights.append((i, cum_weight))
         sum_weight = cum_weight
 
         # if the sum weight is 0 or inf, just return random candidates
         if sum_weight == 0 or sum_weight == math.inf:
-            selected = []
-            for _ in range(n):
-                selected_index = random.choice(selectable_indices)
-                selected.append(population[selected_index])
+            selected = random.sample(population, n)
             return selected
 
         # calculate interval length
@@ -302,7 +287,6 @@ class GPTree:
                 offset += interval_length
 
         return selected
-
 
     def get_fitness_stats(self, fitnesses):
         # return [],0 if no fitnesses
@@ -322,7 +306,7 @@ class GPTree:
 
         return fitness_rankings, sum_fitness
 
-    def get_selectabilities(self, candidates, population_size, generation_number):
+    def get_selectabilities(self, candidates, population_size):
         # calculates the selectabilities of the candidates
         # returns a new list of tuples, each of (candidate, selectability)
 
@@ -367,7 +351,7 @@ class GPTree:
         # zip the candidates and selectabilities, and return
         return zip(sorted_candidates, selectabilities)
 
-    def select(self, population, n=1, generation_number=None):
+    def select(self, population, n=1):
         # probabilistically selects n members of the population according to the selectability tree
 
         # raise an error if the population members do not have a fitness attribute
@@ -380,78 +364,45 @@ class GPTree:
             raise Exception('EPPSEA ERROR: Trying to use an EEPSEA selector to select from a population'
                             'when one of the members does not have "birth_generation" defined.')
 
-        # create a list of selected individuals for the current generation if one does not exist
-        if generation_number not in self.selected_in_generation.keys():
-            self.selected_in_generation[generation_number] = list()
-
-        # determine the list of candidates for selection
-        if not self.select_with_replacement and generation_number is not None:
-            candidates = list(p for p in population if p not in self.selected_in_generation[generation_number])
-        else:
-            candidates = list(population)
+        candidates = list(population)
 
         # prepare to catch an overflow error
         try:
             # get the candidates with selectabilities
             candidates_with_selectabilities = self.get_selectabilities(candidates, len(population), generation_number)
-
-            # get the newly ordered lists of candidates and selectabilities
-            candidates, selectabilities = zip(*candidates_with_selectabilities)
-            candidates = list(candidates)
-            selectabilities = list(selectabilities)
-
-            # select, record, and return population members
-            selected_members = []
-
-            # if we are doing stochastic universal sampling, select members all at once. Otherwise, select one at a time
-            if self.selection_type == 'stochastic_universal_sampling':
-
-                if len(candidates) == 0:
-                    raise Exception('EPPSEA ERROR: There are no candidates available for selection. '
-                                    ' If mu < 2*lambda in your EA, make sure "select with replacement" is set to True'
-                                    ' in your EPPSEA configuration, or handle this special case in your evaluation'
-                                    ' of EPPSEA functions.')
-
-                if self.select_from_subset and self.selection_subset_size < len(candidates):
-                    subset_size = self.selection_subset_size
-                else:
-                    subset_size = None
-
-                selected_members = self.stochastic_universal_sampling_selection(candidates, selectabilities, subset_size, n)
-            else:
-                for i in range(n):
-                    if len(candidates) == 0:
-                        raise Exception('EPPSEA ERROR: There are no candidates available for selection. '
-                                        ' If mu < 2*lambda in your EA, make sure "select with replacement" is set to True'
-                                        ' in your EPPSEA configuration, or handle this special case in your evaluation'
-                                        ' of EPPSEA functions.')
-
-                    if self.select_from_subset and self.selection_subset_size < len(candidates):
-                        subset_size = self.selection_subset_size
-                    else:
-                        subset_size = None
-
-                    if self.selection_type == 'proportional':
-                        selected_member, selected_index = self.proportional_selection(candidates, selectabilities, subset_size)
-                    elif self.selection_type == 'maximum':
-                        selected_member, selected_index = self.maximum_selection(candidates, selectabilities, subset_size)
-                    else:
-                        raise Exception('EPPSEA ERROR: selection type {0} not found'.format(self.selection_type))
-
-                    if generation_number is not None:
-                        self.selected_in_generation[generation_number].append(selected_member)
-
-                    if not self.select_with_replacement:
-                        candidates.pop(selected_index)
-                        selectabilities.pop(selected_index)
-
-                    selected_members.append(selected_member)
-
-            return selected_members
-
-        # if EPPSEA overflows at any point, just return random choices
+            # if EPPSEA overflows at any point, just return random choices
         except (OverflowError, FloatingPointError):
             return random.sample(candidates, n)
+
+        # get the newly ordered lists of candidates and selectabilities
+        candidates, selectabilities = zip(*candidates_with_selectabilities)
+        candidates = list(candidates)
+        selectabilities = list(selectabilities)
+
+        # if we are doing stochastic universal sampling, select members all at once. Otherwise, select one at a time
+        if self.selection_type == 'stochastic_universal_sampling':
+            selected_members = self.stochastic_universal_sampling_selection(candidates, selectabilities, n)
+
+        elif self.selection_type == 'truncation':
+            selected_members = self.truncation_selection(candidates, selectabilities, n)
+
+        else:
+            selected_members = []
+            for i in range(n):
+                if self.selection_type in ['proportional_replacement', 'proportional_no_replacement']:
+                    selected_member, selected_index = self.proportional_selection(candidates, selectabilities)
+                elif self.selection_type in ['tournament_replacement' 'tournament_no_replacement']:
+                    selected_member, selected_index = self.tournament_selection(candidates, selectabilities, self.tournament_size)
+                else:
+                    raise Exception('EPPSEA ERROR: selection type {0} not found'.format(self.selection_type))
+
+                if self.selection_type in ['proportional_no_replacement','tournament_no_replacement']:
+                    candidates.pop(selected_index)
+                    selectabilities.pop(selected_index)
+
+                selected_members.append(selected_member)
+
+        return selected_members
 
     def recombine(self, parent2):
         # recombines two GPTrees and returns a new child
@@ -472,13 +423,19 @@ class GPTree:
         
         # recombine misc options
         new_child.selection_type = random.choice([self.selection_type, parent2.selection_type])
-        new_child.select_with_replacement = random.choice([self.select_with_replacement, parent2.select_with_replacement])
-        new_child.select_from_subset = random.choice(([self.select_from_subset, parent2.select_from_subset]))
 
-        if self.selection_subset_size > parent2.selection_subset_size:
-            new_child.selection_subset_size = random.randint(parent2.selection_subset_size, self.selection_subset_size)
+        if self.tournament_size > parent2.tournament_size:
+            new_child.tournament_size = random.randint(parent2.tournament_size, self.tournament_size)
         else:
-            new_child.selection_subset_size = random.randint(self.selection_subset_size, parent2.selection_subset_size)
+            new_child.tournament_size = random.randint(self.tournament_size, parent2.tournament_size)
+
+        # clamp the tournament size
+        self.tournament_size = max(self.tournament_size, self.min_tournament_size)
+
+        if self.selection_type in self.replacement_selections:
+            self.tournament_size = min(self.tournament_size, self.max_tournament_size)
+        else:
+            self.tournament_size = min(self.tournament_size, self.max_tournament_no_replacement_size)
 
         return new_child
 
@@ -495,16 +452,20 @@ class GPTree:
         # insert the new subtree
         self.replace_node(insertion_point, new_subtree)
         
-        # 50/50 chance to flip misc options
-        if random.random() < 0.5:
+        # chance to flip selection type
+        if random.random() < 0.2:
             self.selection_type = random.choice(self.selection_types)
-        if random.random() < 0.5:
-            self.select_with_replacement = not self.select_with_replacement
-        if random.random() < 0.5:
-            self.select_from_subset = not self.select_from_subset
 
-        self.selection_subset_size = max(1, round((self.selection_subset_size + random.randint(-5, 5)) * random.uniform(0.9, 1.1)))
-        
+        self.tournament_size = round((self.tournament_size + random.randint(-5, 5)) * random.uniform(0.9, 1.1))
+
+        # clamp the tournament size
+        self.tournament_size = max(self.tournament_size, self.min_tournament_size)
+
+        if self.selection_type in self.replacement_selections:
+            self.tournament_size = min(self.tournament_size, self.max_tournament_size)
+        else:
+            self.tournament_size = min(self.tournament_size, self.max_tournament_no_replacement_size)
+
     def get(self, terminal_values):
         values = self.root.get(terminal_values)
         # if only a single value was returned, expand it into an array of repeated numbers
@@ -543,9 +504,11 @@ class GPTree:
         self.root.grow(self.initial_gp_depth_limit, self.gp_terminal_node_generation_chance, None)
 
         self.selection_type = random.choice(self.selection_types)
-        self.select_with_replacement = bool(random.random() < 0.5)
-        self.select_from_subset = bool(random.random() < 0.5)
-        self.selection_subset_size = self.initial_selection_subset_size
+
+        if self.selection_type in self.replacement_selections:
+            self.tournament_size = random.randint(self.min_tournament_size, self.max_tournament_size)
+        else:
+            self.tournament_size = random.randint(self.min_tournament_size, self.max_tournament_no_replacement_size)
 
         self.assign_id()
 
@@ -558,9 +521,9 @@ class GPTree:
                 assert(n in n.parent.children)
 
     def get_string(self):
-        result = self.root.get_string() + ' | selection type: {0} | select w/ replacement: {1} | select from subset: {2}'.format(self.selection_type, self.select_with_replacement, self.select_from_subset)
-        if self.select_from_subset:
-            result += ' | selection subset size: {0}'.format(self.selection_subset_size)
+        result = self.root.get_string() + ' | selection type: {0} | '.format(self.selection_type)
+        if self.selection_type in ['tournament_replacement', 'tournament_no_replacement']:
+            result += ' | tournament size: {0}'.format(self.tournament_size)
         return result
 
     def get_code(self):
@@ -633,10 +596,11 @@ class EppseaSelectionFunction:
 
             self.initial_gp_depth_limit = other.initial_gp_depth_limit
             self.gp_terminal_node_generation_chance = other.gp_terminal_node_generation_chance
-            self.initial_selection_subset_size = other.initial_selection_subset_size
+            self.min_tournament_size = other.min_tournament_size
+            self.max_tournament_no_replacement_size = other.max_tournament_no_replacement_size
+            self.max_tournament_size = other.max_tournament_size
 
-            self.force_select_with_replacement = other.force_select_with_replacement
-            self.force_select_from_subset = other.force_select_with_replacement
+
         else:
             self.fitness = None
             self.mo_fitnesses = None
@@ -653,10 +617,9 @@ class EppseaSelectionFunction:
 
             self.initial_gp_depth_limit = None
             self.gp_terminal_node_generation_chance = None
-            self.initial_selection_subset_size = None
-
-            self.force_select_with_replacement = None
-            self.force_select_from_subset = None
+            self.min_tournament_size = None
+            self.max_tournament_no_replacement_size = None
+            self.max_tournament_size = None
 
         # the id should never be copied, and should instead be reassigned with assign_id
         self.assign_id()
@@ -681,14 +644,11 @@ class EppseaSelectionFunction:
 
             new_gp_tree.initial_gp_depth_limit = self.initial_gp_depth_limit
             new_gp_tree.gp_terminal_node_generation_chance = self.gp_terminal_node_generation_chance
-            new_gp_tree.initial_selection_subset_size = self.initial_selection_subset_size
+            new_gp_tree.min_tournament_size = self.min_tournament_size
+            new_gp_tree.max_tournament_no_replacement_size = self.max_tournament_no_replacement_size
+            new_gp_tree.max_tournament_size = self.max_tournament_size
 
             new_gp_tree.randomize()
-
-            if self.force_select_with_replacement is not None:
-                new_gp_tree.select_with_replacement = self.force_select_with_replacement
-            if self.force_select_from_subset is not None:
-                new_gp_tree.select_from_subset = self.force_select_from_subset
 
             self.gp_trees.append(new_gp_tree)
 
@@ -696,11 +656,6 @@ class EppseaSelectionFunction:
         # mutates each gp tree
         for tree in self.gp_trees:
             tree.mutate()
-
-            if self.force_select_with_replacement is not None:
-                tree.select_with_replacement = self.force_select_with_replacement
-            if self.force_select_from_subset is not None:
-                tree.select_from_subset = self.force_select_from_subset
 
     def recombine(self, parent2):
         # recombines each gp_tree belonging to this selection function
@@ -711,12 +666,6 @@ class EppseaSelectionFunction:
         new_selection_function.gp_trees = []
         for gp_tree1, gp_tree2 in zip(self.gp_trees, parent2.gp_trees):
             new_gptree = gp_tree1.recombine(gp_tree2)
-
-            if self.force_select_with_replacement is not None:
-                new_gptree.select_with_replacement = self.force_select_with_replacement
-            if self.force_select_from_subset is not None:
-                new_gptree.select_from_subset = self.force_select_from_subset
-
             new_selection_function.gp_trees.append(new_gptree)
 
         # clear the fitness rating
@@ -813,18 +762,9 @@ class Eppsea:
 
         self.number_of_selectors = config.getint('evolved selection', 'number of selectors')
 
-        try:
-            self.force_select_with_replacement = config.getboolean('evolved selection', 'select with replacement')
-        except ValueError:
-            self.force_select_with_replacement = None
-
-        try:
-            self.force_select_from_subset = config.getboolean('evolved selection', 'select from subset')
-        except ValueError:
-            self.force_select_from_subset = None
-
-        self.min_initial_selection_subset_size = config.getint('evolved selection', 'minimum initial selection subset size')
-        self.max_initial_selection_subset_size = config.getint('evolved selection', 'maximum initial selection subset size')
+        self.min_tournament_size = config.getint('evolved selection', 'minimum tournament size')
+        self.max_tournament_no_replacement_size = config.getint('evolved selection', 'maximum tournament (no replacement) size')
+        self.max_tournament_size = config.getint('evolved selection', 'maximum tournament size')
 
         self.constant_min = config.getfloat('evolved selection', 'constant min')
         self.constant_max = config.getfloat('evolved selection', 'constant max')
@@ -833,10 +773,10 @@ class Eppsea:
         self.random_max = config.getfloat('evolved selection', 'random max')
 
         selection_types = config.get('evolved selection', 'selection type').strip().split(',')
+        selection_types = list(s.strip() for s in selection_types)
         for s in list(GPTree.selection_types):
             if s not in selection_types:
                 GPTree.selection_types.remove(s)
-
 
         # create a dictionary for the results
         self.results = dict()
@@ -904,10 +844,7 @@ class Eppsea:
             new_selection_function.random_max = self.random_max
             new_selection_function.initial_gp_depth_limit = self.initial_gp_depth_limit
             new_selection_function.gp_terminal_node_generation_chance = self.gp_terminal_node_generation_chance
-            new_selection_function.initial_selection_subset_size = random.randint(self.min_initial_selection_subset_size, self.max_initial_selection_subset_size)
-
-            new_selection_function.force_select_with_replacement = self.force_select_with_replacement
-            new_selection_function.force_select_from_subset = self.force_select_from_subset
+            new_selection_function.initial_tournament_size = random.randint(self.min_tournament_size, self.max_tournament_size)
 
             # randomize the selection function and add it to the population
             new_selection_function.randomize()
@@ -1065,13 +1002,6 @@ class Eppsea:
 
                 # extend population with new members
                 self.population.extend(self.new_population)
-
-            # force selection function settings, if configured to
-            for p in self.population:
-                if self.force_select_with_replacement is not None:
-                    p.select_with_replacement = self.force_select_with_replacement
-                if self.force_select_from_subset is not None:
-                    p.select_from_subset = self.force_select_from_subset
 
         else:
             # pickle the final population, if configured to
