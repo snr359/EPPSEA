@@ -175,7 +175,7 @@ class FitnessFunction:
         return self.coco_function(genome)
 
 class ModifiedCMAES(purecma.CMAES):
-    def tell_pop(self, population, selection_function):
+    def tell_pop(self, arx, fitvals, population, selection_function):
         """update the evolution paths and the distribution parameters m,
         sigma, and C within CMA-ES.
 
@@ -195,17 +195,15 @@ class ModifiedCMAES(purecma.CMAES):
         xold = self.xmean  # not a copy, xmean is assigned anew later
 
         ### Sort by fitness
-        sorted_population = population[:]
-        population.sort(key=lambda p: p.fitness)
-        arx = list(p.genome for p in sorted_population)  # sorted arx
-        self.fitvals = sorted(p.fitness for p in population)  # used for termination and display only
+        arx = [arx[k] for k in purecma.argsort(fitvals)]  # sorted arx
+        self.fitvals = sorted(fitvals)  # used for termination and display only
         self.best.update(arx[0], self.fitvals[0], self.counteval)
 
         ### recombination, compute new weighted mean value
         # new_arx = random.sample(arx, par.mu)
         selected_members = selection_function.eppsea_selection_function.select(population, par.mu)
-        new_arx = list(p.genome for p in selected_members)
-        self.xmean = purecma.dot(new_arx, par.weights[:par.mu], transpose=True)
+        selected_arx = list(p.genome for p in selected_members)
+        self.xmean = purecma.dot(selected_arx, par.weights[:par.mu], transpose=True)
         #          = [sum(self.weights[k] * arx[k][i] for k in range(self.mu))
         #                                             for i in range(N)]
 
@@ -288,13 +286,13 @@ class CMAES_runner:
             for x, fit in zip(X, fitness_values):
                 new_popi = self.Popi()
                 new_popi.genome = x
-                new_popi.fitness = fit
+                new_popi.fitness = -1 * fit #eppsea assumes fitness maximization
                 new_popi.birth_generation = generation
                 population.append(new_popi)
             if basic:
                 es.tell(X, fitness_values)
             else:
-                es.tell_pop(population, self.selection_function)  # update distribution parameters
+                es.tell_pop(X, fitness_values, population, self.selection_function)  # update distribution parameters
             generation += 1
 
         es.disp(1)
@@ -520,7 +518,7 @@ class EppseaCMAES:
             s_results = ea_results.filter(selection_function=s)
             if self.config.get('CMAES', 'eppsea fitness assignment method') == 'adaptive':
                 if self.eppsea_fitness_assignment_method == 'best_fitness_reached':
-                    if len(list(r for r in s_results.results if r.termination_reason == 'target_fitness_hit')) / len (s_results.results) >= 0.5:
+                    if len(list(r for r in s_results.results if r.termination_reason == 'target_fitness_hit')) / len (s_results.results) >= 0.1:
                         self.log('At eval count {0}, eppsea fitness assignment changed to proportion_hitting_target_fitness'.format(self.eppsea.gp_evals))
                         self.eppsea_fitness_assignment_method = 'proportion_hitting_target_fitness'
                         for p in self.eppsea.population:
@@ -571,7 +569,7 @@ class EppseaCMAES:
                             final_evals.append(2 * max(r.evals) for r in fitness_function_results)
                     all_final_evals.append(statistics.mean(final_evals))
                 # assign fitness as -1 * the average of final eval counts
-                s.eppsea_selection_function.fitness = statistics.mean(all_final_evals)
+                s.eppsea_selection_function.fitness = -1 * statistics.mean(all_final_evals)
             else:
                 raise Exception('ERROR: fitness assignment method {0} not recognized by eppsea_basicEA'.format(self.eppsea_fitness_assignment_method))
 

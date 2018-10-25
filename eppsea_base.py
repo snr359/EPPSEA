@@ -371,38 +371,39 @@ class GPTree:
             # get the candidates with selectabilities
             candidates_with_selectabilities = self.get_selectabilities(candidates, len(population), generation_number)
             # if EPPSEA overflows at any point, just return random choices
+
+            # get the newly ordered lists of candidates and selectabilities
+            candidates, selectabilities = zip(*candidates_with_selectabilities)
+            candidates = list(candidates)
+            selectabilities = list(selectabilities)
+
+            # if we are doing stochastic universal sampling, select members all at once. Otherwise, select one at a time
+            if self.selection_type == 'stochastic_universal_sampling':
+                selected_members = self.stochastic_universal_sampling_selection(candidates, selectabilities, n)
+
+            elif self.selection_type == 'truncation':
+                selected_members = self.truncation_selection(candidates, selectabilities, n)
+
+            else:
+                selected_members = []
+                for i in range(n):
+                    if self.selection_type in ['proportional_replacement', 'proportional_no_replacement']:
+                        selected_member, selected_index = self.proportional_selection(candidates, selectabilities)
+                    elif self.selection_type in ['tournament_replacement', 'tournament_no_replacement']:
+                        selected_member, selected_index = self.tournament_selection(candidates, selectabilities, self.tournament_size)
+                    else:
+                        raise Exception('EPPSEA ERROR: selection type {0} not found'.format(self.selection_type))
+
+                    if self.selection_type in ['proportional_no_replacement','tournament_no_replacement']:
+                        candidates.pop(selected_index)
+                        selectabilities.pop(selected_index)
+
+                    selected_members.append(selected_member)
+
+            return selected_members
+
         except (OverflowError, FloatingPointError):
             return random.sample(candidates, n)
-
-        # get the newly ordered lists of candidates and selectabilities
-        candidates, selectabilities = zip(*candidates_with_selectabilities)
-        candidates = list(candidates)
-        selectabilities = list(selectabilities)
-
-        # if we are doing stochastic universal sampling, select members all at once. Otherwise, select one at a time
-        if self.selection_type == 'stochastic_universal_sampling':
-            selected_members = self.stochastic_universal_sampling_selection(candidates, selectabilities, n)
-
-        elif self.selection_type == 'truncation':
-            selected_members = self.truncation_selection(candidates, selectabilities, n)
-
-        else:
-            selected_members = []
-            for i in range(n):
-                if self.selection_type in ['proportional_replacement', 'proportional_no_replacement']:
-                    selected_member, selected_index = self.proportional_selection(candidates, selectabilities)
-                elif self.selection_type in ['tournament_replacement', 'tournament_no_replacement']:
-                    selected_member, selected_index = self.tournament_selection(candidates, selectabilities, self.tournament_size)
-                else:
-                    raise Exception('EPPSEA ERROR: selection type {0} not found'.format(self.selection_type))
-
-                if self.selection_type in ['proportional_no_replacement','tournament_no_replacement']:
-                    candidates.pop(selected_index)
-                    selectabilities.pop(selected_index)
-
-                selected_members.append(selected_member)
-
-        return selected_members
 
     def recombine(self, parent2):
         # recombines two GPTrees and returns a new child
@@ -634,7 +635,7 @@ class EppseaSelectionFunction:
         self.gp_trees = []
 
         # create each new tree (one for parent selection, one for survival selection)
-        for _ in range(2):
+        for _ in range(self.number_of_selectors):
             new_gp_tree = GPTree()
 
             new_gp_tree.constant_min = self.constant_min
