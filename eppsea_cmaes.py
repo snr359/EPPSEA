@@ -25,7 +25,7 @@ def run_cmaes_runner(cmaes_runner):
     final_best, final_cmaes, term_conditions = cmaes_runner.one_run()
     result = CMAES_Result()
     result.final_best_fitness = final_cmaes.best.f
-    result.eval_counts = final_cmaes.counteval
+    result.eval_counts = [final_cmaes.counteval]
 
     result.fitness_function = cmaes_runner.fitness_function
     result.fitness_function_id = cmaes_runner.fitness_function.id
@@ -561,12 +561,15 @@ class EppseaCMAES:
                 # loop through all fitness functions to get average evals to target fitness
                 all_final_evals = []
                 for fitness_function in s_results.fitness_functions:
+                    final_evals = []
                     fitness_function_results = s_results.filter(fitness_function=fitness_function)
-                    final_evals = list(max(r.evals) for r in fitness_function_results if r.termination_reason == 'target_fitness_hit')
-                    # for the runs where the target fitness was not hit, use an eval count equal to twice the maximum count
-                    for r in fitness_function_results:
-                        if r.termination_reason != 'target_fitness_hit':
-                            final_evals.append(2 * max(r.evals) for r in fitness_function_results)
+                    for r in fitness_function_results.results:
+                        if r.termination_reason == 'target_fitness_hit':
+                            final_evals.append(max(r.eval_counts))
+                        else:
+                            # for the runs where the target fitness was not hit, use an eval count equal to twice the maximum count
+                            final_evals.append(2 * self.config.getint('CMAES', 'maximum evaluations'))
+
                     all_final_evals.append(statistics.mean(final_evals))
                 # assign fitness as -1 * the average of final eval counts
                 s.eppsea_selection_function.fitness = -1 * statistics.mean(all_final_evals)
