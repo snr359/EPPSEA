@@ -737,11 +737,11 @@ class EA:
             if self.terminate_at_target_fitness:
                 if self.use_custom_target_fitness:
                     if any(p.fitness >= self.target_fitness for p in population):
-                        termination_reason = 'hit_target_fitness'
+                        termination_reason = 'target_fitness_hit'
                         break
                 else:
                     if self.fitness_function.fitness_target_hit():
-                        termination_reason = 'hit_target_fitness'
+                        termination_reason = 'target_fitness_hit'
                         break
 
             if self.terminate_on_population_convergence:

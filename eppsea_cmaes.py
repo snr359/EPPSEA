@@ -34,7 +34,7 @@ def run_cmaes_runner(cmaes_runner):
     result.selection_function_id = cmaes_runner.selection_function.id
 
     if 'ftarget' in term_conditions:
-        result.termination_reason = 'hit_target_fitness'
+        result.termination_reason = 'target_fitness_hit'
     elif 'maxfevals' in term_conditions:
         result.termination_reason = 'maximum_evaluations_reached'
     elif 'tolfun' in term_conditions or 'tolx' in term_conditions:
