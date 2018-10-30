@@ -2,6 +2,9 @@ import random
 import itertools
 import uuid
 import configparser
+import pickle
+import sys
+import os
 
 try:
     import cocoex
@@ -39,14 +42,13 @@ class FitnessFunction:
     def generate(self, config):
         # performs all first-time generation for a fitness function. Should be called once per unique fitness function
 
-        self.type = config.get('EA', 'fitness function')
+        self.type = config.get('fitness function', 'type')
         self.genome_type = self.genome_types.get(self.type, None)
 
         self.display_name = config.get('fitness function','display name')
 
         self.genome_length = config.getint('fitness function', 'genome length')
         self.max_initial_range = config.getfloat('fitness function', 'max initial range')
-        self.trap_size = config.getint('fitness function', 'trap size')
         self.epistasis_k = config.getint('fitness function', 'epistasis k')
         self.epistasis_m = config.getint('fitness function', 'epistasis m')
 
@@ -206,3 +208,29 @@ def generate_coco_functions(config_path, append_instance_number):
 
     return fitness_functions
 
+def save(fitness_function, filepath):
+    with open(filepath, 'wb') as file:
+        pickle.dump(fitness_function, file)
+
+def load(filepath):
+    with open(filepath, 'rb') as file:
+        fitness_function = pickle.load(file)
+    return fitness_function
+
+def main(config_path):
+    fitness_functions = generate_coco_functions(config_path, True)
+    save_directory = 'fitness_functions/coco_f{0}_d10'.format(fitness_functions[0].coco_function_index)
+    os.makedirs(save_directory, exist_ok=True)
+    for i, f in enumerate(fitness_functions):
+        save_path = '{0}/{1}'.format(save_directory, i)
+        save(f, save_path)
+
+if __name__ == '__main__':
+
+    if len(sys.argv) < 2:
+        print('Please provide config file')
+        exit(1)
+
+    config_path = sys.argv[1]
+
+    main(config_path)
