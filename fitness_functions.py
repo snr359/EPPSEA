@@ -33,6 +33,8 @@ class FitnessFunction:
         self.coco_function_id = None
         self.coco_function = None
 
+        self.id = None
+
         self.started = False
 
     def assign_id(self):
@@ -209,12 +211,53 @@ def generate_coco_functions(config_path, append_instance_number):
     return fitness_functions
 
 def save(fitness_function, filepath):
+    info_dict = dict()
+
+    info_dict['type'] = fitness_function.type
+    info_dict['display_name'] = fitness_function.display_name
+    info_dict['genome_type'] = fitness_function.genome_type
+    info_dict['genome_length'] = fitness_function.genome_length
+    info_dict['max_initial_range'] = fitness_function.max_initial_range
+
+    info_dict['epistasis_k'] = fitness_function.epistasis_k
+    info_dict['epistasis'] = fitness_function.epistasis
+    info_dict['loci_values'] = fitness_function.loci_values
+
+    info_dict['coco_function_index'] = fitness_function.coco_function_index
+    info_dict['coco_function_id'] = fitness_function.coco_function_id
+    info_dict['coco_function'] = fitness_function.coco_function
+
+    info_dict['id'] = fitness_function.id
+
+    info_dict['started'] = fitness_function.started
+
     with open(filepath, 'wb') as file:
-        pickle.dump(fitness_function, file)
+        pickle.dump(info_dict, file)
 
 def load(filepath):
     with open(filepath, 'rb') as file:
-        fitness_function = pickle.load(file)
+        info_dict = pickle.load(file)
+
+    fitness_function = FitnessFunction()
+
+    fitness_function.type = info_dict['type']
+    fitness_function.display_name = info_dict['display_name']
+    fitness_function.genome_type = info_dict['genome_type']
+    fitness_function.genome_length = info_dict['genome_length']
+    fitness_function.max_initial_range = info_dict['max_initial_range']
+
+    fitness_function.epistasis_k = info_dict['epistasis_k']
+    fitness_function.epistasis = info_dict['epistasis']
+    fitness_function.loci_values = info_dict['loci_values']
+
+    fitness_function.coco_function_index = info_dict['coco_function_index']
+    fitness_function.coco_function_id = info_dict['coco_function_id']
+    fitness_function.coco_function = info_dict['coco_function']
+
+    fitness_function.id = info_dict['id']
+
+    fitness_function.started = info_dict['started']
+
     return fitness_function
 
 def main(config_path):
@@ -231,6 +274,7 @@ if __name__ == '__main__':
         print('Please provide config file')
         exit(1)
 
-    config_path = sys.argv[1]
+    config_paths = sys.argv[1:]
 
-    main(config_path)
+    for config_path in config_paths:
+        main(config_path)

@@ -3,7 +3,6 @@ from eppsea_basicEA import SelectionFunction
 import math
 import random
 import statistics
-import itertools
 import sys
 import configparser
 import os
@@ -12,12 +11,9 @@ import multiprocessing
 import time
 import datetime
 import pickle
-import json
-import uuid
-
-import cocoex
 
 import eppsea_base
+import fitness_functions as ff
 
 from pycma.cma import purecma
 
@@ -102,77 +98,6 @@ class CMAES_ResultCollection:
         # create a new result collection with the filtered results and return it
         new_collection = CMAES_ResultCollection(filtered_results)
         return new_collection
-
-
-class FitnessFunction:
-    genome_types = {
-        'rastrigin': 'float',
-        'rosenbrock': 'float',
-        'dtrap': 'bool',
-        'nk_landscape': 'bool',
-        'mk_landscape': 'bool',
-        'coco': 'float'
-    }
-
-    def __init__(self):
-        self.name = None
-        self.genome_type = None
-        self.genome_length = None
-        self.max_initial_range = None
-
-        self.coco_function_index = None
-        self.coco_function_id = None
-        self.coco_function = None
-
-        self.started = False
-
-    def __hash__(self):
-        return hash(self.id)
-
-    def assign_id(self):
-        # assigns a random id to self. Every unique Fitness Function should call this once
-        self.id = '{0}_{1}_{2}'.format('FitnessFunction', str(id(self)), str(uuid.uuid4()))
-
-    def generate(self, config):
-        # performs all first-time generation for a fitness function. Should be called once per unique fitness function
-        self.genome_type = self.genome_types.get(self.name, None)
-
-        self.genome_length = config.getint('fitness function', 'genome length')
-        self.max_initial_range = config.getfloat('fitness function', 'max initial range')
-
-        self.coco_function_index = config.getint('fitness function', 'coco function index')
-
-        self.assign_id()
-
-    def start(self):
-        # should be called once at the start of each search
-        suite = cocoex.Suite('bbob', '', 'dimensions:{0}, function_indices:{1}'.format(self.genome_length, self.coco_function_index))
-        self.coco_function = suite.get_problem(self.coco_function_id)
-        self.started = True
-
-    def finish(self):
-        # should be called once at the end of each EA
-        self.coco_function = None
-        self.started = False
-
-    def random_genome(self):
-        # generates and returns a random genome
-
-        # generate a new genome
-        genome = []
-
-        # generate values and append to the genome
-        for _ in range(self.genome_length):
-            genome.append(random.uniform(-self.max_initial_range, self.max_initial_range))
-
-        # return the new genome
-        return genome
-
-    def fitness_target_hit(self):
-        return self.coco_function.final_target_hit
-
-    def evaluate(self, genome):
-        return self.coco_function(genome)
 
 class ModifiedCMAES(purecma.CMAES):
     def tell_pop(self, arx, fitvals, population, selection_function):
@@ -268,7 +193,7 @@ class CMAES_runner:
             self.birth_generation = None
 
     def one_run(self, basic=False):
-        start = list(random.uniform(-5, 5) for _ in range(self.fitness_function.genome_length))
+        start = self.fitness_function.random_genome()
         init_sigma = 0.5
         max_evals = self.config.getint('CMAES', 'maximum evaluations')
 
@@ -353,99 +278,32 @@ class EppseaCMAES:
             log_file.write(message + '\n')
 
     def prepare_fitness_functions(self, config):
-        # generates the fitness functions to be used in the EAs
-
-        # count the number of available function indices
-        genome_length = config.getint('fitness function', 'genome length')
-        if genome_length not in [2, 3, 5, 10, 20, 40]:
-            print('WARNING: genome length {0} may not be supported by coco'.format(genome_length))
-        coco_function_index = config.get('fitness function', 'coco function index')
-        suite = cocoex.Suite('bbob', '', 'dimensions:{0}, function_indices:{1}'.format(genome_length, coco_function_index))
-        coco_ids = list(suite.ids())
-
-        # get the number of training and testing fitness functions to be used
-        self.num_training_fitness_functions = config.getint('CMAES', 'num training fitness functions')
-        if config.getboolean('CMAES', 'test generalization'):
-            self.num_testing_fitness_functions = config.getint('CMAES', 'num testing fitness functions')
-            # if we are using coco and testing fitness functions is -1, automatically use remaining instances as test functions
-            if self.num_testing_fitness_functions == -1:
-                self.num_testing_fitness_functions = len(coco_ids) - self.num_training_fitness_functions
-        else:
-            self.num_testing_fitness_functions = 0
-
-        self.training_fitness_functions = []
-        training_fitness_function_path = config.get('CMAES', 'fitness function training instances directory')
-        self.testing_fitness_functions = []
-        testing_fitness_function_path = config.get('CMAES', 'fitness function testing instances directory')
-
-        # shuffle coco indeces so there is no bias in assigning training vs testing functions
-        if coco_ids is not None:
-            random.shuffle(coco_ids)
+        # loads the fitness functions to be used in the EAs
+        fitness_function_config_path = config.get('CMAES', 'fitness function config path')
+        fitness_function_config = configparser.ConfigParser()
+        fitness_function_config.read(fitness_function_config_path)
+        fitness_function_directory = config.get('CMAES', 'fitness function directory')
 
         if config.getboolean('CMAES', 'generate new fitness functions'):
-            for i in range(self.num_training_fitness_functions):
-                new_fitness_function = FitnessFunction()
-                new_fitness_function.generate(config)
-                new_fitness_function.coco_function_id = coco_ids.pop()
-                self.training_fitness_functions.append(new_fitness_function)
-
-            for i in range(self.num_testing_fitness_functions):
-                new_fitness_function = FitnessFunction()
-                new_fitness_function.generate(config)
-                new_fitness_function.coco_function_id = coco_ids.pop()
-                self.testing_fitness_functions.append(new_fitness_function)
-
-            if config.getboolean('CMAES', 'save generated fitness functions'):
-                os.makedirs(training_fitness_function_path, exist_ok=True)
-                for i, f in enumerate(self.training_fitness_functions):
-                    filepath = '{0}/training{1}'.format(training_fitness_function_path, i)
-                    with open(filepath, 'wb') as file:
-                        pickle.dump(f, file)
-
-                os.makedirs(testing_fitness_function_path, exist_ok=True)
-                for i, f in enumerate(self.testing_fitness_functions):
-                    filepath = '{0}/testing{1}'.format(testing_fitness_function_path, i)
-                    with open(filepath, 'wb') as file:
-                        pickle.dump(f, file)
+            prepared_fitness_functions = ff.generate_coco_functions(fitness_function_config_path, True)
+            os.makedirs(fitness_function_directory, exist_ok=True)
+            for i, f in enumerate(prepared_fitness_functions):
+                save_path = '{0}/{1}'.format(fitness_function_directory, i)
+                ff.save(f, save_path)
 
         else:
-            if not os.path.exists(training_fitness_function_path):
-                raise Exception('ERROR: Attempting to load fitness functions from non-existent path {0}'.format(
-                    training_fitness_function_path))
+            prepared_fitness_functions = []
+            for fitness_function_path in sorted(os.listdir(fitness_function_directory)):
+                full_fitness_function_path = '{0}/{1}'.format(fitness_function_directory, fitness_function_path)
+                with open(full_fitness_function_path, 'rb') as file:
+                    prepared_fitness_functions.append(ff.load(full_fitness_function_path))
 
-            training_fitness_function_files = sorted(os.listdir(training_fitness_function_path))
-            for filepath in training_fitness_function_files:
-                try:
-                    full_filepath = '{0}/{1}'.format(training_fitness_function_path, filepath)
-                    with open(full_filepath, 'rb') as file:
-                        self.training_fitness_functions.append(pickle.load(file))
-                except (pickle.PickleError, pickle.PickleError, ImportError, AttributeError):
-                    print('Failed to load fitness function at {0}, possibly not a saved fitness function'.format(
-                        filepath))
-                    pass
-
-                if len(self.training_fitness_functions) == self.num_training_fitness_functions:
-                    break
-
-            if config.getboolean('CMAES', 'test generalization'):
-
-                if not os.path.exists(testing_fitness_function_path):
-                    raise Exception('ERROR: Attempting to load fitness functions from non-existent path {0}'.format(
-                        testing_fitness_function_path))
-
-                testing_fitness_function_files = sorted(os.listdir(testing_fitness_function_path))
-                for filepath in testing_fitness_function_files:
-                    try:
-                        full_filepath = '{0}/{1}'.format(testing_fitness_function_path, filepath)
-                        with open(full_filepath, 'rb') as file:
-                            self.testing_fitness_functions.append(pickle.load(file))
-                    except (pickle.PickleError, pickle.PickleError, ImportError, AttributeError):
-                        print('Failed to load fitness function at {0}, possibly not a saved fitness function'.format(
-                            filepath))
-                        pass
-
-                    if len(self.testing_fitness_functions) == self.num_testing_fitness_functions:
-                        break
+        # sample a spread of the loaded fitness functions
+        self.training_fitness_functions = (prepared_fitness_functions[0], prepared_fitness_functions[-1], prepared_fitness_functions[5])
+        if self.test_generalization:
+            self.testing_fitness_functions = list(f for f in prepared_fitness_functions if f not in self.training_fitness_functions)
+        else:
+            self.testing_fitness_functions = None
 
     def get_cmaes_runners(self, fitness_functions, selection_functions):
         # this prepares and returns a list of cmaes_runners for the provided selection functions
