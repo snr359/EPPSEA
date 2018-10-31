@@ -125,8 +125,7 @@ class FitnessFunction:
         return result
 
     def coco(self, x):
-        # multiply by -1 since coco functions are minimization functions
-        return -1 * self.coco_function(x)
+        return self.coco_function(x)
 
     def generate_nk_epistatis(self, n, k):
         loci_values = dict()

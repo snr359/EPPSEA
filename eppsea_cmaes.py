@@ -295,8 +295,7 @@ class EppseaCMAES:
             prepared_fitness_functions = []
             for fitness_function_path in sorted(os.listdir(fitness_function_directory)):
                 full_fitness_function_path = '{0}/{1}'.format(fitness_function_directory, fitness_function_path)
-                with open(full_fitness_function_path, 'rb') as file:
-                    prepared_fitness_functions.append(ff.load(full_fitness_function_path))
+                prepared_fitness_functions.append(ff.load(full_fitness_function_path))
 
         # sample a spread of the loaded fitness functions
         self.training_fitness_functions = (prepared_fitness_functions[0], prepared_fitness_functions[-1], prepared_fitness_functions[5])
