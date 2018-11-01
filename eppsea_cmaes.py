@@ -1,7 +1,6 @@
 from eppsea_basicEA import SelectionFunction
 
 import math
-import random
 import statistics
 import sys
 import configparser
@@ -11,6 +10,7 @@ import multiprocessing
 import time
 import datetime
 import pickle
+import subprocess
 
 import eppsea_base
 import fitness_functions as ff
@@ -18,86 +18,58 @@ import fitness_functions as ff
 from pycma.cma import purecma
 
 def run_cmaes_runner(cmaes_runner):
-    final_best, final_cmaes, term_conditions = cmaes_runner.one_run()
-    result = CMAES_Result()
-    result.final_best_fitness = final_cmaes.best.f
-    result.eval_counts = [final_cmaes.counteval]
-
-    result.fitness_function = cmaes_runner.fitness_function
-    result.fitness_function_id = cmaes_runner.fitness_function.id
-
-    result.selection_function = cmaes_runner.selection_function
-    result.selection_function_id = cmaes_runner.selection_function.id
-
-    if 'ftarget' in term_conditions:
-        result.termination_reason = 'target_fitness_hit'
-    elif 'maxfevals' in term_conditions:
-        result.termination_reason = 'maximum_evaluations_reached'
-    elif 'tolfun' in term_conditions or 'tolx' in term_conditions:
-        result.termination_reason = 'fitness_convergence'
+    result = cmaes_runner.one_run()
 
     return result
 
+def run_basic_cmaes_runner(cmaes_runner):
+    result = cmaes_runner.one_run(basic=True)
+
+    return result
+
+def export_results(results, file_path):
+    # exports a list of CMAES_Result objects to a file_path for postprocessing
+    run_dicts = list(r.export() for r in results)
+    with open(file_path, 'wb') as file:
+        pickle.dump(run_dicts, file)
 
 class CMAES_Result:
     # a class for holding the results of a single run of a cmaes
     def __init__(self):
-        self.eval_counts = []
+        self.eval_counts = None
+        self.fitnesses = None
+        self.average_fitnesses = None
+        self.best_fitnesses = None
         self.final_best_fitness = None
         self.termination_reason = None
 
-        self.selection_function_name = None
+        self.selection_function_display_name = None
         self.selection_function_id = None
+        self.selection_function_was_evolved = None
+        self.selection_function_eppsea_string = None
 
-        self.fitness_function_name = None
+        self.fitness_function_display_name = None
         self.fitness_function_id = None
 
+    def export(self):
+        info_dict = dict()
 
-class CMAES_ResultCollection:
-    # a class for holding the results of several cmaes runs
-    def __init__(self, results=None):
-        self.results = []
-        self.fitness_functions = list()
-        self.selection_functions = list()
+        info_dict['eval_counts'] = self.eval_counts
+        info_dict['fitnesses'] = self.fitnesses
+        info_dict['average_fitnesses'] = self.average_fitnesses
+        info_dict['best_fitnesses'] = self.best_fitnesses
+        info_dict['final_best_fitness'] = self.final_best_fitness
+        info_dict['termination_reason'] = self.termination_reason
 
-        if results is not None:
-            self.add(results)
+        info_dict['selection_function_display_name'] = self.selection_function_display_name
+        info_dict['selection_function_id'] = self.selection_function_id
+        info_dict['selection_function_was_evolved'] = self.selection_function_was_evolved
+        info_dict['selection_function_eppsea_string'] = self.selection_function_eppsea_string
 
-    def add(self, new_results):
-        # adds a list of new results to the result collection
-        self.results.extend(new_results)
-        for r in new_results:
-            if not any(r.selection_function.id == s.id for s in self.selection_functions):
-                self.selection_functions.append(r.selection_function)
-            if not any(r.fitness_function.id == f.id for f in self.fitness_functions):
-                self.fitness_functions.append(r.fitness_function)
+        info_dict['fitness_function_display_name'] = self.fitness_function_display_name
+        info_dict['fitness_function_id'] = self.fitness_function_id
 
-    def get_eval_counts(self):
-        all_counts = set()
-        for r in self.results:
-            counts = r.eval_counts
-            all_counts.update(counts)
-        return sorted(list(all_counts))
-
-    def filter(self, selection_function=None, fitness_function=None):
-        # this returns a new instance of EAResultCollection, with a subset of the EAResults in results
-        # if selection_function is provided, it keeps only the results with a matching selection_function
-        # if fitness_function is provided, it keeps only the results with a matching selection_function
-
-        # filter by selection function id, fitness function id, or both
-        if selection_function is not None and fitness_function is not None:
-            filtered_results = list(r for r in self.results if r.selection_function.id == selection_function.id
-                                    and r.fitness_function.id == fitness_function.id)
-        elif selection_function is not None:
-            filtered_results = list(r for r in self.results if r.selection_function.id == selection_function.id)
-        elif fitness_function is not None:
-            filtered_results = list(r for r in self.results if r.fitness_function.id == fitness_function.id)
-        else:
-            filtered_results = list(self.results)
-
-        # create a new result collection with the filtered results and return it
-        new_collection = CMAES_ResultCollection(filtered_results)
-        return new_collection
+        return info_dict
 
 class ModifiedCMAES(purecma.CMAES):
     def tell_pop(self, arx, fitvals, population, selection_function):
@@ -196,28 +168,42 @@ class CMAES_runner:
         start = self.fitness_function.random_genome()
         init_sigma = 0.5
         max_evals = self.config.getint('CMAES', 'maximum evaluations')
+        population_size = self.config.getint('CMAES', 'population size')
 
-        es = ModifiedCMAES(start, init_sigma, maxfevals=max_evals, popsize=100)
+        es = ModifiedCMAES(start, init_sigma, maxfevals=max_evals, popsize=population_size)
         es.fitness_function = self.fitness_function
 
         self.fitness_function.start()
 
         generation = 0
 
+        result = CMAES_Result()
+
+        result.eval_counts = []
+        result.fitnesses = dict()
+        result.average_fitnesses = dict()
+        result.best_fitnesses = dict()
+
         while not es.stop():
             X = es.ask()  # get a list of sampled candidate solutions
             fitness_values = list(self.fitness_function.evaluate(x) for x in X)
-            population = []
-            for x, fit in zip(X, fitness_values):
-                new_popi = self.Popi()
-                new_popi.genome = x
-                new_popi.fitness = -1 * fit #eppsea assumes fitness maximization
-                new_popi.birth_generation = generation
-                population.append(new_popi)
             if basic:
                 es.tell(X, fitness_values)
             else:
+                population = []
+                for x, fit in zip(X, fitness_values):
+                    new_popi = self.Popi()
+                    new_popi.genome = x
+                    new_popi.fitness = -1 * fit  # eppsea assumes fitness maximization
+                    new_popi.birth_generation = generation
+                    population.append(new_popi)
                 es.tell_pop(X, fitness_values, population, self.selection_function)  # update distribution parameters
+
+            result.eval_counts.append(es.counteval)
+            result.fitnesses[es.counteval] = fitness_values
+            result.average_fitnesses[es.counteval] = statistics.mean(fitness_values)
+            result.best_fitnesses[es.counteval] = max(fitness_values)
+
             generation += 1
 
         es.disp(1)
@@ -226,10 +212,26 @@ class CMAES_runner:
         print('best f-value =', es.result[1])
         print('solution =', es.result[0])
 
-        if es.best.f < self.fitness_function.evaluate(es.xmean):
-            result = [es.best.x, es, term_conditions]
+        result.fitness_function_display_name = self.fitness_function.display_name
+        result.fitness_function_id = self.fitness_function.id
+        if basic:
+            result.selection_function_was_evolved = False
+            result.selection_function_display_name = 'Basic CMAES'
+            result.selection_function_id = 'Basic_CMAES'
         else:
-            result = [es.xmean, es, term_conditions]
+            result.selection_function_was_evolved = True
+            result.selection_function_display_name = self.selection_function.display_name
+            result.selection_function_id = self.selection_function.id
+            result.selection_function_eppsea_string = self.selection_function.eppsea_selection_function.get_string()
+
+        if 'ftarget' in term_conditions:
+            result.termination_reason = 'target_fitness_hit'
+        elif 'maxfevals' in term_conditions:
+            result.termination_reason = 'maximum_evaluations_reached'
+        elif 'tolfun' in term_conditions or 'tolx' in term_conditions:
+            result.termination_reason = 'fitness_convergence'
+
+        result.final_best_fitness = max(es.best.f, self.fitness_function.evaluate(es.xmean))
 
         self.fitness_function.finish()
 
@@ -259,6 +261,7 @@ class EppseaCMAES:
         self.training_fitness_functions = None
         self.testing_fitness_functions = None
 
+
         if config.get('CMAES', 'eppsea fitness assignment method') == 'best fitness reached' or config.get('CMAES', 'eppsea fitness assignment method') == 'adaptive':
             self.eppsea_fitness_assignment_method = 'best_fitness_reached'
         elif config.get('CMAES', 'eppsea fitness assignment method') == 'proportion hitting target fitness':
@@ -269,6 +272,7 @@ class EppseaCMAES:
             raise Exception('ERROR: eppsea fitness assignment method {0} not recognized!'.format(config.get('EA', 'eppsea fitness assignment method')))
 
         self.eppsea = None
+        self.final_test_results = None
 
         self.prepare_fitness_functions(config)
 
@@ -318,6 +322,14 @@ class EppseaCMAES:
 
         return result
 
+    def get_basic_cmaes_runners(self, fitness_functions):
+        result = list()
+
+        for fitness_function in fitness_functions:
+            result.append(CMAES_runner(self.config, fitness_function, None))
+
+        return result
+
     def run_cmaes_runners(self, eas, is_testing):
         # runs each of the eas for the configured number of runs, returning one result_holder for each ea
         all_run_results = []
@@ -351,7 +363,42 @@ class EppseaCMAES:
                 for r in range(runs):
                     all_run_results.append(run_cmaes_runner(ea))
 
-        return CMAES_ResultCollection(all_run_results)
+        return all_run_results
+
+    def run_basic_cmaes_runners(self, eas, is_testing):
+        # runs each of the eas for the configured number of runs, returning one result_holder for each ea
+        all_run_results = []
+
+        if is_testing:
+            runs = self.testing_runs
+        else:
+            runs = self.training_runs
+
+        if self.using_multiprocessing:
+            # setup parameters for multiprocessing
+            params = []
+            for ea in eas:
+                params.extend([ea]*runs)
+            # run all runs
+            pool = multiprocessing.Pool()
+            results = pool.map(run_basic_cmaes_runner, params)
+            pool.close()
+
+            # split up results by ea
+            for i in range(len(eas)):
+                start = i * runs
+                stop = (i + 1) * runs
+
+                run_results = results[start:stop]
+
+                all_run_results.extend(run_results)
+
+        else:
+            for ea in eas:
+                for r in range(runs):
+                    all_run_results.append(run_basic_cmaes_runner(ea))
+
+        return all_run_results
 
     def evaluate_eppsea_population(self, eppsea_population, is_testing):
         # evaluates a population of eppsea individuals and assigns fitness values to them
@@ -371,11 +418,12 @@ class EppseaCMAES:
         self.assign_eppsea_fitness(selection_functions, ea_results)
 
     def assign_eppsea_fitness(self, selection_functions, ea_results):
+        fitness_function_ids = set(r.fitness_function_id for r in ea_results)
         for s in selection_functions:
-            s_results = ea_results.filter(selection_function=s)
+            s_results = list(r for r in ea_results if r.selection_function_id == s.id)
             if self.config.get('CMAES', 'eppsea fitness assignment method') == 'adaptive':
                 if self.eppsea_fitness_assignment_method == 'best_fitness_reached':
-                    if len(list(r for r in s_results.results if r.termination_reason == 'target_fitness_hit')) / len (s_results.results) >= 0.1:
+                    if len(list(r for r in s_results if r.termination_reason == 'target_fitness_hit')) / len (s_results) >= 0.1:
                         self.log('At eval count {0}, eppsea fitness assignment changed to proportion_hitting_target_fitness'.format(self.eppsea.gp_evals))
                         self.eppsea_fitness_assignment_method = 'proportion_hitting_target_fitness'
                         for p in self.eppsea.population:
@@ -385,7 +433,7 @@ class EppseaCMAES:
                         self.eppsea.highest_average_fitness = -math.inf
                         self.eppsea.highest_best_fitness = -math.inf
                 if self.eppsea_fitness_assignment_method == 'proportion_hitting_target_fitness':
-                    if len(list(r for r in s_results.results if r.termination_reason == 'target_fitness_hit')) / len(s_results.results) >= .95:
+                    if len(list(r for r in s_results if r.termination_reason == 'target_fitness_hit')) / len(s_results) >= .95:
                         self.log('At eval count {0}, eppsea fitness assignment changed to evals_to_target_fitness'.format(self.eppsea.gp_evals))
                         self.eppsea_fitness_assignment_method = 'evals_to_target_fitness'
                         for p in self.eppsea.population:
@@ -398,29 +446,31 @@ class EppseaCMAES:
         # loop through the selection functions containing the eppsea individuals
         for s in selection_functions:
             # filter out the ea runs associated with this individual
-            s_results = ea_results.filter(selection_function=s)
+            s_results = list(r for r in ea_results if r.selection_function_id == s.id)
 
             if self.eppsea_fitness_assignment_method == 'best_fitness_reached':
                 # loop through all fitness functions to get average final best fitnesses
                 average_final_best_fitnesses = []
-                for fitness_function in s_results.fitness_functions:
-                    fitness_function_results = s_results.filter(fitness_function=fitness_function)
-                    final_best_fitnesses = (r.final_best_fitness for r in fitness_function_results.results)
+                for fitness_function_id in fitness_function_ids:
+                    fitness_function_results = list(r for r in s_results if r.fitness_function_id == fitness_function_id)
+                    final_best_fitnesses = (r.final_best_fitness for r in fitness_function_results)
                     average_final_best_fitnesses.append(statistics.mean(final_best_fitnesses))
-                # assign fitness as -1 times the average of the average final best fitnesses or, if multiobjective ea is on, the list of average final best fitnesses
+                # assign fitness as -1 times the average of the average final best fitnesses
                 s.eppsea_selection_function.fitness = -1 * statistics.mean(average_final_best_fitnesses)
+                if s.eppsea_selection_function.fitness == float('-inf'):
+                    s.eppsea_selection_function.fitness = -9999999999999
 
             elif self.eppsea_fitness_assignment_method == 'proportion_hitting_target_fitness':
                 # assign the fitness as the proportion of runs that hit the target fitness
-                s.eppsea_selection_function.fitness = len(list(r for r in s_results.results if r.termination_reason == 'target_fitness_hit')) / len (s_results.results)
+                s.eppsea_selection_function.fitness = len(list(r for r in s_results if r.termination_reason == 'target_fitness_hit')) / len (s_results)
 
             elif self.eppsea_fitness_assignment_method == 'evals_to_target_fitness':
                 # loop through all fitness functions to get average evals to target fitness
                 all_final_evals = []
-                for fitness_function in s_results.fitness_functions:
+                for fitness_function_id in fitness_function_ids:
                     final_evals = []
-                    fitness_function_results = s_results.filter(fitness_function=fitness_function)
-                    for r in fitness_function_results.results:
+                    fitness_function_results = list(r for r in s_results if r.fitness_function_id == fitness_function_id)
+                    for r in fitness_function_results:
                         if r.termination_reason == 'target_fitness_hit':
                             final_evals.append(max(r.eval_counts))
                         else:
@@ -432,6 +482,33 @@ class EppseaCMAES:
                 s.eppsea_selection_function.fitness = -1 * statistics.mean(all_final_evals)
             else:
                 raise Exception('ERROR: fitness assignment method {0} not recognized by eppsea_basicEA'.format(self.eppsea_fitness_assignment_method))
+
+    def run_final_tests(self, best_selection_function):
+        if self.config.get('CMAES', 'test generalization'):
+            fitness_functions = self.testing_fitness_functions
+        else:
+            fitness_functions = self.training_fitness_functions
+
+        eppsea_selection_function = SelectionFunction()
+        eppsea_selection_function.generate_from_eppsea_individual(best_selection_function)
+
+        cmaess = self.get_cmaes_runners(fitness_functions, [eppsea_selection_function])
+        cmaes_results = self.run_cmaes_runners(cmaess, True)
+
+        basic_cmaess = self.get_basic_cmaes_runners(fitness_functions)
+        basic_cmaess_results = self.run_basic_cmaes_runners(basic_cmaess, True)
+
+        return cmaes_results + basic_cmaess_results
+
+    def save_final_results(self, final_results):
+        file_path = self.results_directory + '/final_results'
+        with open(file_path, 'wb') as file:
+            pickle.dump(list(f.export() for f in final_results), file)
+
+    def postprocess(self):
+        postprocess_args = ['python3', 'post_process.py', self.results_directory, self.results_directory + '/final_results']
+        output = subprocess.run(postprocess_args, stdout=subprocess.PIPE, universal_newlines=True).stdout
+        return output
 
     def run_eppsea_cmaes(self):
         print('Now starting EPPSEA')
@@ -449,13 +526,14 @@ class EppseaCMAES:
 
         best_selection_function = eppsea.final_best_member
 
-        #print('Running final tests')
-        #self.final_test_results = self.test_against_basic_cmaes(best_selection_function)
+        print('Running final tests')
+        self.final_test_results = self.run_final_tests(best_selection_function)
+        self.save_final_results(self.final_test_results)
 
-        #self.log('Running Postprocessing')
-        #postprocess_results = self.postprocess(self.final_test_results)
-        #self.log('Postprocess results:')
-        #self.log(postprocess_results)
+        self.log('Running Postprocessing')
+        postprocess_results = self.postprocess()
+        self.log('Postprocess results:')
+        self.log(postprocess_results)
 
         eppsea_base_results_path = eppsea.results_directory
         shutil.copytree(eppsea_base_results_path, self.results_directory + '/base')
@@ -468,13 +546,8 @@ def main(config_path):
     config.read(config_path)
 
     evaluator = EppseaCMAES(config)
-    #shutil.copy(config_path, '{0}/config.cfg'.format(evaluator.results_directory))
+    shutil.copy(config_path, '{0}/config.cfg'.format(evaluator.results_directory))
     evaluator.run_eppsea_cmaes()
-
-    # pickle the entire eppsea_basicEA object, and separately the base selection function found and a config file for it, and the final test results
-    #evaluator_pickle_path = '{0}/EppseaBasicEA'.format(evaluator.results_directory)
-    #with open(evaluator_pickle_path, 'wb') as pickle_file:
-    #    pickle.dump(evaluator, pickle_file)
 
 
 if __name__ == '__main__':
