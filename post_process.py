@@ -133,9 +133,9 @@ def main(final_output_directory, results_file_paths):
 
                     if p_fitness < 0.05:
                         if mean_difference_fitness > 0:
-                            print('\t\t{0} performed {1} better | p-value: {2}\n'.format(selection_function_name1,mean_difference_fitness,p_fitness))
+                            print('\t\t{0} performed {1} higher | p-value: {2}\n'.format(selection_function_name1,mean_difference_fitness,p_fitness))
                         else:
-                            print('\t\t{0} performed {1} worse | p-value: {2}\n'.format(selection_function_name1,mean_difference_fitness,p_fitness))
+                            print('\t\t{0} performed {1} lower | p-value: {2}\n'.format(selection_function_name1,mean_difference_fitness,p_fitness))
                     else:
                         print('\t\t{0} performance difference is insignificant | p-value: {1}\n'.format(selection_function_name1, p_fitness))
 
@@ -143,17 +143,12 @@ def main(final_output_directory, results_file_paths):
                     final_target_evals2 = list(max(r['eval_counts']) for r in selection_function_target_results2)
 
                     if len(final_target_evals1) > 0 and len(final_target_evals2) > 0:
-
-                        _, p_evals = scipy.stats.ttest_rel(final_target_evals1, final_target_evals2)
                         mean_difference_evals = round(statistics.mean(final_target_evals1) - statistics.mean(final_target_evals2), 5)
 
-                        if p_evals < 0.05:
-                            if mean_difference_evals < 0:
-                                print('\t\t{0} used {1} fewer evals to hit target fitness | p-value: {2}\n'.format(selection_function_name1,mean_difference_evals,p_evals))
-                            else:
-                                print('\t\t{0} used {1} more evals to hit target fitness | p-value: {2}\n'.format(selection_function_name1,mean_difference_evals,p_evals))
+                        if mean_difference_evals < 0:
+                            print('\t\t{0} used {1} fewer evals to hit target fitness\n'.format(selection_function_name1,mean_difference_evals))
                         else:
-                            print('\t\t{0} difference in eval count to target fitness is insignificant | p-value: {1}\n'.format(selection_function_name1, p_evals))
+                            print('\t\t{0} used {1} more evals to hit target fitness\n'.format(selection_function_name1,mean_difference_evals))
 
                     tested_pairs.append((selection_function_id1, selection_function_id2))
 
