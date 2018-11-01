@@ -12,8 +12,10 @@ import datetime
 import pickle
 import json
 import uuid
+import subprocess
 
 import eppsea_base
+import fitness_functions as ff
 
 try:
     import cocoex
@@ -31,25 +33,45 @@ def run_ea(ea):
     result = ea.one_run()
     return result
 
-def run_hill_climber(fitness_function, iterations):
-    result = fitness_function.hill_climber(iterations)
-    return result
-
 class EAResult:
     # a class for holding the results of a single run of an EA
     def __init__(self):
-        self.eval_counts = []
-        self.average_fitness = dict()
-        self.best_fitnesses = dict()
-        self.final_average_fitness = None
+        self.eval_counts = None
+        self.fitnesses = None
+        self.average_fitnesses = None
+        self.best_fitnesses = None
         self.final_best_fitness = None
         self.termination_reason = None
 
-        self.selection_function_name = None
+        self.selection_function = None
+        self.selection_function_display_name = None
         self.selection_function_id = None
-        
-        self.fitness_function_name = None
+        self.selection_function_was_evolved = None
+        self.selection_function_eppsea_string = None
+
+        self.fitness_function = None
+        self.fitness_function_display_name = None
         self.fitness_function_id = None
+
+    def export(self):
+        info_dict = dict()
+
+        info_dict['eval_counts'] = self.eval_counts
+        info_dict['fitnesses'] = self.fitnesses
+        info_dict['average_fitnesses'] = self.average_fitnesses
+        info_dict['best_fitnesses'] = self.best_fitnesses
+        info_dict['final_best_fitness'] = self.final_best_fitness
+        info_dict['termination_reason'] = self.termination_reason
+
+        info_dict['selection_function_display_name'] = self.selection_function_display_name
+        info_dict['selection_function_id'] = self.selection_function_id
+        info_dict['selection_function_was_evolved'] = self.selection_function_was_evolved
+        info_dict['selection_function_eppsea_string'] = self.selection_function_eppsea_string
+
+        info_dict['fitness_function_display_name'] = self.fitness_function_display_name
+        info_dict['fitness_function_id'] = self.fitness_function_id
+
+        return info_dict
 
 class EAResultCollection:
     # a class for holding the results of several EA runs
@@ -97,351 +119,8 @@ class EAResultCollection:
         new_collection = EAResultCollection(filtered_results)
         return new_collection
 
-
-class FitnessFunction:
-    genome_types = {
-        'rastrigin': 'float',
-        'rosenbrock': 'float',
-        'dtrap': 'bool',
-        'nk_landscape': 'bool',
-        'mk_landscape': 'bool',
-        'coco': 'float'
-    }
-
-    def __init__(self):
-        self.name = None
-        self.genome_type = None
-        self.genome_length = None
-        self.max_initial_range = None
-        self.trap_size = None
-
-        self.fitness_function_a = None
-        self.epistasis_k = None
-
-        self.fitness_function_offset = None
-        self.loci_values = None
-        self.epistasis = None
-
-        self.coco_function_index = None
-        self.coco_function_id = None
-        self.coco_function = None
-
-        self.started = False
-
-    def __hash__(self):
-        return hash(self.id)
-
-    def assign_id(self):
-        # assigns a random id to self. Every unique Fitness Function should call this once
-        self.id = '{0}_{1}_{2}'.format('FitnessFunction', str(id(self)), str(uuid.uuid4()))
-
-    def generate(self, config):
-        # performs all first-time generation for a fitness function. Should be called once per unique fitness function
-
-        self.name = config.get('EA', 'fitness function')
-        self.genome_type = self.genome_types.get(self.name, None)
-
-        self.genome_length = config.getint('fitness function', 'genome length')
-        self.fitness_function_a = config.getfloat('fitness function', 'a')
-        self.max_initial_range = config.getfloat('fitness function', 'max initial range')
-        self.trap_size = config.getint('fitness function', 'trap size')
-        self.epistasis_k = config.getint('fitness function', 'epistasis k')
-        self.epistasis_m = config.getint('fitness function', 'epistasis m')
-
-        self.coco_function_index = config.getint('fitness function', 'coco function index')
-
-        if self.name == 'rastrigin':
-            self.fitness_function_offset = self.generate_offset(self.genome_length)
-        else:
-            self.fitness_function_offset = None
-
-        if self.name == 'nk_landscape':
-            self.loci_values, self.epistasis = self.generate_epistatis(self.genome_length, self.epistasis_k)
-        elif self.name == 'mk_landscape':
-            self.loci_values, self.epistasis = self.generate_mk_epistatis(self.genome_length, self.epistasis_m, self.epistasis_k)
-        else:
-            self.loci_values, self.epistasis = None, None
-
-        self.assign_id()
-
-    def start(self):
-        # should be called once at the start of each search
-        if self.name == 'coco':
-            suite = cocoex.Suite('bbob', '', 'dimensions:{0}, function_indices:{1}'.format(self.genome_length, self.coco_function_index))
-            self.coco_function = suite.get_problem(self.coco_function_id)
-        self.started = True
-
-    def finish(self):
-        # should be called once at the end of each EA
-        self.coco_function = None
-        self.started = False
-
-    def random_genome(self):
-        # generates and returns a random genome
-
-        # generate a new genome
-        genome = []
-
-        # generate values and append to the genome
-        for _ in range(self.genome_length):
-            if self.genome_type == 'bool':
-                genome.append(random.choice((True, False)))
-            elif self.genome_type == 'float':
-                genome.append(random.uniform(-self.max_initial_range, self.max_initial_range))
-            else:
-                print('WARNING: genome type {0} not recognized for random genome generation'.format(self.genome_type))
-                break
-
-        # return the new genome
-        return genome
-
-    def hill_climber(self, max_evals):
-        # performs a first-ascent hill climb, restarting with random genomes at local optima
-        # for real-valued genomes, hill climbing is done with stochastic perturbations and may not settle on the local optima
-        # returns an EAResults object with results, and the best genome found
-
-        self.start()
-
-        # generate and evaluate a new genome
-        current_genome = self.random_genome()
-        current_fitness = self.evaluate(current_genome)
-
-        # evaluate adjacent genomes, keeping improvements and restarting on stagnation
-        evals = 1
-        best_fitness = current_fitness
-        best_genome = current_genome
-
-        best_fitnesses = dict()
-        best_fitnesses[1] = best_fitness
-
-        # bool and real genomes are treated slightly differently
-        if self.genome_type == 'bool':
-            while evals < max_evals:
-                climbing = False
-                for i in random.sample(range(self.genome_length), self.genome_length):
-                    # copy the genome and flip one bit
-                    new_genome = current_genome[:]
-                    new_genome[i] = not new_genome[i]
-
-                    # rate the genome. If it is better, replace the current, and start flipping bits in a new order
-                    new_fitness = self.evaluate(new_genome)
-                    evals += 1
-
-                    if new_fitness > current_fitness:
-                        current_genome = new_genome
-                        current_fitness = new_fitness
-                        best_fitnesses[evals] = current_fitness
-                        climbing = True
-                        break
-
-                # if we go through all the genes and have not climbed at all, we have found a local optimum. generate a
-                # new genome and start another hill climb
-                if not climbing:
-                    best_fitness = current_fitness
-                    best_genome = current_genome
-                    current_genome = self.random_genome()
-
-            # after we have expended all evaluations, record the best fitness and genome
-            if current_fitness > best_fitness:
-                best_fitness = current_fitness
-                best_fitnesses[evals] = best_fitness
-                best_genome = current_genome
-
-        elif self.genome_type == 'float':
-            while evals < max_evals:
-                climbing = False
-                # the max perturbation is equal to the greatest absolute value in the genome
-                max_perturbation = max(abs(c) for c in current_genome)
-
-                for i in random.sample(range(self.genome_length), self.genome_length):
-
-                    # copy the genome
-                    new_genome = current_genome[:]
-
-                    # generate a positive perturbation
-                    perturbation = random.triangular(0.0, max_perturbation, 0.0)
-
-                    # apply the perturbation
-                    new_genome[i] += perturbation
-
-                    # rate the genome. If it is better, replace the current, and start perturbing bits in a new order
-                    new_fitness = self.evaluate(new_genome)
-                    evals +=  1
-
-                    if new_fitness > current_fitness:
-                        current_genome = new_genome
-                        current_fitness = new_fitness
-                        best_fitnesses[evals] = current_fitness
-                        climbing = True
-                        break
-
-                    # if a positive perturbation didn't increase fitness, try a negative one
-                    else:
-                        perturbation = random.triangular(-1 * max_perturbation, 0.0, 0.0)
-
-                        # apply the perturbation
-                        new_genome[i] += perturbation
-
-                        # rate the genome. If it is better, replace the current, and start perturbing bits in a new order
-                        new_fitness = self.evaluate(new_genome)
-                        evals += 1
-
-                        if new_fitness > current_fitness:
-                            current_genome = new_genome
-                            current_fitness = new_fitness
-                            climbing = True
-                            break
-
-                # if we go through all the genes and have not climbed at all, we have found a local optimum. generate a
-                # new genome and start another hill climb
-                if not climbing:
-                    best_fitness = current_fitness
-                    best_genome = current_genome
-                    current_genome = self.random_genome()
-
-            # after we have expended all evaluations, record the best fitness and genome
-            if current_fitness > best_fitness:
-                best_fitness = current_fitness
-                best_fitnesses[evals] = best_fitness
-                best_genome = current_genome
-
-        else:
-            print('WARNING: genome type {0} not recognized for hill climber'.format(self.genome_type))
-
-        self.finish()
-
-        results = EAResult()
-        results.eval_counts = list(best_fitnesses.keys())
-        results.best_fitnesses = best_fitnesses
-        results.final_best_fitness = best_fitness
-
-        # create a dummy selection function for the hill climber results
-        selection_function = SelectionFunction()
-        selection_function.type = 'hill_climber'
-        selection_function.display_name = 'hill_climber'
-        selection_function.id = 'hill_climber'
-        results.selection_function = selection_function
-
-        results.fitness_function = self
-
-        # return best fitness and genome
-        return results
-
-    def fitness_target_hit(self):
-        if self.name == 'coco':
-            return self.coco_function.final_target_hit
-        else:
-            return False
-
-    def rosenbrock(self, x, a):
-        result = 0
-        n = len(x)
-        for i in range(n-1):
-            if -5 <= x[i] <= 10:
-                result += (1 - x[i])**2 + a*(x[i+1] - x[i]**2)**2
-
-        result = -1 * result
-        return result
-
-    def rastrigin(self, x, a):
-        n = len(x)
-        result = a * n
-        for i in range(n):
-            result += x[i]**2 - a*math.cos(2*math.pi*x[i])
-
-        result = -1 * result
-        return result
-
-    def dtrap(self, x, trap_size):
-        result = 0
-        for i in range(0, self.genome_length, trap_size):
-            trap = x[i:i+trap_size]
-            if all(trap):
-                result += trap_size
-            else:
-                result += trap.count(False)
-
-        return result
-
-    def nk_landscape(self, x):
-        result = 0
-
-        for i in range(self.genome_length):
-            locus = [x[i]]
-            locus.extend((x[j] for j in self.epistasis[i]))
-            locus_fitness = self.loci_values[tuple(locus)]
-            result += locus_fitness
-
-        return result
-
-    def mk_landscape(self, x):
-        result = 0
-
-        for e in self.epistasis:
-            locus = []
-            locus.extend(x[j] for j in e)
-            locus_fitness = self.loci_values[tuple(locus)]
-            result += locus_fitness
-
-        return result
-
-    def coco(self, x):
-        # multiply by -1 since coco functions are minimization functions
-        return -1 * self.coco_function(x)
-
-    def offset_rastrigin(self, x, a, offset):
-        offset_x = list(x)
-        for i in range(len(x)):
-            offset_x[i] += offset[i]
-        return self.rastrigin(offset_x, a)
-
-    def generate_offset(self, n):
-        result = []
-        for _ in range(n):
-            result.append(random.choice([-2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5]))
-        return result
-
-    def generate_epistatis(self, n, k):
-        loci_values = dict()
-        for locus in itertools.product([True, False], repeat=k+1):
-            loci_values[locus] = random.randint(0,k)
-
-        epistasis = dict()
-        for i in range(n):
-            epistasis[i] = sorted(random.sample(list(j for j in range(n) if j != i), k))
-
-        return loci_values, epistasis
-
-    def generate_mk_epistatis(self, n, m, k):
-        loci_values = dict()
-        for locus in itertools.product([True, False], repeat=k):
-            loci_values[locus] = random.randint(0,k)
-
-        epistasis = list()
-        for _ in range(m):
-            epistasis.append(list(random.sample(list(j for j in range(n)), k)))
-
-        return loci_values, epistasis
-
-    def evaluate(self, genome):
-        if self.name == 'rosenbrock':
-            fitness = self.rosenbrock(genome, self.fitness_function_a)
-        elif self.name == 'rastrigin':
-            fitness = self.offset_rastrigin(genome, self.fitness_function_a, self.fitness_function_offset)
-        elif self.name == 'dtrap':
-            fitness = self.dtrap(genome, self.trap_size)
-        elif self.name == 'nk_landscape':
-            fitness = self.nk_landscape(genome)
-        elif self.name == 'mk_landscape':
-            fitness = self.mk_landscape(genome)
-        elif self.name == 'coco':
-            fitness = self.coco(genome)
-
-        else:
-            raise Exception('EPPSEA BasicEA ERROR: fitness function name {0} not recognized'.format(self.name))
-
-        return fitness
-
+    def export(self):
+        return list(r.export() for r in self.results)
 
 class SelectionFunction:
     def __init__(self):
@@ -488,17 +167,37 @@ class SelectionFunction:
         self.eppsea_selection_function = eppsea_selection_function
         self.assign_id()
         
-    def parent_selection(self, population, n, generation_number):
+    def parent_selection(self, population, n, generation_number, minimizing):
+        if minimizing:
+            for p in population:
+                p.fitness *= -1
+
         if self.eppsea_selection_function is not None:
-            return self.eppsea_selection_function.select(population, n, 0, generation_number)
+            selected =  self.eppsea_selection_function.select(population, n, 0, generation_number)
         else:
-            return self.basic_selection(population, n, self.parent_selection_type, self.parent_selection_tournament_k)
+            selected =  self.basic_selection(population, n, self.parent_selection_type, self.parent_selection_tournament_k)
+
+        if minimizing:
+            for p in population:
+                p.fitness *= -1
+
+        return selected
         
-    def survival_selection(self, population, n, generation_number):
+    def survival_selection(self, population, n, generation_number, minimizing):
+        if minimizing:
+            for p in population:
+                p.fitness *= -1
+
         if self.eppsea_selection_function is not None:
-            return self.eppsea_selection_function.select(population, n, 1, generation_number)
+            selected = self.eppsea_selection_function.select(population, n, 1, generation_number)
         else:
-            return self.basic_selection(population, n, self.survival_selection_type, self.survival_selection_tournament_k)
+            selected =  self.basic_selection(population, n, self.survival_selection_type, self.survival_selection_tournament_k)
+
+        if minimizing:
+            for p in population:
+                p.fitness *= -1
+
+        return selected
 
     def basic_selection(self, population, n, type, tournament_k):
         if type == 'truncation':
@@ -600,6 +299,7 @@ class EA:
         self.max_evals = config.getint('EA', 'maximum evaluations')
         self.terminate_on_fitness_convergence = config.getboolean('EA', 'terminate on fitness convergence')
         self.generations_to_convergence = config.getint('EA', 'generations to convergence')
+        self.minimize_fitness_function = config.getboolean('EA', 'minimize fitness function')
         self.terminate_at_target_fitness = config.getboolean('EA', 'terminate at target fitness')
         self.use_custom_target_fitness = config.getboolean('EA', 'use custom target fitness')
         self.target_fitness = config.getfloat('EA', 'target fitness')
@@ -679,6 +379,11 @@ class EA:
         evals = self.mu
 
         # set up data holders and store information
+        eval_counts = [evals]
+
+        fitnesses = dict()
+        fitnesses[evals] = list(p.fitness for p in population)
+
         average_fitnesses = dict()
         average_fitnesses[evals] = statistics.mean(p.fitness for p in population)
 
@@ -696,7 +401,7 @@ class EA:
 
             # select parents
             num_parents = self.lam*2
-            all_parents = self.selection_function.parent_selection(population, num_parents, generation_number)
+            all_parents = self.selection_function.parent_selection(population, num_parents, generation_number, self.minimize_fitness_function)
 
             # pair up parents and recombine them
             for i in range(0, len(all_parents), 2):
@@ -721,10 +426,14 @@ class EA:
             population.extend(children)
 
             # perform survival selection
-            survivors = self.selection_function.survival_selection(population, self.mu, generation_number)
+            survivors = self.selection_function.survival_selection(population, self.mu, generation_number, self.minimize_fitness_function)
             population = survivors
 
-            # record average and best fitness
+            # record fitness values
+            eval_counts.append(evals)
+
+            fitnesses[evals] = list(p.fitness for p in population)
+
             average_fitness = statistics.mean(p.fitness for p in population)
             average_fitnesses[evals] = average_fitness
 
@@ -775,10 +484,20 @@ class EA:
         run_results.best_fitnesses = best_fitnesses
         run_results.termination_reason = termination_reason
 
+        run_results.eval_counts = eval_counts
+
+        run_results.fitnesses = fitnesses
+
         run_results.selection_function = self.selection_function
+        run_results.selection_function_display_name = self.selection_function.display_name
         run_results.selection_function_id = self.selection_function.id
 
+        if self.selection_function.eppsea_selection_function is not None:
+            run_results.selection_function_was_evolved = True
+            self.selection_function_eppsea_string = self.selection_function.eppsea_selection_function.get_string()
+
         run_results.fitness_function = self.fitness_function
+        run_results.fitness_function_display_name = self.fitness_function.display_name
         run_results.fitness_function_id = self.fitness_function.id
 
         return run_results
@@ -809,10 +528,8 @@ class EppseaBasicEA:
         self.test_generalization = config.getboolean('EA', 'test generalization')
         self.training_runs = config.getint('EA', 'training runs')
         self.testing_runs = config.getint('EA', 'testing runs')
-        self.test_hill_climber = config.getboolean('EA', 'test hill climber')
-        self.hill_climber_iterations = config.getint('EA', 'hill climber iterations')
-        self.fitness_function_name = config.get('EA', 'fitness function')
         self.use_multiobjective_ea = config.getboolean('EA', 'use multiobjective ea')
+        self.minimize_fitness_function = config.getboolean('EA', 'minimize fitness function')
 
         # if we are using adaptive fitness assignment, start fitness assignment method as best_fitness_reached
         if config.get('EA', 'eppsea fitness assignment method') == 'best fitness reached' or config.get('EA', 'eppsea fitness assignment method') == 'adaptive':
@@ -839,103 +556,32 @@ class EppseaBasicEA:
         self.basic_results = None
 
     def prepare_fitness_functions(self, config):
-        # generates the fitness functions to be used in the EAs
-
-        # if we are using coco, count the number of available function indices
-        if self.fitness_function_name == 'coco':
-            genome_length = config.getint('fitness function', 'genome length')
-            if genome_length not in [2,3,5,10,20,40]:
-                print('WARNING: genome length {0} may not be supported by coco'.format(genome_length))
-            coco_function_index = config.get('fitness function', 'coco function index')
-            suite = cocoex.Suite('bbob', '', 'dimensions:{0}, function_indices:{1}'.format(genome_length, coco_function_index))
-            coco_ids = list(suite.ids())
-        else:
-            coco_ids = None
-
-        # get the number of training and testing fitness functions to be used
-        self.num_training_fitness_functions = config.getint('EA', 'num training fitness functions')
-        if config.getboolean('EA', 'test generalization'):
-            self.num_testing_fitness_functions = config.getint('EA', 'num testing fitness functions')
-            # if we are using coco and testing fitness functions is -1, automatically use remaining instances as test functions
-            if self.num_testing_fitness_functions == -1 and self.fitness_function_name == 'coco':
-                self.num_testing_fitness_functions = len(coco_ids) - self.num_training_fitness_functions
-        else:
-            self.num_testing_fitness_functions = 0
-
-        self.training_fitness_functions = []
-        training_fitness_function_path = config.get('EA', 'fitness function training instances directory')
-        self.testing_fitness_functions = []
-        testing_fitness_function_path = config.get('EA', 'fitness function testing instances directory')
-
-        # shuffle coco indeces so there is no bias in assigning training vs testing functions
-        if coco_ids is not None:
-            random.shuffle(coco_ids)
+        # loads the fitness functions to be used in the EAs
+        fitness_function_config_path = config.get('EA', 'fitness function config path')
+        fitness_function_config = configparser.ConfigParser()
+        fitness_function_config.read(fitness_function_config_path)
+        fitness_function_directory = config.get('EA', 'fitness function directory')
 
         if config.getboolean('EA', 'generate new fitness functions'):
-            for i in range(self.num_training_fitness_functions):
-                new_fitness_function = FitnessFunction()
-                new_fitness_function.generate(config)
-                if self.fitness_function_name == 'coco':
-                    new_fitness_function.coco_function_id = coco_ids.pop()
-                self.training_fitness_functions.append(new_fitness_function)
-
-            for i in range(self.num_testing_fitness_functions):
-                new_fitness_function = FitnessFunction()
-                new_fitness_function.generate(config)
-                if self.fitness_function_name == 'coco':
-                    new_fitness_function.coco_function_id = coco_ids.pop()
-                self.testing_fitness_functions.append(new_fitness_function)
-
-            if config.getboolean('EA', 'save generated fitness functions'):
-                os.makedirs(training_fitness_function_path, exist_ok=True)
-                for i, f in enumerate(self.training_fitness_functions):
-                    filepath = '{0}/training{1}'.format(training_fitness_function_path, i)
-                    with open(filepath, 'wb') as file:
-                        pickle.dump(f, file)
-
-                os.makedirs(testing_fitness_function_path, exist_ok=True)
-                for i, f in enumerate(self.testing_fitness_functions):
-                    filepath = '{0}/testing{1}'.format(testing_fitness_function_path, i)
-                    with open(filepath, 'wb') as file:
-                        pickle.dump(f, file)
+            prepared_fitness_functions = ff.generate_coco_functions(fitness_function_config_path, True)
+            os.makedirs(fitness_function_directory, exist_ok=True)
+            for i, f in enumerate(prepared_fitness_functions):
+                save_path = '{0}/{1}'.format(fitness_function_directory, i)
+                ff.save(f, save_path)
 
         else:
-            if not os.path.exists(training_fitness_function_path):
-                raise Exception('ERROR: Attempting to load fitness functions from non-existent path {0}'.format(training_fitness_function_path))
+            prepared_fitness_functions = []
+            for fitness_function_path in sorted(os.listdir(fitness_function_directory)):
+                full_fitness_function_path = '{0}/{1}'.format(fitness_function_directory, fitness_function_path)
+                prepared_fitness_functions.append(ff.load(full_fitness_function_path))
 
-            training_fitness_function_files = sorted(os.listdir(training_fitness_function_path))
-            for filepath in training_fitness_function_files:
-                try:
-                    full_filepath = '{0}/{1}'.format(training_fitness_function_path, filepath) 
-                    with open(full_filepath, 'rb') as file:
-                        self.training_fitness_functions.append(pickle.load(file))
-                except (pickle.PickleError, pickle.PickleError, ImportError, AttributeError):
-                    print('Failed to load fitness function at {0}, possibly not a saved fitness function'.format(filepath))
-                    pass
-                
-                if len(self.training_fitness_functions) == self.num_training_fitness_functions:
-                    break
-                    
-            if config.getboolean('EA', 'test generalization'):
-                
-                if not os.path.exists(testing_fitness_function_path):
-                    raise Exception('ERROR: Attempting to load fitness functions from non-existent path {0}'.format(
-                        testing_fitness_function_path))
-
-                testing_fitness_function_files = sorted(os.listdir(testing_fitness_function_path))
-                for filepath in testing_fitness_function_files:
-                    try:
-                        full_filepath = '{0}/{1}'.format(testing_fitness_function_path, filepath)
-                        with open(full_filepath, 'rb') as file:
-                            self.testing_fitness_functions.append(pickle.load(file))
-                    except (pickle.PickleError, pickle.PickleError, ImportError, AttributeError):
-                        print('Failed to load fitness function at {0}, possibly not a saved fitness function'.format(
-                            filepath))
-                        pass
-
-                    if len(self.testing_fitness_functions) == self.num_testing_fitness_functions:
-                        break
-
+        # sample a spread of the loaded fitness functions
+        self.training_fitness_functions = [prepared_fitness_functions[0], prepared_fitness_functions[-1], prepared_fitness_functions[5]]
+        if self.test_generalization:
+            self.testing_fitness_functions = list(f for f in prepared_fitness_functions if f not in self.training_fitness_functions)
+        else:
+            self.testing_fitness_functions = None
+            
     def prepare_basic_selection_functions(self, config):
         self.basic_selection_functions = []
         selection_configs = config.items('basic selection function configs')
@@ -999,43 +645,6 @@ class EppseaBasicEA:
                     all_run_results.append(run_ea(ea))
 
         return EAResultCollection(all_run_results)
-
-    def run_hill_climbers(self, fitness_functions, iterations, is_testing):
-        # runs hill climbers on a set of fitness functions, once for every run
-        # runs each of the eas for the configured number of runs, returning one result_holder for each ea
-        all_hill_climber_results = []
-
-        if is_testing:
-            runs = self.testing_runs
-        else:
-            runs = self.training_runs
-
-        if self.using_multiprocessing:
-            # setup parameters for multiprocessing
-            params = []
-            for f in fitness_functions:
-                params.extend([(f, iterations)]*runs)
-            # run all runs
-            pool = multiprocessing.Pool()
-            results = pool.starmap(run_hill_climber, params)
-            pool.close()
-
-            # split up results by ea
-            for i, f in enumerate(fitness_functions):
-                start = i * runs
-                stop = (i + 1) * runs
-
-                hill_climber_results = list(r for r in results[start:stop])
-
-                all_hill_climber_results.extend(hill_climber_results)
-
-        else:
-            for f in fitness_functions:
-                for r in range(runs):
-                    hill_climber_results = run_hill_climber(f, iterations)
-                    all_hill_climber_results.append(hill_climber_results)
-
-        return EAResultCollection(all_hill_climber_results)
 
     def evaluate_eppsea_population(self, eppsea_population, is_testing):
         # evaluates a population of eppsea individuals and assigns fitness values to them
@@ -1105,8 +714,15 @@ class EppseaBasicEA:
                 # assign fitness as the average of the average final best fitnesses or, if multiobjective ea is on, the list of average final best fitnesses
                 if self.use_multiobjective_ea:
                     s.eppsea_selection_function.mo_fitnesses = average_final_best_fitnesses
+                    if self.minimize_fitness_function:
+                        for i,f in enumerate(s.eppsea_selection_function.mo_fitnesses):
+                            s.eppsea_selection_function.mo_fitnesses[i] *= -1
+
                 else:
                     s.eppsea_selection_function.fitness = statistics.mean(average_final_best_fitnesses)
+                    if self.minimize_fitness_function:
+                        s.eppsea_selection_function.fitness *= -1
+
 
             elif self.eppsea_fitness_assignment_method == 'proportion_hitting_target_fitness':
                 # assign the fitness as the proportion of runs that hit the target fitness
@@ -1154,13 +770,7 @@ class EppseaBasicEA:
 
         ea_results = self.run_eas(eas, True)
 
-        if self.test_hill_climber:
-            hill_climber_results = self.run_hill_climbers(self.testing_fitness_functions, self.hill_climber_iterations, True)
-            full_results = EAResultCollection(ea_results.results + hill_climber_results.results)
-        else:
-            full_results = ea_results
-
-        return full_results
+        return ea_results
 
     def export_run_results(self, final_test_results):
         # takes a list of ResultsHolder objects and exports several json files that are compatible with the post_process
@@ -1202,121 +812,11 @@ class EppseaBasicEA:
             results_paths.append(results_path)
         return results_paths
 
-    def postprocess(self, results):
-        # runs postprocessing on an EAResultCollection results
-        output = ''
-        np.seterr(all='warn')
-        # log string forms of eppsea-based selection functions
-        for s in results.selection_functions:
-            if s.eppsea_selection_function is not None:
-                self.log('String form of {0}: {1}'.format(s.display_name, s.eppsea_selection_function.get_string()))
-        # Analyze results for each fitness function
-        for fitness_function in results.fitness_functions:
-            plt.clf()
-            if fitness_function in self.training_fitness_functions:
-                output += 'Analyzing results for training fitness function with id {0} ---------------------------------\n'.format(fitness_function.id)
-            else:
-                output += 'Analyzing results for testing fitness function with id {0} ---------------------------------\n'.format(fitness_function.id)
-            output += 'Plotting figure\n'
-            # Get the name of the fitness function from one of the result files
-            fitness_function_name = fitness_function.name
-
-            # filter out the results for this fitness function
-            fitness_function_results = results.filter(fitness_function=fitness_function)
-
-            # Set the plot to use Log Scale if any of the result files require it
-            if any(s in fitness_function_name for s in ['rastrigin', 'rosenbrock', 'coco']):
-                plt.yscale('symlog')
-
-            # Plot results for each selection function
-            for selection_function in fitness_function_results.selection_functions:
-                selection_function_results = fitness_function_results.filter(selection_function=selection_function)
-                selection_function_name = selection_function.display_name
-                mu = selection_function_results.get_eval_counts()
-                average_best_fitnesses = []
-                for m in mu:
-                    average_best_fitnesses.append(statistics.mean(r.best_fitnesses[m] for r in selection_function_results.results if m in r.best_fitnesses))
-
-                plt.plot(mu, average_best_fitnesses, label=selection_function_name)
-
-            plt.xlabel('Evaluations')
-            plt.ylabel('Best Fitness')
-            plt.legend(loc=(1.02, 0))
-            plt.savefig('{0}/figure_{1}.png'.format(self.results_directory, fitness_function.id),
-                        bbox_inches='tight')
-
-            output += 'Plotting boxplot\n'
-            final_best_fitnesses_list = []
-            selection_name_list = []
-
-            # Set the plot to use Log Scale if any of the result files require it
-            if any(s in fitness_function_name for s in ['rastrigin', 'rosenbrock', 'coco']):
-                plt.yscale('symlog')
-
-            for selection_function in fitness_function_results.selection_functions:
-                selection_function_results = fitness_function_results.filter(selection_function=selection_function)
-                selection_function_name = selection_function.display_name
-                selection_name_list.append(selection_function_name)
-                final_best_fitnesses = list(r.final_best_fitness for r in selection_function_results.results)
-                final_best_fitnesses_list.append(final_best_fitnesses)
-            plt.boxplot(final_best_fitnesses_list, labels=selection_name_list)
-
-            plt.xlabel('Evaluations')
-            plt.xticks(rotation=90)
-            plt.ylabel('Final Best Fitness')
-            legend = plt.legend([])
-            legend.remove()
-            plt.savefig('{0}/boxplot_{1}.png'.format(self.results_directory, fitness_function.id),
-                        bbox_inches='tight')
-
-            output += 'Doing t-tests\n'
-
-            tested_pairs = []
-
-            for selection_function1 in fitness_function_results.selection_functions:
-                selection_function_results1 = fitness_function_results.filter(selection_function=selection_function1)
-                selection_function_name1 = selection_function1.display_name
-                final_best_fitnesses1 = list(r.final_best_fitness for r in selection_function_results1.results)
-                final_evals1 = list(max(r.eval_counts) for r in selection_function_results1.results)
-                # round means to 5 decimal places for cleaner display
-                average_final_best_fitness1 = round(statistics.mean(final_best_fitnesses1), 5)
-                average_final_evals1 = round(statistics.mean(final_evals1), 5)
-                output += 'Mean performance of {0}: {1}, in {2} evals\n'.format(selection_function_name1, average_final_best_fitness1, final_evals1)
-                # perform a t test with all the other results that this selection has not yet been tested against
-                for selection_function2 in fitness_function_results.selection_functions:
-                    if selection_function2 is not selection_function1 and (selection_function1, selection_function2) not in tested_pairs and (selection_function2, selection_function1) not in tested_pairs:
-                        selection_function_results2 = fitness_function_results.filter(selection_function=selection_function2)
-                        selection_function_name2 = selection_function2.display_name
-                        final_best_fitnesses2 = list(r.final_best_fitness for r in selection_function_results2.results)
-                        final_evals2 = list(max(r.eval_counts) for r in selection_function_results2.results)
-                        average_final_best_fitness2 = round(statistics.mean(final_best_fitnesses2), 5)
-                        average_final_evals2 = round(statistics.mean(final_evals2), 5)
-                        _, p_fitness = scipy.stats.ttest_rel(final_best_fitnesses1, final_best_fitnesses2)
-                        _, p_evals = scipy.stats.ttest_rel(final_evals1, final_evals2)
-                        mean_difference_fitness = round(average_final_best_fitness1 - average_final_best_fitness2, 5)
-                        mean_difference_evals = round(average_final_evals1 - average_final_evals2, 5)
-
-                        output += '\tMean performance of {0}: {1}, in {2} evals\n'.format(selection_function_name2, average_final_best_fitness2, average_final_evals2)
-
-                        if p_fitness < 0.05:
-                            if mean_difference_fitness > 0:
-                                output += '\t\t{0} performed {1} better | p-value: {2}\n'.format(selection_function_name1, mean_difference_fitness, p_fitness)
-                            else:
-                                output += '\t\t{0} performed {1} worse | p-value: {2}\n'.format(selection_function_name1, mean_difference_fitness, p_fitness)
-                        else:
-                            output += '\t\t{0} performance difference is insignificant | p-value: {1}\n'.format(selection_function_name1, p_fitness)
-
-                        if p_evals < 0.05:
-                            if mean_difference_evals < 0:
-                                output += '\t\t{0} used {1} fewer evals | p-value: {2}\n'.format(selection_function_name1, mean_difference_evals, p_evals)
-                            else:
-                                output += '\t\t{0} used {1} more evals | p-value: {2}\n'.format(selection_function_name1, mean_difference_evals, p_evals)
-                        else:
-                            output += '\t\t{0} eval count difference is insignificant | p-value: {1}\n'.format(selection_function_name1, p_evals)
-
-                        tested_pairs.append((selection_function1, selection_function2))
-
+    def postprocess(self):
+        postprocess_args = ['python3', 'post_process.py', self.results_directory, self.results_directory + '/final_results']
+        output = subprocess.run(postprocess_args, stdout=subprocess.PIPE, universal_newlines=True).stdout
         return output
+
 
     def convert_to_eppsea_selection(self, selection_functions):
         # converts a list of SelectionFunction objects to eppsea_base.EppseaSelectionFunction objects
@@ -1455,6 +955,11 @@ class EppseaBasicEA:
 
         return results
 
+    def save_final_results(self, final_results):
+        file_path = self.results_directory + '/final_results'
+        with open(file_path, 'wb') as file:
+            pickle.dump(list(final_results.export()), file)
+
     def run_eppsea_basicea(self):
         print('Now starting EPPSEA')
         start_time = time.time()
@@ -1477,10 +982,12 @@ class EppseaBasicEA:
         else:
             best_selection_functions = [eppsea.final_best_member]
         print('Running final tests')
+
         self.final_test_results = self.test_against_basic_selection(best_selection_functions)
+        self.save_final_results(self.final_test_results)
 
         self.log('Running Postprocessing')
-        postprocess_results = self.postprocess(self.final_test_results)
+        postprocess_results = self.postprocess()
         self.log('Postprocess results:')
         self.log(postprocess_results)
 

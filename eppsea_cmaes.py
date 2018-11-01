@@ -302,7 +302,7 @@ class EppseaCMAES:
                 prepared_fitness_functions.append(ff.load(full_fitness_function_path))
 
         # sample a spread of the loaded fitness functions
-        self.training_fitness_functions = (prepared_fitness_functions[0], prepared_fitness_functions[-1], prepared_fitness_functions[5])
+        self.training_fitness_functions = [prepared_fitness_functions[0], prepared_fitness_functions[-1], prepared_fitness_functions[5]]
         if self.test_generalization:
             self.testing_fitness_functions = list(f for f in prepared_fitness_functions if f not in self.training_fitness_functions)
         else:
