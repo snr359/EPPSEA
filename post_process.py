@@ -51,8 +51,8 @@ def main(final_output_directory, results_file_paths):
     # Analyze results for each fitness function
     for fitness_function_id in fitness_function_ids:
         plt.clf()
-        print('Analyzing results for fitness function with id {0} ---------------------------------\n'.format(fitness_function_id))
-        print('Plotting figure\n')
+        print('Analyzing results for fitness function with id {0} ---------------------------------'.format(fitness_function_id))
+        print('Plotting figure')
         # Get the name of the fitness function from one of the result files
         fitness_function_name = fitness_function_display_names[fitness_function_id]
 
@@ -80,7 +80,7 @@ def main(final_output_directory, results_file_paths):
         plt.savefig('{0}/figure_{1}.png'.format(final_output_directory, fitness_function_id),
                     bbox_inches='tight')
 
-        print('Plotting boxplot\n')
+        print('Plotting boxplot')
         final_best_fitnesses_list = []
         selection_name_list = []
 
@@ -103,7 +103,7 @@ def main(final_output_directory, results_file_paths):
         plt.savefig('{0}/boxplot_{1}.png'.format(final_output_directory, fitness_function_id),
                     bbox_inches='tight')
 
-        print('Doing t-tests\n')
+        print('Doing t-tests')
 
         tested_pairs = []
 
@@ -115,7 +115,7 @@ def main(final_output_directory, results_file_paths):
             # round means to 5 decimal places for cleaner display
             average_final_best_fitness1 = round(statistics.mean(final_best_fitnesses1), 5)
             target_hit_percentage1 = len(selection_function_target_results1) / len(selection_function_results1)
-            print('Mean performance of {0}: {1}, reaching target fitness in {2}% of runs\n'.format(selection_function_name1,average_final_best_fitness1, target_hit_percentage1))
+            print('Mean performance of {0}: {1}, reaching target fitness in {2}% of runs'.format(selection_function_name1,average_final_best_fitness1, target_hit_percentage1))
             # perform a t test with all the other results that this selection has not yet been tested against
             for selection_function_id2 in selection_function_ids:
                 if selection_function_id2 != selection_function_id1 and (selection_function_id1, selection_function_id2) not in tested_pairs and (selection_function_id2, selection_function_id1) not in tested_pairs:
@@ -126,18 +126,18 @@ def main(final_output_directory, results_file_paths):
                     # round means to 5 decimal places for cleaner display
                     average_final_best_fitness2 = round(statistics.mean(final_best_fitnesses2), 5)
                     target_hit_percentage2 = len(selection_function_target_results2) / len(selection_function_results2)
-                    print('Mean performance of {0}: {1}, reaching target fitness in {2}% of runs\n'.format(selection_function_name2, average_final_best_fitness2,target_hit_percentage2))
+                    print('Mean performance of {0}: {1}, reaching target fitness in {2}% of runs'.format(selection_function_name2, average_final_best_fitness2,target_hit_percentage2))
 
                     _, p_fitness = scipy.stats.ttest_rel(final_best_fitnesses1, final_best_fitnesses2)
                     mean_difference_fitness = round(average_final_best_fitness1 - average_final_best_fitness2, 5)
 
                     if p_fitness < 0.05:
                         if mean_difference_fitness > 0:
-                            print('\t\t{0} performed {1} higher | p-value: {2}\n'.format(selection_function_name1,mean_difference_fitness,p_fitness))
+                            print('\t\t{0} performed {1} higher | p-value: {2}'.format(selection_function_name1,mean_difference_fitness,p_fitness))
                         else:
-                            print('\t\t{0} performed {1} lower | p-value: {2}\n'.format(selection_function_name1,mean_difference_fitness,p_fitness))
+                            print('\t\t{0} performed {1} lower | p-value: {2}'.format(selection_function_name1,mean_difference_fitness,p_fitness))
                     else:
-                        print('\t\t{0} performance difference is insignificant | p-value: {1}\n'.format(selection_function_name1, p_fitness))
+                        print('\t\t{0} performance difference is insignificant | p-value: {1}'.format(selection_function_name1, p_fitness))
 
                     final_target_evals1 = list(max(r['eval_counts']) for r in selection_function_target_results1)
                     final_target_evals2 = list(max(r['eval_counts']) for r in selection_function_target_results2)
@@ -146,9 +146,9 @@ def main(final_output_directory, results_file_paths):
                         mean_difference_evals = round(statistics.mean(final_target_evals1) - statistics.mean(final_target_evals2), 5)
 
                         if mean_difference_evals < 0:
-                            print('\t\t{0} used {1} fewer evals to hit target fitness\n'.format(selection_function_name1,mean_difference_evals))
+                            print('\t\t{0} used {1} fewer evals to hit target fitness'.format(selection_function_name1,mean_difference_evals))
                         else:
-                            print('\t\t{0} used {1} more evals to hit target fitness\n'.format(selection_function_name1,mean_difference_evals))
+                            print('\t\t{0} used {1} more evals to hit target fitness'.format(selection_function_name1,mean_difference_evals))
 
                     tested_pairs.append((selection_function_id1, selection_function_id2))
 
