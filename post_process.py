@@ -114,7 +114,7 @@ def main(final_output_directory, results_file_paths):
             final_best_fitnesses1 = list(r['final_best_fitness'] for r in selection_function_results1)
             # round means to 5 decimal places for cleaner display
             average_final_best_fitness1 = round(statistics.mean(final_best_fitnesses1), 5)
-            target_hit_percentage1 = len(selection_function_target_results1) / len(selection_function_results1)
+            target_hit_percentage1 = round(len(selection_function_target_results1) * 100 / len(selection_function_results1), 2)
             print('Mean performance of {0}: {1}, reaching target fitness in {2}% of runs'.format(selection_function_name1,average_final_best_fitness1, target_hit_percentage1))
             # perform a t test with all the other results that this selection has not yet been tested against
             for selection_function_id2 in selection_function_ids:
@@ -125,7 +125,7 @@ def main(final_output_directory, results_file_paths):
                     final_best_fitnesses2 = list(r['final_best_fitness'] for r in selection_function_results2)
                     # round means to 5 decimal places for cleaner display
                     average_final_best_fitness2 = round(statistics.mean(final_best_fitnesses2), 5)
-                    target_hit_percentage2 = len(selection_function_target_results2) / len(selection_function_results2)
+                    target_hit_percentage2 = round(len(selection_function_target_results2) * 100 / len(selection_function_results2), 2)
                     print('Mean performance of {0}: {1}, reaching target fitness in {2}% of runs'.format(selection_function_name2, average_final_best_fitness2,target_hit_percentage2))
 
                     _, p_fitness = scipy.stats.ttest_rel(final_best_fitnesses1, final_best_fitnesses2)
