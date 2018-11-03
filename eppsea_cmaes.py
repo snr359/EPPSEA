@@ -551,11 +551,11 @@ def main(config_path):
 
 
 if __name__ == '__main__':
-
     if len(sys.argv) < 2:
         print('Please provide config file')
         exit(1)
 
-    config_path = sys.argv[1]
+    config_paths = sys.argv[1:]
 
-    main(config_path)
+    for config_path in config_paths:
+        main(config_path)
