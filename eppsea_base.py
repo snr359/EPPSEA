@@ -204,7 +204,7 @@ class GPTree:
         sum_weight = cum_weight
 
         # if the sum weight is 0 or inf, just return random candidate
-        if sum_weight == 0 or sum_weight == math.inf:
+        if sum_weight == 0 or sum_weight == math.inf or numpy.isnan(sum_weight):
             index = random.randrange(len(population))
             selection = population[index]
             return selection, index
@@ -220,7 +220,7 @@ class GPTree:
 
         # if the program reaches this point, something is wrong. dump everything
         print('ERROR: EPPSEA tree overran proportional selection. Dumping objects in "errors"')
-        timestamp = datetime.datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         error_directory = 'errors/error_{0}'.format(timestamp)
         os.makedirs(error_directory, exist_ok=True)
 
