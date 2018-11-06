@@ -206,9 +206,6 @@ class CMAES_runner:
 
         es.disp(1)
         term_conditions = es.stop()
-        print('termination by', term_conditions)
-        print('best f-value =', es.result[1])
-        print('solution =', es.result[0])
 
         result.fitness_function_display_name = self.fitness_function.display_name
         result.fitness_function_id = self.fitness_function.id
@@ -421,7 +418,7 @@ class EppseaCMAES:
             s_results = list(r for r in ea_results if r.selection_function_id == s.id)
             if self.config.get('CMAES', 'eppsea fitness assignment method') == 'adaptive':
                 if self.eppsea_fitness_assignment_method == 'best_fitness_reached':
-                    if len(list(r for r in s_results if r.termination_reason == 'target_fitness_hit')) / len (s_results) >= 0.1:
+                    if len(list(r for r in s_results if r.termination_reason == 'target_fitness_hit')) / len (s_results) >= 0.50:
                         self.log('At eval count {0}, eppsea fitness assignment changed to proportion_hitting_target_fitness'.format(self.eppsea.gp_evals))
                         self.eppsea_fitness_assignment_method = 'proportion_hitting_target_fitness'
                         for p in self.eppsea.population:
