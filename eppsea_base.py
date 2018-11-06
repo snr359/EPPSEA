@@ -784,6 +784,17 @@ class Eppsea:
             if s not in selection_types:
                 GPTree.selection_types.remove(s)
 
+        selection_terminals = config.get('evolved selection', 'selection terminals').strip().split(',')
+        selection_terminals = list(s.strip() for s in selection_terminals)
+        for s in list(GPNode.data_terminals):
+            if s not in selection_terminals:
+                GPNode.data_terminals.remove(s)
+        for s in list(GPNode.numeric_terminals):
+            if s not in selection_terminals:
+                GPNode.numeric_terminals.remove(s)
+
+        GPNode.terminals = GPNode.data_terminals + GPNode.numeric_terminals
+
         # create a dictionary for the results
         self.results = dict()
         self.results['eval_counts'] = []
