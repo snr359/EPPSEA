@@ -162,7 +162,6 @@ class CMAES_runner:
         def __init__(self):
             self.genome = None
             self.fitness = None
-            self.birth_generation = None
 
     def one_run(self, basic=False):
         start = self.fitness_function.random_genome()
@@ -195,7 +194,6 @@ class CMAES_runner:
                     new_popi = self.Popi()
                     new_popi.genome = x
                     new_popi.fitness = -1 * fit  # eppsea assumes fitness maximization
-                    new_popi.birth_generation = generation
                     population.append(new_popi)
                 es.tell_pop(X, fitness_values, population, self.selection_function)  # update distribution parameters
 
