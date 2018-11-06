@@ -325,18 +325,26 @@ class GPTree:
 
         # calculate selectabilities
         terminal_values = dict()
-        terminal_values['fitness'] = numpy.array(list(c.fitness for c in sorted_candidates))
-        terminal_values['fitness_rank'] = numpy.arange(1, len(sorted_candidates)+1)
-        terminal_values['sum_fitness'] = numpy.repeat(sum_fitness, population_size)
-        terminal_values['min_fitness'] = numpy.repeat(min_fitness, population_size)
-        terminal_values['max_fitness'] = numpy.repeat(max_fitness, population_size)
-        numpy.seterr(all='raise')
-        if max_fitness == min_fitness or max_fitness == math.inf or min_fitness == math.inf:
-            terminal_values['relative_fitness'] = numpy.repeat(1, population_size)
-        else:
-            terminal_values['relative_fitness'] = numpy.array(list(((c.fitness - min_fitness) / (max_fitness - min_fitness)) for c in sorted_candidates))
-        terminal_values['population_size'] = numpy.repeat(population_size, population_size)
-        terminal_values['birth_generation'] = numpy.array(list(c.birth_generation for c in sorted_candidates))
+        if 'fitness' in GPNode.terminals:
+            terminal_values['fitness'] = numpy.array(list(c.fitness for c in sorted_candidates))
+        if 'fitness_rank' in GPNode.terminals:
+            terminal_values['fitness_rank'] = numpy.arange(1, len(sorted_candidates)+1)
+        if 'sum_fitness' in GPNode.terminals:
+            terminal_values['sum_fitness'] = numpy.repeat(sum_fitness, population_size)
+        if 'min_fitness' in GPNode.terminals:
+            terminal_values['min_fitness'] = numpy.repeat(min_fitness, population_size)
+        if 'max_fitness' in GPNode.terminals:
+            terminal_values['max_fitness'] = numpy.repeat(max_fitness, population_size)
+        if 'relative_fitness' in GPNode.terminals:
+            numpy.seterr(all='raise')
+            if max_fitness == min_fitness or max_fitness == math.inf or min_fitness == math.inf:
+                terminal_values['relative_fitness'] = numpy.repeat(1, population_size)
+            else:
+                terminal_values['relative_fitness'] = numpy.array(list(((c.fitness - min_fitness) / (max_fitness - min_fitness)) for c in sorted_candidates))
+        if 'population_size' in GPNode.terminals:
+            terminal_values['population_size'] = numpy.repeat(population_size, population_size)
+        if 'birth_generation' in GPNode.terminals:
+            terminal_values['birth_generation'] = numpy.array(list(c.birth_generation for c in sorted_candidates))
 
         if generation_number is not None:
             terminal_values['generation_number'] = numpy.repeat(generation_number, population_size)
