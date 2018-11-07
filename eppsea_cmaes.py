@@ -248,6 +248,7 @@ class EppseaCMAES:
         os.makedirs(self.results_directory, exist_ok=True)
 
         self.log_file_location = '{0}/log.txt'.format(self.results_directory)
+        self.verbosity = config.getint('CMAES', 'logging verbosity')
 
         self.using_multiprocessing = config.getboolean('CMAES', 'use multiprocessing')
 
@@ -275,10 +276,11 @@ class EppseaCMAES:
 
         self.prepare_fitness_functions(config)
 
-    def log(self, message):
-        print(message)
-        with open(self.log_file_location, 'a') as log_file:
-            log_file.write(message + '\n')
+    def log(self, message, verbosity):
+        if self.verbosity >= verbosity:
+            print(message)
+            with open(self.log_file_location, 'a') as log_file:
+                log_file.write(message + '\n')
 
     def prepare_fitness_functions(self, config):
         # loads the fitness functions to be used in the EAs
@@ -416,6 +418,19 @@ class EppseaCMAES:
         ea_results = self.run_cmaes_runners(eas, False)
         self.assign_eppsea_fitness(selection_functions, ea_results)
 
+        self.log('Reporting results from EPPSEA generation {0}'.format(self.eppsea.gen_number), 2)
+        for s in selection_functions:
+            self.log('Results for EPPSEA member: {0}'.format(s.eppsea_selection_function.get_string()), 2)
+            e_results = list(r for r in ea_results if r.selection_function_id == s.id)
+            for f in fitness_functions:
+                self.log('\tResults on fitness function {0} with id {1}'.format(f.display_name, f.id), 2)
+                f_results = list(r for r in e_results if r.fitness_function_id == f.id)
+                for r in f_results:
+                    self.log('\t\tEvals: {0} | Final best fitness: {1} | Termination reason: {2}'.format(max(r.eval_counts), r.final_best_fitness, r.termination_reason), 2)
+            self.log('\tFitness assigned to EPPSEA member: {0}'.format(s.eppsea_selection_function.fitness), 2)
+
+
+
     def assign_eppsea_fitness(self, selection_functions, ea_results):
         fitness_function_ids = set(r.fitness_function_id for r in ea_results)
         for s in selection_functions:
@@ -423,7 +438,7 @@ class EppseaCMAES:
             if self.config.get('CMAES', 'eppsea fitness assignment method') == 'adaptive':
                 if self.eppsea_fitness_assignment_method == 'best_fitness_reached':
                     if len(list(r for r in s_results if r.termination_reason == 'target_fitness_hit')) / len (s_results) >= 0.50:
-                        self.log('At eval count {0}, eppsea fitness assignment changed to proportion_hitting_target_fitness'.format(self.eppsea.gp_evals))
+                        self.log('At eval count {0}, eppsea fitness assignment changed to proportion_hitting_target_fitness'.format(self.eppsea.gp_evals), 1)
                         self.eppsea_fitness_assignment_method = 'proportion_hitting_target_fitness'
                         for p in self.eppsea.population:
                             p.fitness = -math.inf
@@ -433,7 +448,7 @@ class EppseaCMAES:
                         self.eppsea.highest_best_fitness = -math.inf
                 if self.eppsea_fitness_assignment_method == 'proportion_hitting_target_fitness':
                     if len(list(r for r in s_results if r.termination_reason == 'target_fitness_hit')) / len(s_results) >= .95:
-                        self.log('At eval count {0}, eppsea fitness assignment changed to evals_to_target_fitness'.format(self.eppsea.gp_evals))
+                        self.log('At eval count {0}, eppsea fitness assignment changed to evals_to_target_fitness'.format(self.eppsea.gp_evals), 1)
                         self.eppsea_fitness_assignment_method = 'evals_to_target_fitness'
                         for p in self.eppsea.population:
                             p.fitness = -math.inf
@@ -529,15 +544,15 @@ class EppseaCMAES:
         self.final_test_results = self.run_final_tests(best_selection_function)
         self.save_final_results(self.final_test_results)
 
-        self.log('Running Postprocessing')
+        self.log('Running Postprocessing', 1)
         postprocess_results = self.postprocess()
-        self.log('Postprocess results:')
-        self.log(postprocess_results)
+        self.log('Postprocess results:', 1)
+        self.log(postprocess_results, 1)
 
         eppsea_base_results_path = eppsea.results_directory
         shutil.copytree(eppsea_base_results_path, self.results_directory + '/base')
         end_time = time.time() - start_time
-        self.log('Total time elapsed: {0}'.format(end_time))
+        self.log('Total time elapsed: {0}'.format(end_time),1)
 
 
 def main(config_path):
