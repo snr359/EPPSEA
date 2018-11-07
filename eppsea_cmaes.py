@@ -152,6 +152,10 @@ class ModifiedCMAES(purecma.CMAES):
             res['tolx'] = 1e-11
         return res
 
+    def disp(self, verb_modulo=1):
+        # overwrite parent disp function to reduce printouts
+        pass
+
 class CMAES_runner:
     def __init__(self, config, fitness_function, selection_function):
         self.config = config

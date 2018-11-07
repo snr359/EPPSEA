@@ -234,12 +234,9 @@ class GPTree:
 
     def tournament_selection(self, population, weights, k):
         # makes a k-tournament selection from the population
-        try:
-            tournament_indices = random.sample(range(len(population)), k)
-        except ValueError:
-            print('ERROR: trying to select with too small a tournmanet')
-            print('The tournament value is {0}'.format(k))
-            print('The size of the population is {0}'.format(len(population)))
+        if k > len(population) or k < 1:
+            raise('ERROR: trying to select from a population of {0} with a tournament size of {1}'.format(len(population), k))
+        tournament_indices = random.sample(range(len(population)), k)
         index = max(tournament_indices, key=lambda i: weights[i])
         selection = population[index]
         return selection, index
@@ -584,14 +581,6 @@ class GPTree:
             d = pickle.load(pickleFile)
             self.build_from_dict(d)
 
-    def is_clone(self, all_trees):
-        # returns true if this GPTree is a clone of any members of the given population
-        # uses the get_string() function of the GPTree, so there may be some false negatives, but no false positives
-        for t in all_trees:
-            if self is not t and self.get_string() == t.get_string():
-                return True
-        return False
-
 
 class EppseaSelectionFunction:
     # encapsulates all trees and functionality associated with one selection function
@@ -690,15 +679,6 @@ class EppseaSelectionFunction:
 
     def select(self, population, n=1, selector=0, generation_number=None):
         return self.gp_trees[selector].select(population, n, generation_number)
-
-    def is_clone(self, population):
-        # returns true if this selection function is a clone of any other selection function in the population
-        for i in range(self.number_of_selectors):
-            all_trees = list(p.gp_trees[i] for p in population)
-            for p in population:
-                if p is not self and p.gp_trees[i].is_clone(all_trees):
-                    return True
-        return False
 
     def get_string(self):
         tree_strings = list(tree.get_string() for tree in self.gp_trees)
@@ -822,6 +802,7 @@ class Eppsea:
         self.gp_evals = None
         self.restarting = None
         self.final_best_member = None
+        self.fitness_assignments = dict()
 
         self.start_time = None
         self.time_elapsed = None
@@ -890,6 +871,15 @@ class Eppsea:
         # initialize the population
         self.randomize_population()
 
+        # force mutation of clones
+        if self.force_mutation_of_clones:
+            new_pop_strings = []
+            for i, p in enumerate(self.population):
+                p_string = p.get_string()
+                while p_string in new_pop_strings:
+                    p.mutate()
+                new_pop_strings.append(p)
+
         # check population uniqueness
         self.check_gp_population_uniqueness(self.population, 0.75)
 
@@ -921,6 +911,10 @@ class Eppsea:
 
         # increment evaluation counter
         self.gp_evals += len(self.new_population)
+
+        # record fitness assignments
+        for p in self.new_population:
+            self.fitness_assignments[p.get_string()] = p.fitness
 
         # kill bad population members, if configured to
         # bad population members are those with a fitness less than the first quartile minus 3 * the interquartile range
@@ -1024,10 +1018,21 @@ class Eppsea:
                         parent2 = max(random.sample(self.population, self.gp_k_tournament_k), key=lambda p: p.fitness)
                     # recombination/mutation
                     new_child = parent1.recombine(parent2)
-                    if random.random() < self.gp_mutation_rate or (
-                            self.force_mutation_of_clones and new_child.is_clone(self.population + self.new_population)):
+                    if random.random() < self.gp_mutation_rate:
                         new_child.mutate()
                     self.new_population.append(new_child)
+
+                    # if configured to, force mutation of children who are clones, or have been seen before
+                    if self.force_mutation_of_clones:
+                        new_pop_strings = []
+                        for i, p in enumerate(self.new_population):
+                            p_string = p.get_string()
+                            while p_string in self.fitness_assignments.keys() or p_string in new_pop_strings:
+                                p.mutate()
+                                p_string = p.get_string()
+                            new_pop_strings.append(p_string)
+
+                        assert(len(set(p.get_string() for p in self.population)) == len(list(p.get_string() for p in self.population)))
 
                 # extend population with new members
                 self.population.extend(self.new_population)
