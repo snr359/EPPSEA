@@ -143,8 +143,6 @@ class ModifiedCMAES(purecma.CMAES):
             res['ftarget'] = self.fitvals[0]
         if self.C.condition_number > 1e14:
             res['condition'] = self.C.condition_number
-        if self.sigma > 1e140:
-            res['sigma'] = self.sigma
         if len(self.fitvals) > 1 and (self.fitvals[0] == float('inf') or self.fitvals[-1] - self.fitvals[0] < 1e-12):
             res['tolfun'] = 1e-12
         if self.sigma * max(self.C.eigenvalues)**0.5 < 1e-11:
@@ -188,6 +186,7 @@ class CMAES_runner:
         result.best_fitnesses = dict()
 
         while not es.stop():
+            es.sigma = min(es.sigma, 1e100)
             X = es.ask()  # get a list of sampled candidate solutions
             fitness_values = list(self.fitness_function.evaluate(x) for x in X)
             if basic:
