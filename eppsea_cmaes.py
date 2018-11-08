@@ -170,6 +170,9 @@ class CMAES_runner:
         init_sigma = 0.5
         max_evals = self.config.getint('CMAES', 'maximum evaluations')
         population_size = self.config.getint('CMAES', 'population size')
+        terminate_no_best_fitness_change = self.config.getboolean('CMAES', 'terminate on no improvement in best fitness')
+        no_change_termination_generations = self.config.getint('CMAES', 'generations to termination for no improvement')
+
 
         es = ModifiedCMAES(start, init_sigma, maxfevals=max_evals, popsize=population_size)
         es.fitness_function = self.fitness_function
@@ -184,6 +187,10 @@ class CMAES_runner:
         result.fitnesses = dict()
         result.average_fitnesses = dict()
         result.best_fitnesses = dict()
+
+        gens_since_best_fitness_improvement = 0
+        best_fitness = math.inf
+        term_conditions = None
 
         while not es.stop():
             es.sigma = min(es.sigma, 1e100)
@@ -205,10 +212,20 @@ class CMAES_runner:
             result.average_fitnesses[es.counteval] = statistics.mean(fitness_values)
             result.best_fitnesses[es.counteval] = max(fitness_values)
 
+            if min(fitness_values) < best_fitness:
+                best_fitness = min(fitness_values)
+                gens_since_best_fitness_improvement = 0
+            else:
+                gens_since_best_fitness_improvement += 1
+                if terminate_no_best_fitness_change and gens_since_best_fitness_improvement >= no_change_termination_generations:
+                    term_conditions = {'fitness_convergence': best_fitness}
+                    break
+
             generation += 1
 
         es.disp(1)
-        term_conditions = es.stop()
+        if term_conditions is None:
+            term_conditions = es.stop()
 
         result.fitness_function_display_name = self.fitness_function.display_name
         result.fitness_function_id = self.fitness_function.id
@@ -226,7 +243,7 @@ class CMAES_runner:
             result.termination_reason = 'target_fitness_hit'
         elif 'maxfevals' in term_conditions:
             result.termination_reason = 'maximum_evaluations_reached'
-        elif 'tolfun' in term_conditions or 'tolx' in term_conditions:
+        elif 'tolfun' in term_conditions or 'tolx' in term_conditions or 'fitness_convergence' in term_conditions:
             result.termination_reason = 'fitness_convergence'
 
         result.final_best_fitness = max(es.best.f, self.fitness_function.evaluate(es.xmean))
