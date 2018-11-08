@@ -510,6 +510,137 @@ class GPTree:
                     break
             replacement_node.parent = parent_of_replacement
 
+    def simplify(self, target_node):
+        # eliminates redundant branches in the tree
+
+        # first, simplify the children
+        for c in target_node.children:
+            self.simplify(c)
+
+        # go through the cases that can be simplified
+        # if anything is subtracted from itself, the result is always 0
+        if target_node.operation == '-':
+            if target_node.children[0].operation == target_node.children[1].operation:
+                target_node.operation = 'constant'
+                target_node.data = 0
+                target_node.children = []
+
+        # anything multiplied by 1 is just itself
+        if target_node.operation == '*':
+            if target_node.children[0].operation == 'constant' and target_node.children[0].data == 1:
+                new_node = copy.deepcopy(target_node.children[1])
+                self.replace_node(target_node, new_node)
+                return
+            elif target_node.children[1].operation == 'constant' and target_node.children[1].data == 1:
+                new_node = copy.deepcopy(target_node.children[0])
+                self.replace_node(target_node, new_node)
+                return
+
+        # anything multiplied by 0 is 0
+        if target_node.operation == '*':
+            if target_node.children[0].operation == 'constant' and target_node.children[0].data == 0:
+                target_node.operation = 'constant'
+                target_node.data = 0
+                target_node.children = []
+            elif target_node.children[1].operation == 'constant' and target_node.children[1].data == 0:
+                target_node.operation = 'constant'
+                target_node.data = 0
+                target_node.children = []
+
+        # 0 divided by anything is 0
+        if target_node.operation == '/':
+            if target_node.children[0].operation == 'constant' and target_node.children[0].data == 0:
+                target_node.operation = 'constant'
+                target_node.data = 0
+                target_node.children = []
+
+        # anything divided by 1 is itself
+        if target_node.operation == '/':
+            if target_node.children[1].operation == 'constant' and target_node.children[1].data == 1:
+                new_node = copy.deepcopy(target_node.children[0])
+                self.replace_node(target_node, new_node)
+                return
+
+        # the absolute value of anything positive is always itself
+        if target_node.operation == 'absolute':
+            if target_node.children[0].operation == 'fitness_rank' or (target_node.children[0].operation == 'constant' and target_node.children[0].data >= 0):
+                new_node = copy.deepcopy(target_node.children[0])
+                self.replace_node(target_node, new_node)
+                return
+
+        # the maximum or minimum of two identical terminals is just that terminal
+        if target_node.operation == 'max' or target_node.operation == 'min':
+            if target_node.children[0].operation == target_node.children[1].operation and target_node.children[0].operation in GPNode.data_terminals:
+                new_node = copy.deepcopy(target_node.children[0])
+                self.replace_node(target_node, new_node)
+                return
+
+        # a step or division function on two identical terminators is always 1
+        if target_node.operation == 'step' or target_node.operation == '/':
+            if target_node.children[0].operation == target_node.children[1].operation and target_node.children[0].operation in GPNode.data_terminals:
+                target_node.operation = 'constant'
+                target_node.data = 1
+                target_node.children = []
+
+        # the max, min, and step of constant terminals can be directly calculated
+        if target_node.operation == 'max':
+            if target_node.children[0].operation == 'constant' and target_node.children[1].operation == 'constant':
+                target_node.operation = 'constant'
+                target_node.data = max(target_node.children[0].data, target_node.children[1].constant)
+                target_node.children = []
+        if target_node.operation == 'min':
+            if target_node.children[0].operation == 'constant' and target_node.children[1].operation == 'constant':
+                target_node.operation = 'constant'
+                target_node.data = min(target_node.children[0].data, target_node.children[1].constant)
+                target_node.children = []
+        if target_node.operation == 'step':
+            if target_node.children[0].operation == 'constant' and target_node.children[1].operation == 'constant':
+                target_node.operation = 'constant'
+                target_node.data = int(target_node.children[0].data >= target_node.children[1].constant)
+                target_node.children = []
+
+        # population_size will always be >= fitness rank
+        if target_node.operation == 'max':
+            if target_node.children[0].operation == 'population_size' and target_node.children[1].operation == 'fitness_rank':
+                new_node = copy.deepcopy(target_node.children[0])
+                self.replace_node(target_node, new_node)
+                return
+            elif target_node.children[0].operation == 'fitness_rank' and target_node.children[1].operation == 'population_size':
+                new_node = copy.deepcopy(target_node.children[1])
+                self.replace_node(target_node, new_node)
+                return
+        if target_node.operation == 'min':
+            if target_node.children[0].operation == 'population_size' and target_node.children[1].operation == 'fitness_rank':
+                new_node = copy.deepcopy(target_node.children[1])
+                self.replace_node(target_node, new_node)
+                return
+            elif target_node.children[0].operation == 'fitness_rank' and target_node.children[1].operation == 'population_size':
+                new_node = copy.deepcopy(target_node.children[0])
+                self.replace_node(target_node, new_node)
+                return
+        if target_node.operation == 'step':
+            if target_node.children[0].operation == 'population_size' and target_node.children[1].operation == 'fitness_rank':
+                target_node.operation = 'constant'
+                target_node.data = 1
+                target_node.children = []
+
+        # two constants can be added/subtracted/multiplied by each other
+        if target_node.operation == '+':
+            if target_node.children[0].operation == 'constant' and target_node.children[1].operation == 'constant':
+                target_node.operation = 'constant'
+                target_node.data = target_node.children[0].data + target_node.children[1].data
+                target_node.children = []
+        if target_node.operation == '-':
+            if target_node.children[0].operation == 'constant' and target_node.children[1].operation == 'constant':
+                target_node.operation = 'constant'
+                target_node.data = target_node.children[0].data - target_node.children[1].data
+                target_node.children = []
+        if target_node.operation == '*':
+            if target_node.children[0].operation == 'constant' and target_node.children[1].operation == 'constant':
+                target_node.operation = 'constant'
+                target_node.data = target_node.children[0].data * target_node.children[1].data
+                target_node.children = []
+
     def randomize(self):
         if self.root is None:
             self.root = GPNode(self.constant_min, self.constant_max, self.random_min, self.random_max)
