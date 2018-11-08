@@ -514,16 +514,11 @@ class GPTree:
         # eliminates redundant branches in the tree
 
         # first, simplify the children
-        for c in target_node.children:
-            self.simplify(c)
+        if target_node.children is not None:
+            for c in list(target_node.children):
+                self.simplify(c)
 
         # go through the cases that can be simplified
-        # if anything is subtracted from itself, the result is always 0
-        if target_node.operation == '-':
-            if target_node.children[0].operation == target_node.children[1].operation:
-                target_node.operation = 'constant'
-                target_node.data = 0
-                target_node.children = []
 
         # anything multiplied by 1 is just itself
         if target_node.operation == '*':
@@ -541,18 +536,18 @@ class GPTree:
             if target_node.children[0].operation == 'constant' and target_node.children[0].data == 0:
                 target_node.operation = 'constant'
                 target_node.data = 0
-                target_node.children = []
+                self.children = None
             elif target_node.children[1].operation == 'constant' and target_node.children[1].data == 0:
                 target_node.operation = 'constant'
                 target_node.data = 0
-                target_node.children = []
+                self.children = None
 
         # 0 divided by anything is 0
         if target_node.operation == '/':
             if target_node.children[0].operation == 'constant' and target_node.children[0].data == 0:
                 target_node.operation = 'constant'
                 target_node.data = 0
-                target_node.children = []
+                self.children = None
 
         # anything divided by 1 is itself
         if target_node.operation == '/':
@@ -580,26 +575,33 @@ class GPTree:
             if target_node.children[0].operation == target_node.children[1].operation and target_node.children[0].operation in GPNode.data_terminals:
                 target_node.operation = 'constant'
                 target_node.data = 1
-                target_node.children = []
+                self.children = None
+
+        # a subtraction function on two identical terminators is always 1
+        if target_node.operation == '-':
+            if target_node.children[0].operation == target_node.children[1].operation and target_node.children[0].operation in GPNode.data_terminals:
+                target_node.operation = 'constant'
+                target_node.data = 0
+                self.children = None
 
         # the max, min, and step of constant terminals can be directly calculated
         if target_node.operation == 'max':
             if target_node.children[0].operation == 'constant' and target_node.children[1].operation == 'constant':
                 target_node.operation = 'constant'
                 target_node.data = max(target_node.children[0].data, target_node.children[1].constant)
-                target_node.children = []
+                self.children = None
         if target_node.operation == 'min':
             if target_node.children[0].operation == 'constant' and target_node.children[1].operation == 'constant':
                 target_node.operation = 'constant'
                 target_node.data = min(target_node.children[0].data, target_node.children[1].constant)
-                target_node.children = []
+                self.children = None
         if target_node.operation == 'step':
             if target_node.children[0].operation == 'constant' and target_node.children[1].operation == 'constant':
                 target_node.operation = 'constant'
                 target_node.data = int(target_node.children[0].data >= target_node.children[1].constant)
-                target_node.children = []
+                self.children = None
 
-        # population_size will always be >= fitness rank
+        # population_size will always be >= fitness_rank
         if target_node.operation == 'max':
             if target_node.children[0].operation == 'population_size' and target_node.children[1].operation == 'fitness_rank':
                 new_node = copy.deepcopy(target_node.children[0])
@@ -622,24 +624,49 @@ class GPTree:
             if target_node.children[0].operation == 'population_size' and target_node.children[1].operation == 'fitness_rank':
                 target_node.operation = 'constant'
                 target_node.data = 1
-                target_node.children = []
+                self.children = None
+
+        # max_fitness will always be >= min_fitness
+        if target_node.operation == 'max':
+            if target_node.children[0].operation == 'max_fitness' and target_node.children[1].operation == 'min_fitness':
+                new_node = copy.deepcopy(target_node.children[0])
+                self.replace_node(target_node, new_node)
+                return
+            elif target_node.children[0].operation == 'min_fitness' and target_node.children[1].operation == 'max_fitness':
+                new_node = copy.deepcopy(target_node.children[1])
+                self.replace_node(target_node, new_node)
+                return
+        if target_node.operation == 'min':
+            if target_node.children[0].operation == 'max_fitness' and target_node.children[1].operation == 'min_fitness':
+                new_node = copy.deepcopy(target_node.children[1])
+                self.replace_node(target_node, new_node)
+                return
+            elif target_node.children[0].operation == 'min_fitness' and target_node.children[1].operation == 'max_fitness':
+                new_node = copy.deepcopy(target_node.children[0])
+                self.replace_node(target_node, new_node)
+                return
+        if target_node.operation == 'step':
+            if target_node.children[0].operation == 'max_fitness' and target_node.children[1].operation == 'min_fitness':
+                target_node.operation = 'constant'
+                target_node.data = 1
+                self.children = None
 
         # two constants can be added/subtracted/multiplied by each other
         if target_node.operation == '+':
             if target_node.children[0].operation == 'constant' and target_node.children[1].operation == 'constant':
                 target_node.operation = 'constant'
                 target_node.data = target_node.children[0].data + target_node.children[1].data
-                target_node.children = []
+                self.children = None
         if target_node.operation == '-':
             if target_node.children[0].operation == 'constant' and target_node.children[1].operation == 'constant':
                 target_node.operation = 'constant'
                 target_node.data = target_node.children[0].data - target_node.children[1].data
-                target_node.children = []
+                self.children = None
         if target_node.operation == '*':
             if target_node.children[0].operation == 'constant' and target_node.children[1].operation == 'constant':
                 target_node.operation = 'constant'
                 target_node.data = target_node.children[0].data * target_node.children[1].data
-                target_node.children = []
+                self.children = None
 
     def randomize(self):
         if self.root is None:
@@ -810,6 +837,10 @@ class EppseaSelectionFunction:
 
     def select(self, population, n=1, selector=0, generation_number=None):
         return self.gp_trees[selector].select(population, n, generation_number)
+
+    def simplify(self):
+        for t in self.gp_trees:
+            t.simplify(t.root)
 
     def get_string(self):
         tree_strings = list(tree.get_string() for tree in self.gp_trees)
@@ -991,6 +1022,20 @@ class Eppsea:
             new_selection_function.randomize()
             self.population.append(new_selection_function)
 
+        # force mutation of clones
+        if self.force_mutation_of_clones:
+            new_pop_strings = []
+            for i, p in enumerate(self.population):
+                p_string = p.get_string()
+                while p_string in new_pop_strings:
+                    p.mutate()
+                    p_string = p.get_string()
+                new_pop_strings.append(p)
+
+        # simplify the children
+        for p in self.population:
+            p.simplify()
+
         # mark the entire population as new
         self.new_population = self.population
 
@@ -1001,15 +1046,6 @@ class Eppsea:
 
         # initialize the population
         self.randomize_population()
-
-        # force mutation of clones
-        if self.force_mutation_of_clones:
-            new_pop_strings = []
-            for i, p in enumerate(self.population):
-                p_string = p.get_string()
-                while p_string in new_pop_strings:
-                    p.mutate()
-                new_pop_strings.append(p)
 
         # check population uniqueness
         self.check_gp_population_uniqueness(self.population, 0.75)
@@ -1137,8 +1173,21 @@ class Eppsea:
                         self.population.sort(key=lambda p: p.fitness, reverse=True)
                         self.population = self.population[:self.gp_mu]
 
-                # parent selection and new child generation
+                # new child generation
                 self.new_population = []
+                # first, generate a number of children by asexual split and mutation
+                while len(self.new_population) < self.gp_lambda * self.gp_mutation_rate:
+                    # parent selection
+                    if self.multiobjective:
+                        parent = min(random.sample(self.population, self.gp_k_tournament_k), key=lambda p: p.pareto_tier)
+                    else:
+                        parent = max(random.sample(self.population, self.gp_k_tournament_k), key=lambda p: p.fitness)
+                    # split and mutation
+                    new_child = copy.deepcopy(parent)
+                    new_child.mutate()
+                    self.new_population.append(new_child)
+
+                # sexual reproduction
                 while len(self.new_population) < self.gp_lambda:
                     # parent selection (k tournament)
                     if self.multiobjective:
@@ -1153,17 +1202,19 @@ class Eppsea:
                         new_child.mutate()
                     self.new_population.append(new_child)
 
-                    # if configured to, force mutation of children who are clones, or have been seen before
-                    if self.force_mutation_of_clones:
-                        new_pop_strings = []
-                        for i, p in enumerate(self.new_population):
-                            p_string = p.get_string()
-                            while p_string in self.fitness_assignments.keys() or p_string in new_pop_strings:
-                                p.mutate()
-                                p_string = p.get_string()
-                            new_pop_strings.append(p_string)
+                # simplify the children
+                for p in self.new_population:
+                    p.simplify()
 
-                        assert(len(set(p.get_string() for p in self.population)) == len(list(p.get_string() for p in self.population)))
+                # if configured to, force mutation of children who are clones, or have been seen before
+                if self.force_mutation_of_clones:
+                    new_pop_strings = []
+                    for i, p in enumerate(self.new_population):
+                        p_string = p.get_string()
+                        while p_string in self.fitness_assignments.keys() or p_string in new_pop_strings:
+                            p.mutate()
+                            p_string = p.get_string()
+                        new_pop_strings.append(p_string)
 
                 # extend population with new members
                 self.population.extend(self.new_population)

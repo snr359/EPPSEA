@@ -471,7 +471,7 @@ class EppseaCMAES:
                 # assign fitness as -1 times the average of the average final best fitnesses
                 s.eppsea_selection_function.fitness = -1 * statistics.mean(average_final_best_fitnesses)
                 if s.eppsea_selection_function.fitness == float('-inf'):
-                    s.eppsea_selection_function.fitness = -9999999999999
+                    s.eppsea_selection_function.fitness = -1e100
 
             elif self.eppsea_fitness_assignment_method == 'proportion_hitting_target_fitness':
                 # assign the fitness as the proportion of runs that hit the target fitness
