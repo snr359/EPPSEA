@@ -272,8 +272,8 @@ class EppseaCMAES:
         self.training_runs = config.getint('CMAES', 'training runs')
         self.testing_runs = config.getint('CMAES', 'testing runs')
 
-        self.num_training_fitness_functions = None
-        self.num_testing_fitness_functions = None
+        self.num_training_fitness_functions = config.getint('CMAES', 'num training fitness functions')
+        self.num_testing_fitness_functions = config.getint('CMAES', 'num testing fitness functions')
         self.training_fitness_functions = None
         self.testing_fitness_functions = None
 
@@ -330,6 +330,10 @@ class EppseaCMAES:
             i += step_size
         if self.test_generalization:
             self.testing_fitness_functions = list(f for f in prepared_fitness_functions if f not in self.training_fitness_functions)
+            if self.num_testing_fitness_functions == -1:
+                self.num_testing_fitness_functions = len(self.testing_fitness_functions)
+            else:
+                self.testing_fitness_functions = self.testing_fitness_functions[:self.num_testing_fitness_functions]
         else:
             self.testing_fitness_functions = None
 
