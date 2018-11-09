@@ -588,17 +588,17 @@ class GPTree:
         if target_node.operation == 'max':
             if target_node.children[0].operation == 'constant' and target_node.children[1].operation == 'constant':
                 target_node.operation = 'constant'
-                target_node.data = max(target_node.children[0].data, target_node.children[1].constant)
+                target_node.data = max(target_node.children[0].data, target_node.children[1].data)
                 self.children = None
         if target_node.operation == 'min':
             if target_node.children[0].operation == 'constant' and target_node.children[1].operation == 'constant':
                 target_node.operation = 'constant'
-                target_node.data = min(target_node.children[0].data, target_node.children[1].constant)
+                target_node.data = min(target_node.children[0].data, target_node.children[1].data)
                 self.children = None
         if target_node.operation == 'step':
             if target_node.children[0].operation == 'constant' and target_node.children[1].operation == 'constant':
                 target_node.operation = 'constant'
-                target_node.data = int(target_node.children[0].data >= target_node.children[1].constant)
+                target_node.data = int(target_node.children[0].data >= target_node.children[1].data)
                 self.children = None
 
         # population_size will always be >= fitness_rank
