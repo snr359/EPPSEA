@@ -319,7 +319,15 @@ class EppseaCMAES:
                 prepared_fitness_functions.append(ff.load(full_fitness_function_path))
 
         # sample a spread of the loaded fitness functions
-        self.training_fitness_functions = [prepared_fitness_functions[0], prepared_fitness_functions[-1], prepared_fitness_functions[5]]
+        if len(prepared_fitness_functions) < self.num_training_fitness_functions:
+            raise Exception('ERROR: Trying to load {0} training fitness functions, but only {1} are available'.format(self.num_training_fitness_functions, len(prepared_fitness_functions)))
+        # take an even sampling of the training functions to prevent bias
+        self.training_fitness_functions = []
+        step_size = self.num_training_fitness_functions / len(prepared_fitness_functions)
+        i = 0
+        for _ in range(self.num_training_fitness_functions):
+            self.training_fitness_functions.append(prepared_fitness_functions[math.floor(i)])
+            i += step_size
         if self.test_generalization:
             self.testing_fitness_functions = list(f for f in prepared_fitness_functions if f not in self.training_fitness_functions)
         else:
