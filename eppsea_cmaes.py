@@ -218,7 +218,7 @@ class CMAES_runner:
             else:
                 gens_since_best_fitness_improvement += 1
                 if terminate_no_best_fitness_change and gens_since_best_fitness_improvement >= no_change_termination_generations:
-                    term_conditions = {'fitness_convergence': best_fitness}
+                    term_conditions = {'fitness_stagnation': best_fitness}
                     break
 
             generation += 1
@@ -243,8 +243,12 @@ class CMAES_runner:
             result.termination_reason = 'target_fitness_hit'
         elif 'maxfevals' in term_conditions:
             result.termination_reason = 'maximum_evaluations_reached'
-        elif 'tolfun' in term_conditions or 'tolx' in term_conditions or 'fitness_convergence' in term_conditions:
+        elif 'tolfun' in term_conditions:
             result.termination_reason = 'fitness_convergence'
+        elif 'tolx' in term_conditions:
+            result.termination_reason = 'population_convergence'
+        elif 'fitness_stagnation' in term_conditions:
+            result.termination_reason = 'fitness_stagnation'
 
         result.final_best_fitness = max(es.best.f, self.fitness_function.evaluate(es.xmean))
 
