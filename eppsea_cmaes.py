@@ -281,6 +281,7 @@ class EppseaCMAES:
         self.training_fitness_functions = None
         self.testing_fitness_functions = None
 
+        self.basic_average_best_fitness = None
 
         if config.get('CMAES', 'eppsea fitness assignment method') == 'best fitness reached' or config.get('CMAES', 'eppsea fitness assignment method') == 'adaptive':
             self.eppsea_fitness_assignment_method = 'best_fitness_reached'
@@ -288,8 +289,10 @@ class EppseaCMAES:
             self.eppsea_fitness_assignment_method = 'proportion_hitting_target_fitness'
         elif config.get('CMAES', 'eppsea fitness assignment method') == 'evals to target fitness':
             self.eppsea_fitness_assignment_method = 'evals_to_target_fitness'
+        elif config.get('CMAES', 'eppsea fitness assignment method') == 'proportion better than basic':
+            self.eppsea_fitness_assignment_method = 'proportion_better_than_basic'
         else:
-            raise Exception('ERROR: eppsea fitness assignment method {0} not recognized!'.format(config.get('EA', 'eppsea fitness assignment method')))
+            raise Exception('ERROR: eppsea fitness assignment method {0} not recognized!'.format(config.get('CMAES', 'eppsea fitness assignment method')))
 
         self.eppsea = None
         self.final_test_results = None
@@ -526,6 +529,18 @@ class EppseaCMAES:
                     all_final_evals.append(statistics.mean(final_evals))
                 # assign fitness as -1 * the average of final eval counts
                 s.eppsea_selection_function.fitness = -1 * statistics.mean(all_final_evals)
+
+            elif self.eppsea_fitness_assignment_method == 'proportion_better_than_basic':
+                # assign the fitness as the proportion of runs that hit a fitness higher than cmaes did
+                proportions_better = []
+                for fitness_function_id in fitness_function_ids:
+                    fitness_function_results = list(r for r in s_results if r.fitness_function_id == fitness_function_id)
+                    proportion_better = len(list(r for r in fitness_function_results if r.final_best_fitness < self.basic_average_best_fitness[fitness_function_id])) / len(fitness_function_results)
+                    proportions_better.append(proportion_better)
+                # assign fitness as -1 times the average of the proportions better
+                s.eppsea_selection_function.fitness = statistics.mean(proportions_better)
+
+
             else:
                 raise Exception('ERROR: fitness assignment method {0} not recognized by eppsea_basicEA'.format(self.eppsea_fitness_assignment_method))
 
@@ -563,6 +578,14 @@ class EppseaCMAES:
         eppsea_config = self.config.get('CMAES', 'base eppsea config path')
         eppsea = eppsea_base.Eppsea(eppsea_config)
         self.eppsea = eppsea
+
+        if self.eppsea_fitness_assignment_method == 'proportion_better_than_basic':
+            self.basic_average_best_fitness = dict()
+            basic_cmaess = self.get_basic_cmaes_runners(self.training_fitness_functions)
+            basic_cmaess_results = self.run_basic_cmaes_runners(basic_cmaess, True)
+            for f in self.training_fitness_functions:
+                f_results = list(r for r in basic_cmaess_results if r.fitness_function_id == f.id)
+                self.basic_average_best_fitness[f.id] = statistics.mean(r.final_best_fitness for r in f_results)
 
         eppsea.start_evolution()
 
