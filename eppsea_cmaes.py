@@ -546,7 +546,7 @@ class EppseaCMAES:
 
     def run_final_tests(self, best_selection_function):
         if self.config.get('CMAES', 'test generalization'):
-            fitness_functions = self.testing_fitness_functions
+            fitness_functions = self.testing_fitness_functions + self.training_fitness_functions
         else:
             fitness_functions = self.training_fitness_functions
 
@@ -595,7 +595,13 @@ class EppseaCMAES:
 
         best_selection_function = eppsea.final_best_member
 
-        print('Running final tests')
+        self.log('Running final tests', 1)
+        self.log('Training fitness functions:', 2)
+        for f in self.training_fitness_functions:
+            self.log('Name: {0}, id: {1}'.format(f.display_name, f.id), 1)
+        self.log('Testing fitness functions:', 2)
+        for f in self.testing_fitness_functions:
+            self.log('Name: {0}, id: {1}'.format(f.display_name, f.id), 1)
         self.final_test_results = self.run_final_tests(best_selection_function)
         self.save_final_results(self.final_test_results)
 
