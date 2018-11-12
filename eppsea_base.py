@@ -235,7 +235,7 @@ class GPTree:
     def tournament_selection(self, population, weights, k):
         # makes a k-tournament selection from the population
         if k > len(population) or k < 1:
-            raise('ERROR: trying to select from a population of {0} with a tournament size of {1}'.format(len(population), k))
+            raise Exception('ERROR: trying to select from a population of {0} with a tournament size of {1}'.format(len(population), k))
         tournament_indices = random.sample(range(len(population)), k)
         index = max(tournament_indices, key=lambda i: weights[i])
         selection = population[index]
