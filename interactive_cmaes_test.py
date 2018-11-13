@@ -66,7 +66,7 @@ def main(config_path):
         for s in selection_functions:
             log('\tResults for EPPSEA member: {0}'.format(s.eppsea_selection_function.get_string()))
             s_results = list(r for r in f_results if r.selection_function_id == s.id)
-            percentage_better = len(list(r for r in s_results if r.final_best_fitness >= basic_average_best_fitnesses[f.id])) / len(s_results)
+            percentage_better = len(list(r for r in s_results if r.final_best_fitness <= basic_average_best_fitnesses[f.id])) / len(s_results)
             percentage_better = round(100 * percentage_better, 2)
             log('\t\tThis selection function beat basic cmaes {0}% of the time'.format(percentage_better))
 
@@ -83,11 +83,11 @@ def main(config_path):
                 log('Results on fitness function {0} with id {1}'.format(f.display_name, f.id))
                 f_results = list(r for r in all_results if r.fitness_function_id == f.id)
                 for s in selection_functions:
-                    log('Results for EPPSEA member: {0}'.format(s.eppsea_selection_function.get_string()))
+                    log('\tResults for EPPSEA member: {0}'.format(s.eppsea_selection_function.get_string()))
                     s_results = list(r for r in f_results if r.selection_function_id == s.id)[:i]
-                    percentage_better = len(list(r for r in s_results if r.final_best_fitness >= basic_average_best_fitnesses[f.id])) / len(s_results)
+                    percentage_better = len(list(r for r in s_results if r.final_best_fitness <= basic_average_best_fitnesses[f.id])) / len(s_results)
                     percentage_better = round(100 * percentage_better, 2)
-                    log('This selection function beat basic cmaes {0}% of the time'.format(percentage_better))
+                    log('\t\tThis selection function beat basic cmaes {0}% of the time'.format(percentage_better))
 
 
 if __name__ == '__main__':
