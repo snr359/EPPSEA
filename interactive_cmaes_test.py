@@ -7,6 +7,11 @@ import eppsea_cmaes
 
 from eppsea_basicEA import SelectionFunction
 
+def log(s):
+    print(s)
+    with open('output.txt', 'a') as file:
+        file.write('{0}\n'.format(s))
+    
 def main(config_path):
     config = configparser.ConfigParser()
     config.read(config_path)
@@ -56,33 +61,33 @@ def main(config_path):
         basic_average_best_fitnesses[f.id] = statistics.mean(r.final_best_fitness for r in f_results)
 
     for f in fitness_functions:
-        print('Results on fitness function {0} with id {1}'.format(f.display_name, f.id))
+        log('Results on fitness function {0} with id {1}'.format(f.display_name, f.id))
         f_results = list(r for r in all_results if r.fitness_function_id == f.id)
         for s in selection_functions:
-            print('\tResults for EPPSEA member: {0}'.format(s.eppsea_selection_function.get_string()))
+            log('\tResults for EPPSEA member: {0}'.format(s.eppsea_selection_function.get_string()))
             s_results = list(r for r in f_results if r.selection_function_id == s.id)
             percentage_better = len(list(r for r in s_results if r.final_best_fitness >= basic_average_best_fitnesses[f.id])) / len(s_results)
             percentage_better = round(100 * percentage_better, 2)
-            print('\t\tThis selection function beat basic cmaes {0}% of the time'.format(percentage_better))
+            log('\t\tThis selection function beat basic cmaes {0}% of the time'.format(percentage_better))
 
     for i in (3,5,10,20,50,100, 200, 500, 1000, 2000):
         if i < cmaes.testing_runs:
-            print('\n----------------------------------------------------------------------------\n')
-            print('Same reports if only the first {0} results are taken:'.format(i))
+            log('\n----------------------------------------------------------------------------\n')
+            log('Same reports if only the first {0} results are taken:'.format(i))
             basic_average_best_fitnesses = dict()
             for f in fitness_functions:
                 f_results = list(r for r in basic_cmaess_results if r.fitness_function_id == f.id)[:i]
                 basic_average_best_fitnesses[f.id] = statistics.mean(r.final_best_fitness for r in f_results)
 
             for f in fitness_functions:
-                print('Results on fitness function {0} with id {1}'.format(f.display_name, f.id))
+                log('Results on fitness function {0} with id {1}'.format(f.display_name, f.id))
                 f_results = list(r for r in all_results if r.fitness_function_id == f.id)
                 for s in selection_functions:
-                    print('Results for EPPSEA member: {0}'.format(s.eppsea_selection_function.get_string()))
+                    log('Results for EPPSEA member: {0}'.format(s.eppsea_selection_function.get_string()))
                     s_results = list(r for r in f_results if r.selection_function_id == s.id)[:i]
                     percentage_better = len(list(r for r in s_results if r.final_best_fitness >= basic_average_best_fitnesses[f.id])) / len(s_results)
                     percentage_better = round(100 * percentage_better, 2)
-                    print('This selection function beat basic cmaes {0}% of the time'.format(percentage_better))
+                    log('This selection function beat basic cmaes {0}% of the time'.format(percentage_better))
 
 
 if __name__ == '__main__':
