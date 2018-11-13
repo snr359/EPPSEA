@@ -68,7 +68,7 @@ def main(config_path):
     print()
     for i in (3,5,10,20,50,100, 200, 500, 1000, 2000):
         if i < cmaes.testing_runs:
-            print('Same reports if only the first {0} results are taken:')
+            print('Same reports if only the first {0} results are taken:'.format(i))
         basic_average_best_fitnesses = dict()
         for f in fitness_functions:
             f_results = list(r for r in basic_cmaess_results if r.fitness_function_id == f.id)[:i]
