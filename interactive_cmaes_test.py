@@ -39,6 +39,14 @@ def main(config_path):
         if user_input == 's':
             break
 
+    if len(eppsea_selection_functions) > 0:
+        new_selection_function = eppsea_base.EppseaSelectionFunction(eppsea_selection_functions[0])
+        new_selection_function.gp_trees[0].root.operation = 'fitness'
+        new_selection_function.gp_trees[0].root.children = []
+        new_selection_function.gp_trees[0].selection_type = 'truncation'
+
+        eppsea_selection_functions.append(new_selection_function)
+
     selection_functions = []
     for e in eppsea_selection_functions:
         selection_function = SelectionFunction()
