@@ -748,7 +748,7 @@ class EppseaSelectionFunction:
             self.fitness = other.fitness
             self.mo_fitnesses = other.mo_fitnesses
             self.pareto_tier = other.pareto_tier
-            self.gp_trees = other.gp_trees[:]
+            self.gp_trees = copy.deepcopy(other.gp_trees)
 
             self.number_of_selectors = other.number_of_selectors
             self.constant_min = other.constant_min
