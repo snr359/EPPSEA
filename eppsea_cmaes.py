@@ -275,6 +275,9 @@ class EppseaCMAES:
         self.test_generalization = config.getboolean('CMAES', 'test generalization')
         self.training_runs = config.getint('CMAES', 'training runs')
         self.testing_runs = config.getint('CMAES', 'testing runs')
+        self.use_preliminary_training_runs = config.getboolean('CMAES', 'use preliminary training runs')
+        self.preliminary_training_runs = config.getint('CMAES', 'preliminary training runs')
+        self.preliminary_fitness_threshold = config.getfloat('CMAES', 'preliminary fitness threshold')
 
         self.num_training_fitness_functions = config.getint('CMAES', 'num training fitness functions')
         self.num_testing_fitness_functions = config.getint('CMAES', 'num testing fitness functions')
@@ -369,14 +372,17 @@ class EppseaCMAES:
 
         return result
 
-    def run_cmaes_runners(self, eas, is_testing):
+    def run_cmaes_runners(self, eas, is_testing, is_preliminary):
         # runs each of the eas for the configured number of runs, returning one result_holder for each ea
         all_run_results = []
 
         if is_testing:
             runs = self.testing_runs
         else:
-            runs = self.training_runs
+            if is_preliminary:
+                runs = self.preliminary_training_runs
+            else:
+                runs = self.training_runs
 
         if self.using_multiprocessing:
             # setup parameters for multiprocessing
@@ -452,8 +458,23 @@ class EppseaCMAES:
             selection_function.generate_from_eppsea_individual(e)
             selection_functions.append(selection_function)
 
-        eas = self.get_cmaes_runners(fitness_functions, selection_functions)
-        ea_results = self.run_cmaes_runners(eas, False)
+        if self.use_preliminary_training_runs:
+            eas = self.get_cmaes_runners(fitness_functions, selection_functions)
+            preliminary_results =  self.run_cmaes_runners(eas, False, True)
+            good_selection_functions = []
+            for s in selection_functions:
+                s_results = list(r for r in preliminary_results if r.selection_function_id == s.id)
+                if any(r.termination_reason == 'hit_target_fitness' or r.final_best_fitness < self.preliminary_fitness_threshold for r in s_results):
+                    good_selection_functions.append(s)
+            if good_selection_functions:
+                eas = self.get_cmaes_runners(fitness_functions, good_selection_functions)
+                good_selection_function_results = self.run_cmaes_runners(eas, False, False)
+            else:
+                good_selection_function_results = []
+            ea_results = preliminary_results + good_selection_function_results
+        else:
+            eas = self.get_cmaes_runners(fitness_functions, selection_functions)
+            ea_results = self.run_cmaes_runners(eas, False, False)
         self.assign_eppsea_fitness(selection_functions, ea_results)
 
         self.log('Reporting results from EPPSEA generation {0}'.format(self.eppsea.gen_number), 2)
