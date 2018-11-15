@@ -72,7 +72,7 @@ class CMAES_Result:
         return info_dict
 
 class ModifiedCMAES(purecma.CMAES):
-    def tell_pop(self, arx, fitvals, population, selection_function):
+    def tell_pop(self, arx, fitvals, population, selection_function, use_sorted_genomes):
         """update the evolution paths and the distribution parameters m,
         sigma, and C within CMA-ES.
 
@@ -99,6 +99,8 @@ class ModifiedCMAES(purecma.CMAES):
         ### recombination, compute new weighted mean value
         # new_arx = random.sample(arx, par.mu)
         selected_members = selection_function.eppsea_selection_function.select(population, par.mu)
+        if use_sorted_genomes:
+            selected_members.sort(key=lambda p: p.fitness, reverse=True)
         selected_arx = list(p.genome for p in selected_members)
         self.xmean = purecma.dot(selected_arx, par.weights[:par.mu], transpose=True)
         #          = [sum(self.weights[k] * arx[k][i] for k in range(self.mu))
@@ -159,6 +161,7 @@ class CMAES_runner:
         self.config = config
         self.fitness_function = fitness_function
         self.selection_function = selection_function
+        self.use_sorted_genomes = config.getboolean('CMAES', 'use sorted genomes')
 
     class Popi:
         def __init__(self):
@@ -205,7 +208,7 @@ class CMAES_runner:
                     new_popi.genome = x
                     new_popi.fitness = -1 * fit  # eppsea assumes fitness maximization
                     population.append(new_popi)
-                es.tell_pop(X, fitness_values, population, self.selection_function)  # update distribution parameters
+                es.tell_pop(X, fitness_values, population, self.selection_function, self.use_sorted_genomes)  # update distribution parameters
 
             result.eval_counts.append(es.counteval)
             result.fitnesses[es.counteval] = fitness_values
@@ -587,7 +590,7 @@ class EppseaCMAES:
         eppsea_selection_function.generate_from_eppsea_individual(best_selection_function)
 
         cmaess = self.get_cmaes_runners(fitness_functions, [eppsea_selection_function])
-        cmaes_results = self.run_cmaes_runners(cmaess, True)
+        cmaes_results = self.run_cmaes_runners(cmaess, True, False)
 
         basic_cmaess = self.get_basic_cmaes_runners(fitness_functions)
         basic_cmaess_results = self.run_basic_cmaes_runners(basic_cmaess, True)
