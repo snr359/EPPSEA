@@ -15,5 +15,5 @@ for i in range(1, 25):
         for f in fitness_functions:
             f_results = list(r for r in basic_cmaess_results if r.fitness_function_id == f.id)
             num_solved = len(list(r for r in f_results if r.termination_reason == 'target_fitness_hit'))
-            percentage_solved = round(num_solved / len(f_results), 2)
+            percentage_solved = round(num_solved*100 / len(f_results), 2)
             print('Basic CMAES solved fitness function {0} {1}% of the time'.format(f.display_name, percentage_solved))
