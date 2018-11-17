@@ -3,7 +3,7 @@ import configparser
 import eppsea_cmaes
 
 for i in range(1, 25):
-    for config_path in ('config/cmaes/config{0}.cfg', 'config/cmaes/config{0}b.cfg'):
+    for config_path in ('config/cmaes/config{0}.cfg'.format(i), 'config/cmaes/config{0}b.cfg'.format(i)):
         print('Running with config at {0}'.format(config_path))
         config = configparser.ConfigParser()
         config.read(config_path)
