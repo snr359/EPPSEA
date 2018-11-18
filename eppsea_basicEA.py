@@ -958,7 +958,7 @@ class EppseaBasicEA:
     def save_final_results(self, final_results):
         file_path = self.results_directory + '/final_results'
         with open(file_path, 'wb') as file:
-            pickle.dump(list(final_results.export()), file)
+            pickle.dump(list(final_results.export()), file, protocol=4)
 
     def run_eppsea_basicea(self):
         print('Now starting EPPSEA')
@@ -1007,12 +1007,12 @@ def main(config_path):
     # pickle the entire eppsea_basicEA object, and separately the base selection function found and a config file for it, and the final test results
     evaluator_pickle_path = '{0}/EppseaBasicEA'.format(evaluator.results_directory)
     with open(evaluator_pickle_path, 'wb') as pickle_file:
-        pickle.dump(evaluator, pickle_file)
+        pickle.dump(evaluator, pickle_file, protocol=4)
     
     if not evaluator.use_multiobjective_ea:
         selection_function_pickle_path = '{0}/EvolvedSelectionFunction'.format(evaluator.results_directory)
         with open(selection_function_pickle_path, 'wb') as pickle_file:
-            pickle.dump(evaluator.eppsea.final_best_member, pickle_file)
+            pickle.dump(evaluator.eppsea.final_best_member, pickle_file, protocol=4)
         selection_function_config_path = '{0}/EvolvedSelectionFunction.cfg'.format(evaluator.results_directory)
         selection_function_config = configparser.ConfigParser()
         selection_function_config.add_section('selection function')
@@ -1027,7 +1027,7 @@ def main(config_path):
             selection_function_config.write(selection_function_config_file)
 
     with open('{0}/FinalTestResults'.format(evaluator.results_directory), 'wb') as pickle_file:
-        pickle.dump(evaluator.final_test_results, pickle_file)
+        pickle.dump(evaluator.final_test_results, pickle_file, protocol=4)
 
 if __name__ == '__main__':
 

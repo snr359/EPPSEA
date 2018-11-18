@@ -225,7 +225,7 @@ class GPTree:
         os.makedirs(error_directory, exist_ok=True)
 
         with open(error_directory + '/population', 'wb') as file:
-            pickle.dump(population, file)
+            pickle.dump(population, file, protocol=4)
         with open(error_directory + '/variables', 'w') as file:
             file.write('min_weight: {0}\n'.format(min_weight))
             file.write('weights: {0}\n'.format(weights))
@@ -732,7 +732,7 @@ class GPTree:
 
     def save_to_dict(self, filename):
         with open(filename, 'wb') as pickleFile:
-            pickle.dump(self.get_dict(), pickleFile)
+            pickle.dump(self.get_dict(), pickleFile, protocol=4)
 
     def load_from_dict(self, filename):
         with open(filename, 'rb') as pickleFile:
@@ -1138,7 +1138,7 @@ class Eppsea:
             pickle_file_path = pickle_directory + '/gen{0}'.format(self.gen_number)
             os.makedirs(pickle_directory, exist_ok=True)
             with open(pickle_file_path, 'wb') as pickle_file:
-                pickle.dump(self.population, pickle_file)
+                pickle.dump(self.population, pickle_file, protocol=4)
 
         # check termination and restart conditions
         self.check_termination_and_restart_conditions()
@@ -1226,7 +1226,7 @@ class Eppsea:
                 pickle_file_path = pickle_directory + '/final'
                 os.makedirs(pickle_directory, exist_ok=True)
                 with open(pickle_file_path, 'wb') as pickle_file:
-                    pickle.dump(self.population, pickle_file)
+                    pickle.dump(self.population, pickle_file, protocol=4)
 
             # write the results
             with open(self.results_directory + '/results.csv', 'w') as resultFile:

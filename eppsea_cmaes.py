@@ -31,7 +31,7 @@ def export_results(results, file_path):
     # exports a list of CMAES_Result objects to a file_path for postprocessing
     run_dicts = list(r.export() for r in results)
     with open(file_path, 'wb') as file:
-        pickle.dump(run_dicts, file)
+        pickle.dump(run_dicts, file, protocol=4)
 
 class CMAES_Result:
     # a class for holding the results of a single run of a cmaes
@@ -600,7 +600,7 @@ class EppseaCMAES:
     def save_final_results(self, final_results):
         file_path = self.results_directory + '/final_results'
         with open(file_path, 'wb') as file:
-            pickle.dump(list(f.export() for f in final_results), file)
+            pickle.dump(list(f.export() for f in final_results), file, protocol=4)
 
     def postprocess(self):
         postprocess_args = ['python3', 'post_process.py', self.results_directory, self.results_directory + '/final_results']
