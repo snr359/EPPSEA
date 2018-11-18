@@ -4,7 +4,7 @@ import sys
 import eppsea_cmaes
 
 def main(start=1, end=24):
-    for i in range(start, end):
+    for i in range(start, end+1):
         for config_path in ('config/cmaes/config{0}.cfg'.format(i), 'config/cmaes/config{0}b.cfg'.format(i)):
             print('Running with config at {0}'.format(config_path))
             config = configparser.ConfigParser()
