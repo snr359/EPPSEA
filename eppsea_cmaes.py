@@ -393,7 +393,7 @@ class EppseaCMAES:
             for ea in eas:
                 params.extend([ea]*runs)
             # run all runs
-            pool = multiprocessing.Pool()
+            pool = multiprocessing.Pool(maxtasksperchild=10)
             results = pool.map(run_cmaes_runner, params)
             pool.close()
 
@@ -428,7 +428,7 @@ class EppseaCMAES:
             for ea in eas:
                 params.extend([ea]*runs)
             # run all runs
-            pool = multiprocessing.Pool()
+            pool = multiprocessing.Pool(maxtasksperchild=10)
             results = pool.map(run_basic_cmaes_runner, params)
             pool.close()
 
