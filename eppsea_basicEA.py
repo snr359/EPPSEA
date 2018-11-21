@@ -1,7 +1,6 @@
 import math
 import random
 import statistics
-import itertools
 import sys
 import configparser
 import os
@@ -17,12 +16,6 @@ import subprocess
 import eppsea_base
 import fitness_functions as ff
 
-try:
-    import cocoex
-except ImportError:
-    print('BBOB COCO not found. COCO benchmarks will not be available')
-
-import scipy.stats
 import numpy as np
 
 import matplotlib
@@ -541,8 +534,8 @@ class EppseaBasicEA:
         else:
             raise Exception('ERROR: eppsea fitness assignment method {0} not recognized!'.format(config.get('EA', 'eppsea fitness assignment method')))
 
-        self.num_training_fitness_functions = None
-        self.num_testing_fitness_functions = None
+        self.num_training_fitness_functions = config.getint('EA', 'num training fitness functions')
+        self.num_testing_fitness_functions = config.getint('EA', 'num testing fitness functions')
         self.training_fitness_functions = None
         self.testing_fitness_functions = None
 
@@ -563,7 +556,8 @@ class EppseaBasicEA:
         fitness_function_directory = config.get('EA', 'fitness function directory')
 
         if config.getboolean('EA', 'generate new fitness functions'):
-            prepared_fitness_functions = ff.generate_coco_functions(fitness_function_config_path, True)
+            num_fitness_functions = self.num_training_fitness_functions + self.num_testing_fitness_functions # ignored for coco functions
+            prepared_fitness_functions = ff.generate_fitness_functions(fitness_function_config_path, True, num_fitness_functions)
             os.makedirs(fitness_function_directory, exist_ok=True)
             for i, f in enumerate(prepared_fitness_functions):
                 save_path = '{0}/{1}'.format(fitness_function_directory, i)
@@ -576,9 +570,21 @@ class EppseaBasicEA:
                 prepared_fitness_functions.append(ff.load(full_fitness_function_path))
 
         # sample a spread of the loaded fitness functions
-        self.training_fitness_functions = [prepared_fitness_functions[0], prepared_fitness_functions[-1], prepared_fitness_functions[5]]
+        if len(prepared_fitness_functions) < self.num_training_fitness_functions:
+            raise Exception('ERROR: Trying to load {0} training fitness functions, but only {1} are available'.format(self.num_training_fitness_functions, len(prepared_fitness_functions)))
+        # take an even sampling of the training functions to prevent bias
+        self.training_fitness_functions = []
+        step_size =  len(prepared_fitness_functions) / self.num_training_fitness_functions
+        i = 0
+        for _ in range(self.num_training_fitness_functions):
+            self.training_fitness_functions.append(prepared_fitness_functions[math.floor(i)])
+            i += step_size
         if self.test_generalization:
             self.testing_fitness_functions = list(f for f in prepared_fitness_functions if f not in self.training_fitness_functions)
+            if self.num_testing_fitness_functions == -1:
+                self.num_testing_fitness_functions = len(self.testing_fitness_functions)
+            else:
+                self.testing_fitness_functions = self.testing_fitness_functions[:self.num_testing_fitness_functions]
         else:
             self.testing_fitness_functions = None
             

@@ -162,11 +162,9 @@ class FitnessFunction:
 
         return fitness
 
-def generate_landscape_functions(config_path, n, append_instance_number):
+def generate_landscape_functions(config, n, append_instance_number):
     # generates and returns a list of n nk_landscape or mk_landscape functions
     # if append_instance_number, then the instance number will be apppended to the function's display name
-    config = configparser.ConfigParser()
-    config.read(config_path)
 
     fitness_functions = []
 
@@ -181,13 +179,10 @@ def generate_landscape_functions(config_path, n, append_instance_number):
 
     return fitness_functions
 
-def generate_coco_functions(config_path, append_instance_number):
+def generate_coco_functions(config, append_instance_number):
     # given a path to a fitness function configuration file, generates all the coco fitness functions and returns them
     # if append_instance_number, then the instance number will be appended to the function's display name
     # generates the fitness functions to be used in the EAs
-
-    config = configparser.ConfigParser()
-    config.read(config_path)
 
     genome_length = config.getint('fitness function', 'genome length')
     if genome_length not in [2, 3, 5, 10, 20, 40]:
@@ -206,6 +201,21 @@ def generate_coco_functions(config_path, append_instance_number):
             new_fitness_function.display_name = '{0}_I{1}'.format(new_fitness_function.display_name, str(coco_id))
 
         fitness_functions.append(new_fitness_function)
+
+    return fitness_functions
+
+def generate_fitness_functions(config_path, append_instance_number, n=0):
+    config = configparser.ConfigParser()
+    config.read(config_path)
+
+    fitness_function_type = config.get('fitness function', 'type')
+
+    if fitness_function_type == 'coco':
+        fitness_functions = generate_coco_functions(config, append_instance_number)
+    elif fitness_function_type in ('nk_landscape', 'mk_landscape'):
+        fitness_functions = generate_landscape_functions(config, n, append_instance_number)
+    else:
+        raise Exception('ERROR: fitness function type {0} not recognized'.format(fitness_function_type))
 
     return fitness_functions
 

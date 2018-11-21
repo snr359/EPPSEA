@@ -322,7 +322,7 @@ class EppseaCMAES:
         fitness_function_directory = config.get('CMAES', 'fitness function directory')
 
         if config.getboolean('CMAES', 'generate new fitness functions'):
-            prepared_fitness_functions = ff.generate_coco_functions(fitness_function_config_path, True)
+            prepared_fitness_functions = ff.generate_fitness_functions(fitness_function_config_path, True)
             os.makedirs(fitness_function_directory, exist_ok=True)
             for i, f in enumerate(prepared_fitness_functions):
                 save_path = '{0}/{1}'.format(fitness_function_directory, i)
