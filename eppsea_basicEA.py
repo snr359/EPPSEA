@@ -20,7 +20,6 @@ import numpy as np
 
 import matplotlib
 matplotlib.use('Agg')
-from matplotlib import pyplot as plt
 
 def run_ea(ea):
     result = ea.one_run()
@@ -114,6 +113,12 @@ class EAResultCollection:
 
     def export(self):
         return list(r.export() for r in self.results)
+
+    def __add__(self, other):
+        new_collection = EAResultCollection()
+        new_collection.add(self.results)
+        new_collection.add(other.results)
+        return new_collection
 
 class SelectionFunction:
     def __init__(self):
@@ -524,6 +529,10 @@ class EppseaBasicEA:
         self.use_multiobjective_ea = config.getboolean('EA', 'use multiobjective ea')
         self.minimize_fitness_function = config.getboolean('EA', 'minimize fitness function')
 
+        self.use_preliminary_training_runs = config.getboolean('EA', 'use preliminary training runs')
+        self.preliminary_training_runs = config.getint('EA', 'preliminary training runs')
+        self.preliminary_fitness_threshold = config.getfloat('EA', 'preliminary fitness threshold')
+
         # if we are using adaptive fitness assignment, start fitness assignment method as best_fitness_reached
         if config.get('EA', 'eppsea fitness assignment method') == 'best fitness reached' or config.get('EA', 'eppsea fitness assignment method') == 'adaptive':
             self.eppsea_fitness_assignment_method = 'best_fitness_reached'
@@ -617,14 +626,17 @@ class EppseaBasicEA:
 
         return result
 
-    def run_eas(self, eas, is_testing):
+    def run_eas(self, eas, is_testing, is_preliminary):
         # runs each of the eas for the configured number of runs, returning one result_holder for each ea
         all_run_results = []
 
         if is_testing:
             runs = self.testing_runs
         else:
-            runs = self.training_runs
+            if is_preliminary:
+                runs = self.preliminary_training_runs
+            else:
+                runs = self.training_runs
 
         if self.using_multiprocessing:
             # setup parameters for multiprocessing
@@ -665,8 +677,23 @@ class EppseaBasicEA:
             selection_function.generate_from_eppsea_individual(e)
             selection_functions.append(selection_function)
 
-        eas = self.get_eas(fitness_functions, selection_functions)
-        ea_results = self.run_eas(eas, False)
+        if self.use_preliminary_training_runs:
+            eas = self.get_eas(fitness_functions, selection_functions)
+            preliminary_results =  self.run_eas(eas, False, True)
+            good_selection_functions = []
+            for s in selection_functions:
+                s_results = list(r for r in preliminary_results.results if r.selection_function_id == s.id)
+                if any(r.termination_reason == 'hit_target_fitness' or r.final_best_fitness < self.preliminary_fitness_threshold for r in s_results):
+                    good_selection_functions.append(s)
+            if good_selection_functions:
+                eas = self.get_eas(fitness_functions, good_selection_functions)
+                good_selection_function_results = self.run_eas(eas, False, False)
+            else:
+                good_selection_function_results = []
+            ea_results = preliminary_results + good_selection_function_results
+        else:
+            eas = self.get_eas(fitness_functions, selection_functions)
+            ea_results = self.run_eas(eas, False, False)
         self.assign_eppsea_fitness(selection_functions, ea_results)
 
     def assign_eppsea_fitness(self, selection_functions, ea_results):
@@ -774,7 +801,7 @@ class EppseaBasicEA:
 
         eas = self.get_eas(fitness_functions, selection_functions)
 
-        ea_results = self.run_eas(eas, True)
+        ea_results = self.run_eas(eas, True, False)
 
         return ea_results
 
