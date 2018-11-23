@@ -288,7 +288,11 @@ class EppseaCMAES:
         self.testing_fitness_functions = None
 
         self.basic_average_best_fitness = None
+        self.basic_average_best_evals = None
         self.basic_median_best_fitness = None
+        self.basic_median_best_evals = None
+        
+        self.measuring_against_basic_evals = None
 
         if config.get('CMAES', 'eppsea fitness assignment method') == 'best fitness reached' or config.get('CMAES', 'eppsea fitness assignment method') == 'adaptive':
             self.eppsea_fitness_assignment_method = 'best_fitness_reached'
@@ -617,19 +621,43 @@ class EppseaCMAES:
 
         if self.eppsea_fitness_assignment_method == 'proportion_better_than_basic':
             self.basic_average_best_fitness = dict()
+            self.basic_average_best_evals = dict()
+            self.measuring_against_basic_evals = False
             basic_cmaess = self.get_basic_cmaes_runners(self.training_fitness_functions)
             basic_cmaess_results = self.run_basic_cmaes_runners(basic_cmaess, True)
             for f in self.training_fitness_functions:
                 f_results = list(r for r in basic_cmaess_results if r.fitness_function_id == f.id)
                 self.basic_average_best_fitness[f.id] = statistics.mean(r.final_best_fitness for r in f_results)
 
+                if len(list(r for r in f_results if r.termination_reason == 'target_fitness_reached')) / len(f_results) >= .95:
+                    self.measuring_against_basic_evals = True
+                evals = []
+                for r in f_results:
+                    if r.termination_reason == 'target_fitness_reached':
+                        evals.append(max(r.eval_counts))
+                    else:
+                        evals.append(2 * self.config.getint('CMAES', 'maximum evaluations'))
+                self.basic_average_best_evals = statistics.mean(evals)
+
         elif self.eppsea_fitness_assignment_method == 'proportion_better_than_basic_median':
             self.basic_median_best_fitness = dict()
+            self.basic_median_best_evals = dict()
+            self.measuring_against_basic_evals = False
             basic_cmaess = self.get_basic_cmaes_runners(self.training_fitness_functions)
             basic_cmaess_results = self.run_basic_cmaes_runners(basic_cmaess, True)
             for f in self.training_fitness_functions:
                 f_results = list(r for r in basic_cmaess_results if r.fitness_function_id == f.id)
                 self.basic_median_best_fitness[f.id] = statistics.median(r.final_best_fitness for r in f_results)
+
+                if len(list(r for r in f_results if r.termination_reason == 'target_fitness_reached')) / len(f_results) >= 95:
+                    self.measuring_against_basic_evals = True
+                evals = []
+                for r in f_results:
+                    if r.termination_reason == 'target_fitness_reached':
+                        evals.append(max(r.eval_counts))
+                    else:
+                        evals.append(2 * self.config.getint('CMAES', 'maximum evaluations'))
+                self.basic_median_best_evals = statistics.median(evals)
 
         eppsea.start_evolution()
 
