@@ -566,8 +566,12 @@ class EppseaCMAES:
                 proportions_better = []
                 for fitness_function_id in fitness_function_ids:
                     fitness_function_results = list(r for r in s_results if r.fitness_function_id == fitness_function_id)
-                    proportion_better = len(list(r for r in fitness_function_results if r.final_best_fitness < self.basic_average_best_fitness[fitness_function_id])) / len(fitness_function_results)
-                    proportions_better.append(proportion_better)
+                    if self.measuring_against_basic_evals:
+                        proportion_better = len(list(r for r in fitness_function_results if r.termination_reason == 'target_fitness_hit' and (r.eval_counts) < self.basic_average_best_evals[fitness_function_id])) / len(fitness_function_results)
+                        proportions_better.append(proportion_better)
+                    else:
+                        proportion_better = len(list(r for r in fitness_function_results if r.final_best_fitness < self.basic_average_best_fitness[fitness_function_id])) / len(fitness_function_results)
+                        proportions_better.append(proportion_better)
                 # assign fitness as the average of the proportions better
                 s.eppsea_selection_function.fitness = statistics.mean(proportions_better)
 
@@ -576,8 +580,12 @@ class EppseaCMAES:
                 proportions_better = []
                 for fitness_function_id in fitness_function_ids:
                     fitness_function_results = list(r for r in s_results if r.fitness_function_id == fitness_function_id)
-                    proportion_better = len(list(r for r in fitness_function_results if r.final_best_fitness < self.basic_median_best_fitness[fitness_function_id])) / len(fitness_function_results)
-                    proportions_better.append(proportion_better)
+                    if self.measuring_against_basic_evals:
+                        proportion_better = len(list(r for r in fitness_function_results if r.termination_reason == 'target_fitness_hit' and (r.eval_counts) < self.basic_median_best_evals[fitness_function_id])) / len(fitness_function_results)
+                        proportions_better.append(proportion_better)
+                    else:
+                        proportion_better = len(list(r for r in fitness_function_results if r.final_best_fitness < self.basic_median_best_fitness[fitness_function_id])) / len(fitness_function_results)
+                        proportions_better.append(proportion_better)
                 # assign fitness as the average of the proportions better
                 s.eppsea_selection_function.fitness = statistics.mean(proportions_better)
 
