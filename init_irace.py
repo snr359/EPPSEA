@@ -104,32 +104,6 @@ def main(irace_path, eppsea_config_path, training_instances_directory, using_evo
 
     subprocess.run(process_args)
 
-    # if we are testing against previous eppsea_basicEA results, run the new selection function against the newly
-    # generated config
-    if test_against_previous_results:
-        with open(previous_results_path, 'rb') as file:
-            previous_results = pickle.load(file)
-
-        new_eppsea_basicea_config = configparser.ConfigParser()
-        new_eppsea_basicea_config.read(new_eppsea_basicea_config_path)
-        new_eppsea_basicea_config['EA']['generate new fitness functions'] = 'False'
-
-        eppsea_basicEA = EppseaBasicEA(new_eppsea_basicea_config)
-
-        new_selection_function = SelectionFunction()
-        new_selection_config = configparser.ConfigParser()
-        new_selection_config.read(new_selection_config_path)
-        new_selection_function.generate_from_config(new_selection_config)
-        new_selection_function.display_name = new_selection_function.display_name + ' with irace'
-
-        eas = eppsea_basicEA.get_eas(eppsea_basicEA.testing_fitness_functions, [new_selection_function])
-        ea_results = eppsea_basicEA.run_eas(eas, True)
-
-        ea_results.add(previous_results.results)
-
-        postprocess_results = eppsea_basicEA.postprocess(ea_results)
-        eppsea_basicEA.log(postprocess_results)
-
 if __name__ == '__main__':
     args = get_args()
     main(args.irace_path, args.eppsea_config_path, args.training_instances_directory, args.evolved,
