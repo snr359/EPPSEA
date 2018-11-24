@@ -810,46 +810,6 @@ class EppseaBasicEA:
 
         return ea_results
 
-    def export_run_results(self, final_test_results):
-        # takes a list of ResultsHolder objects and exports several json files that are compatible with the post_process
-        # script
-        results_paths = []
-        # get a set of the selection functions tested
-        selection_function_names = set(f.selection_function_name for f in final_test_results.results)
-        # create a dictionary of results for each selection function
-        for s in selection_function_names:
-            results_dict = dict()
-            results_dict['Name'] = s
-            # get the list of results for this particular selection function
-            results = list(f for f in final_test_results.results if f.selection_function_name == s)
-            # check if a log scale needs to be used
-            if any(r.fitness_function_name in ['rosenbrock', 'rastrigin', 'coco'] for r in results):
-                results_dict['Log Scale'] = True
-            else:
-                results_dict['Log Scale'] = False
-            # check if this is the EPPSEA selection function, in which case a t test must be done
-            if s == 'eppsea_selection_function':
-                results_dict['T Test'] = True
-            else:
-                results_dict['T Test'] = False
-            results_dict['Fitness Functions'] = dict()
-            # enumerate over all fitness functions tested
-            for i,f in enumerate(self.testing_fitness_functions):
-                # get the result holder corresponding to the runs for this fitness function
-                fitness_function_result = next(r for r in results if r.fitness_function_id == f.id)
-                # get the mappings of evaluations to best fitnesses for all runs of this fitness function
-                run_results = list(r['best_fitnesses'] for r in fitness_function_result)
-
-                fitness_function_name = f.fitness_function_name
-                results_dict['Fitness Functions'][i] = {'Name':fitness_function_name, 'Runs':run_results}
-
-            # export the json file and record its location
-            results_path = '{0}/{1}.json'.format(self.results_directory, s)
-            with open(results_path, 'w') as file:
-                json.dump(results_dict, file)
-            results_paths.append(results_path)
-        return results_paths
-
     def postprocess(self):
         postprocess_args = ['python3', 'post_process.py', self.results_directory, self.results_directory + '/final_results']
         output = subprocess.run(postprocess_args, stdout=subprocess.PIPE, universal_newlines=True).stdout
