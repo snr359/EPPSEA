@@ -1,3 +1,8 @@
 parent_selection == "truncation" & offspring_size*2 >  population_size
-parent_selection == "k_tournament" & parent_selection_tournament_k > population_size
-survival_selection == "k_tournament" & survival_selection_tournament_k > population_size
+parent_selection == "k_tournament_no_replacement" & offspring_size*2 >  population_size
+parent_selection == "fitness_proportional_no_replacement" & offspring_size*2 >  population_size
+parent_selection == "fitness_rank_no_replacement" & offspring_size*2 >  population_size
+parent_selection == "k_tournament_replacement" & parent_selection_tournament_k > population_size
+parent_selection == "k_tournament_no_replacement" & parent_selection_tournament_k > population_size-2*offspring_size+1
+survival_selection == "k_tournament_replacement" & survival_selection_tournament_k > population_size
+survival_selection == "k_tournament_no_replacement" & survival_selection_tournament_k > population_size
