@@ -1,4 +1,5 @@
 # this script automatically sets up and runs irace
+# WARNING: this will overwrite a directory named '_instances' and a file named '_evolved_selection_function'
 
 import configparser
 import subprocess
@@ -7,7 +8,7 @@ import sys
 import datetime
 import shutil
 import argparse
-import pickle
+
 
 from eppsea_basicEA import *
 
@@ -16,7 +17,6 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--irace_path')
     parser.add_argument('-c', '--eppsea_config_path')
-    parser.add_argument('-t', '--training_instances_directory')
 
     parser.add_argument('-e', '--evolved', action='store_true', required=False)
     parser.add_argument('-s', '--evolved_selection_path', required=False)
@@ -37,7 +37,7 @@ def get_args():
 
     return args
 
-def main(irace_path, eppsea_config_path, training_instances_directory, using_evolved_selection_function,
+def main(irace_path, eppsea_config_path, using_evolved_selection_function,
          evolved_selection_path, evolved_selection_config_path, test_against_previous_results,
          previous_results_path):
     # first, set up the fitness functions, using config/basicEA/config5 as the base for the coco functions
@@ -60,6 +60,23 @@ def main(irace_path, eppsea_config_path, training_instances_directory, using_evo
     if num_processes is None:
         num_processes = 4
 
+    # create a directory of training instances
+    if os.path.exists('_instances'):
+        shutil.rmtree('_instances')
+    os.makedirs('_instances', exist_ok=True)
+    num_training_fitness_functions = eppsea_basicEA_config.getint('EA', 'num training fitness functions')
+    num_testing_fitness_functions = eppsea_basicEA_config.getint('EA', 'num testing fitness functions')
+    fitness_function_directory = eppsea_basicEA_config.get('EA', 'fitness function directory')
+
+    step_size = (num_training_fitness_functions + num_testing_fitness_functions) / num_training_fitness_functions
+    i = 0
+    for _ in range(num_training_fitness_functions):
+        function_index = math.floor(i)
+        function_path = '{0}/{1}'.format(fitness_function_directory, function_index)
+        dest_path = '_instances/{0}'.format(function_index)
+        shutil.copyfile(function_path, dest_path)
+        i += step_size
+
     # if we are using an evolved selection function, copy it into the base directory
     if using_evolved_selection_function:
         shutil.copy(evolved_selection_path, '_evolved_selection_function')
@@ -70,10 +87,10 @@ def main(irace_path, eppsea_config_path, training_instances_directory, using_evo
         with open('_evolved_selection_function.cfg', 'w') as config_file:
             config.write(config_file)
 
-        process_args = [irace_path, '--scenario', 'irace_evolved_scenario.txt', '--train-instances-dir', training_instances_directory,
+        process_args = [irace_path, '--scenario', 'irace_evolved_scenario.txt', '--train-instances-dir', '_instances',
                         '--parallel', str(num_processes)]
     else:
-        process_args = [irace_path, '--scenario', 'irace_scenario.txt', '--train-instances-dir', training_instances_directory,
+        process_args = [irace_path, '--scenario', 'irace_scenario.txt', '--train-instances-dir', '_instances',
                         '--parallel', str(num_processes)]
     irace_output = subprocess.run(process_args, stdout=subprocess.PIPE, universal_newlines=True).stdout
 
@@ -106,6 +123,6 @@ def main(irace_path, eppsea_config_path, training_instances_directory, using_evo
 
 if __name__ == '__main__':
     args = get_args()
-    main(args.irace_path, args.eppsea_config_path, args.training_instances_directory, args.evolved,
+    main(args.irace_path, args.eppsea_config_path, args.evolved,
          args.evolved_selection_path, args.evolved_selection_config_path, args.test_against_previous_results,
          args.previous_results_path)

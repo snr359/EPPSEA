@@ -6,7 +6,8 @@ import configparser
 import pickle
 import datetime
 
-from eppsea_basicEA import SelectionFunction, FitnessFunction, EA
+from eppsea_basicEA import SelectionFunction, EA
+from fitness_functions import FitnessFunction
 
 
 def get_args():
@@ -115,8 +116,11 @@ def main():
     # run the ea
     result = ea.one_run()
 
-    # print the mean of the average final best fitnesses, times -1 (so i_race can minimize it)
-    print(-1 * result.final_best_fitness)
+    # print the mean of the average final best fitnesses
+    if eppsea_ea_config.getboolean('EA', 'minimize fitness function'):
+        print(result.final_best_fitness)
+    else:
+        print(-1 * result.final_best_fitness)
 
 if __name__ == '__main__':
     main()
