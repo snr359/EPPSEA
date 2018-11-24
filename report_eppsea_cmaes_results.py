@@ -28,10 +28,12 @@ def main():
     results_directories = list('{0}/{1}'.format(base_result_directory, r) for r in os.listdir(base_result_directory))
 
     function_results = dict()
+    function_paths = []
     for i in range(1,25):
         for n in (5,10):
             function_path = 'config/fitness_functions/coco_f{0}_d{1}.cfg'.format(i,n)
             function_results[function_path] = []
+            function_paths.append(function_path)
 
     for r in results_directories:
         config_path = '{0}/config.cfg'.format(r)
@@ -41,9 +43,9 @@ def main():
         if function_path in function_results:
             function_results[function_path].append(r)
 
-    for f, r in function_results.items():
+    for f in function_paths:
         print('Results directories for fitness function at {0}'.format(f))
-        for rr in sorted(r):
+        for rr in sorted(function_results[f]):
             print('\t' + rr)
         print('-----------------------------------------------------------------------')
 
