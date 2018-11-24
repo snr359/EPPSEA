@@ -495,6 +495,10 @@ class EppseaBasicEA:
             self.eppsea_fitness_assignment_method = 'proportion_hitting_target_fitness'
         elif config.get('EA', 'eppsea fitness assignment method') == 'evals to target fitness':
             self.eppsea_fitness_assignment_method = 'evals_to_target_fitness'
+        elif config.get('EA', 'eppsea fitness assignment method') == 'proportion better than basic':
+            self.eppsea_fitness_assignment_method = 'proportion_better_than_basic'
+        elif config.get('EA', 'eppsea fitness assignment method') == 'proportion better than basic median':
+            self.eppsea_fitness_assignment_method = 'proportion_better_than_basic_median'
         else:
             raise Exception('ERROR: eppsea fitness assignment method {0} not recognized!'.format(config.get('EA', 'eppsea fitness assignment method')))
 
@@ -502,6 +506,13 @@ class EppseaBasicEA:
         self.num_testing_fitness_functions = config.getint('EA', 'num testing fitness functions')
         self.training_fitness_functions = None
         self.testing_fitness_functions = None
+
+        self.basic_average_best_fitness = None
+        self.basic_average_best_evals = None
+        self.basic_median_best_fitness = None
+        self.basic_median_best_evals = None
+
+        self.measuring_against_basic_evals = None
 
         self.eppsea = None
 
@@ -729,11 +740,48 @@ class EppseaBasicEA:
                             final_evals.append(max(r.eval_counts))
                         else:
                             # for the runs where the target fitness was not hit, use an eval count equal to twice the maximum count
-                            final_evals.append(2 * self.config.getint('CMAES', 'maximum evaluations'))
+                            final_evals.append(2 * self.config.getint('EA', 'maximum evaluations'))
 
                     all_final_evals.append(statistics.mean(final_evals))
                 # assign fitness as -1 * the average of final eval counts
                 s.eppsea_selection_function.fitness = -1 * statistics.mean(all_final_evals)
+
+            elif self.eppsea_fitness_assignment_method == 'proportion_better_than_basic':
+                # assign the fitness as the proportion of runs that hit a fitness higher than cmaes did
+                proportions_better = []
+                for fitness_function_id in fitness_function_ids:
+                    fitness_function_results = list(r for r in s_results if r.fitness_function_id == fitness_function_id)
+                    if self.measuring_against_basic_evals:
+                        proportion_better = len(list(r for r in fitness_function_results if r.termination_reason == 'target_fitness_hit' and (r.eval_counts) < self.basic_average_best_evals[fitness_function_id])) / len(fitness_function_results)
+                        proportions_better.append(proportion_better)
+                    else:
+                        if self.minimize_fitness_function:
+                            proportion_better = len(list(r for r in fitness_function_results if r.final_best_fitness < self.basic_average_best_fitness[fitness_function_id])) / len(fitness_function_results)
+                            proportions_better.append(proportion_better)
+                        else:
+                            proportion_better = len(list(r for r in fitness_function_results if r.final_best_fitness > self.basic_average_best_fitness[fitness_function_id])) / len(fitness_function_results)
+                            proportions_better.append(proportion_better)
+                # assign fitness as the average of the proportions better
+                s.eppsea_selection_function.fitness = statistics.mean(proportions_better)
+
+            elif self.eppsea_fitness_assignment_method == 'proportion_better_than_basic_median':
+                # assign the fitness as the proportion of runs that hit a fitness higher than cmaes did
+                proportions_better = []
+                for fitness_function_id in fitness_function_ids:
+                    fitness_function_results = list(r for r in s_results if r.fitness_function_id == fitness_function_id)
+                    if self.measuring_against_basic_evals:
+                        proportion_better = len(list(r for r in fitness_function_results if r.termination_reason == 'target_fitness_hit' and (r.eval_counts) < self.basic_median_best_evals[fitness_function_id])) / len(fitness_function_results)
+                        proportions_better.append(proportion_better)
+                    else:
+                        if self.minimize_fitness_function:
+                            proportion_better = len(list(r for r in fitness_function_results if r.final_best_fitness < self.basic_median_best_fitness[fitness_function_id])) / len(fitness_function_results)
+                            proportions_better.append(proportion_better)
+                        else:
+                            proportion_better = len(list(r for r in fitness_function_results if r.final_best_fitness > self.basic_median_best_fitness[fitness_function_id])) / len(fitness_function_results)
+                            proportions_better.append(proportion_better)
+                # assign fitness as the average of the proportions better
+                s.eppsea_selection_function.fitness = statistics.mean(proportions_better)
+
             else:
                 raise Exception('ERROR: fitness assignment method {0} not recognized by eppsea_basicEA'.format(self.eppsea_fitness_assignment_method))
 
@@ -957,6 +1005,46 @@ class EppseaBasicEA:
         eppsea_config = self.config.get('EA', 'base eppsea config path')
         eppsea = eppsea_base.Eppsea(eppsea_config)
         self.eppsea = eppsea
+
+        if self.eppsea_fitness_assignment_method == 'proportion_better_than_basic':
+            self.basic_average_best_fitness = dict()
+            self.basic_average_best_evals = dict()
+            self.measuring_against_basic_evals = False
+            basic_eas = self.get_eas(self.training_fitness_functions, self.basic_selection_functions)
+            basic_ea_results = self.run_eas(basic_eas, True, False)
+            for f in self.training_fitness_functions:
+                f_results = list(r for r in basic_ea_results if r.fitness_function_id == f.id)
+                self.basic_average_best_fitness[f.id] = statistics.mean(r.final_best_fitness for r in f_results)
+
+                if len(list(r for r in f_results if r.termination_reason == 'target_fitness_reached')) / len(f_results) >= .95:
+                    self.measuring_against_basic_evals = True
+                evals = []
+                for r in f_results:
+                    if r.termination_reason == 'target_fitness_reached':
+                        evals.append(max(r.eval_counts))
+                    else:
+                        evals.append(2 * self.config.getint('EA', 'maximum evaluations'))
+                self.basic_average_best_evals = statistics.mean(evals)
+
+        elif self.eppsea_fitness_assignment_method == 'proportion_better_than_basic_median':
+            self.basic_median_best_fitness = dict()
+            self.basic_median_best_evals = dict()
+            self.measuring_against_basic_evals = False
+            basic_eas = self.get_eas(self.training_fitness_functions, self.basic_selection_functions)
+            basic_ea_results = self.run_eas(basic_eas, True, False)
+            for f in self.training_fitness_functions:
+                f_results = list(r for r in basic_ea_results if r.fitness_function_id == f.id)
+                self.basic_median_best_fitness[f.id] = statistics.median(r.final_best_fitness for r in f_results)
+
+                if len(list(r for r in f_results if r.termination_reason == 'target_fitness_reached')) / len(f_results) >= 95:
+                    self.measuring_against_basic_evals = True
+                evals = []
+                for r in f_results:
+                    if r.termination_reason == 'target_fitness_reached':
+                        evals.append(max(r.eval_counts))
+                    else:
+                        evals.append(2 * self.config.getint('EA', 'maximum evaluations'))
+                self.basic_median_best_evals = statistics.median(evals)
 
         initial_members = self.convert_to_eppsea_selection(self.basic_selection_functions)
         eppsea.initial_population.extend(initial_members)
