@@ -18,9 +18,6 @@ import fitness_functions as ff
 
 import numpy as np
 
-import matplotlib
-matplotlib.use('Agg')
-
 def run_ea(ea):
     result = ea.one_run()
     return result
@@ -96,11 +93,11 @@ class SelectionFunction:
             
         else:
             self.parent_selection_type = config.get('selection function', 'parent selection type')
-            if self.parent_selection_type == 'k_tournament':
+            if self.parent_selection_type in ('k_tournament_replacement', 'k_tournament_no_replacement'):
                 self.parent_selection_tournament_k = config.getint('selection function', 'parent selection tournament k')
     
             self.survival_selection_type = config.get('selection function', 'survival selection type')
-            if self.survival_selection_type == 'k_tournament':
+            if self.survival_selection_type in ('k_tournament_replacement', 'k_tournament_no_replacement'):
                 self.survival_selection_tournament_k = config.getint('selection function', 'survival selection tournament k')
             
         self.display_name = config.get('selection function', 'display name')
@@ -154,21 +151,37 @@ class SelectionFunction:
         if selection_type == 'truncation':
             return sorted(population, key=lambda x: x.fitness)[:n]
 
-        elif selection_type == 'fitness_rank':
+        elif selection_type == 'fitness_rank_replacement':
             selected = []
             sorted_population = sorted(population, key=lambda p: p.fitness, reverse=True)
-            ranks = list(range(len(population), 0, -1))
-            sum_ranks = (len(sorted_population) * (len(sorted_population)+1)) / 2
+            ranks = list(range(len(sorted_population), 0, -1))
+            sum_ranks = sum(ranks)
             for _ in range(n):
                 r = random.randint(0, sum_ranks)
                 i = 0
                 while r > ranks[i]:
                     r -= ranks[i]
                     i += 1
-                selected.append(population[i])
+                selected.append(sorted_population[i])
+            return selected
+        
+        elif selection_type == 'fitness_rank_no_replacement':
+            selected = []
+            sorted_population = sorted(population, key=lambda p: p.fitness, reverse=True)
+            ranks = list(range(len(sorted_population), 0, -1))
+            for _ in range(n):
+                sum_ranks = sum(ranks)
+                r = random.randint(0, sum_ranks)
+                i = 0
+                while r > ranks[i]:
+                    r -= ranks[i]
+                    i += 1
+                selected.append(sorted_population[i])
+                sorted_population.pop(i)
+                ranks.pop(i)
             return selected
 
-        elif selection_type == 'fitness_proportional':
+        elif selection_type == 'fitness_proportional_replacement':
             selected = []
             min_fitness = min(p.fitness for p in population)
             if min_fitness < 0:
@@ -184,13 +197,43 @@ class SelectionFunction:
                     i += 1
                 selected.append(population[i])
             return selected
+        
+        elif selection_type == 'fitness_proportional_no_replacement':
+            selected = []
+            population_copy = list(population)
+            min_fitness = min(p.fitness for p in population_copy)
+            if min_fitness < 0:
+                selection_chances = [p.fitness - min_fitness for p in population_copy]
+            else:
+                selection_chances = [p.fitness for p in population_copy]
+            for _ in range(n):
+                sum_selection_chances = sum(selection_chances)
+                r = random.uniform(0, sum_selection_chances)
+                i = 0
+                while r > selection_chances[i]:
+                    r -= selection_chances[i]
+                    i += 1
+                selected.append(population_copy[i])
+                population_copy.pop(i)
+                selection_chances.pop(i)
+            return selected
 
-        elif selection_type == 'k_tournament':
+        elif selection_type == 'k_tournament_replacement':
             selected = []
             for _ in range(n):
                 tournament = random.sample(population, tournament_k)
                 winner = max(tournament, key=lambda p: p.fitness)
                 selected.append(winner)
+            return selected
+
+        elif selection_type == 'k_tournament_no_replacement':
+            selected = []
+            population_copy = list(population)
+            for _ in range(n):
+                tournament = random.sample(population_copy, tournament_k)
+                winner = max(tournament, key=lambda p: p.fitness)
+                selected.append(winner)
+                population_copy.remove(winner)
             return selected
 
         elif selection_type == 'random':
@@ -860,22 +903,40 @@ class EppseaBasicEA:
                     parent_selection.selection_type = 'truncation'
                     parent_selection.tournament_size = 0
                 
-                elif s.parent_selection_type == 'fitness_rank':
+                elif s.parent_selection_type == 'fitness_rank_replacement':
                     parent_selection.root.operation = 'fitness_rank'
 
-                    parent_selection.selection_type = 'proportional'
+                    parent_selection.selection_type = 'proportional_replacement'
                     parent_selection.tournament_size = 0
                     
-                elif s.parent_selection_type == 'fitness_proportional':
+                elif s.parent_selection_type == 'fitness_rank_no_replacement':
+                    parent_selection.root.operation = 'fitness_rank'
+
+                    parent_selection.selection_type = 'proportional_no_replacement'
+                    parent_selection.tournament_size = 0
+                    
+                elif s.parent_selection_type == 'fitness_proportional_replacement':
                     parent_selection.root.operation = 'fitness'
 
-                    parent_selection.selection_type = 'proportional'
+                    parent_selection.selection_type = 'proportional_replacement'
+                    parent_selection.tournament_size = 0
+                    
+                elif s.parent_selection_type == 'fitness_proportional_no_replacement':
+                    parent_selection.root.operation = 'fitness'
+
+                    parent_selection.selection_type = 'proportional_no_replacement'
                     parent_selection.tournament_size = 0
                 
-                elif s.parent_selection_type == 'k_tournament':
+                elif s.parent_selection_type == 'k_tournament_replacement':
                     parent_selection.root.operation = 'fitness'
 
                     parent_selection.selection_type = 'tournament_replacement'
+                    parent_selection.tournament_size = s.parent_selection_tournament_k
+                    
+                elif s.parent_selection_type == 'k_tournament_no_replacement':
+                    parent_selection.root.operation = 'fitness'
+
+                    parent_selection.selection_type = 'tournament_no_replacement'
                     parent_selection.tournament_size = s.parent_selection_tournament_k
                 
                 elif s.parent_selection_type == 'random':
@@ -915,22 +976,40 @@ class EppseaBasicEA:
                     survival_selection.selection_type = 'truncation'
                     survival_selection.tournament_size = 0
 
-                elif s.survival_selection_type == 'fitness_rank':
+                elif s.survival_selection_type == 'fitness_rank_replacement':
                     survival_selection.root.operation = 'fitness_rank'
 
-                    survival_selection.selection_type = 'proportional'
+                    survival_selection.selection_type = 'proportional_replacement'
                     survival_selection.tournament_size = 0
 
-                elif s.survival_selection_type == 'fitness_proportional':
+                elif s.survival_selection_type == 'fitness_rank_no_replacement':
+                    survival_selection.root.operation = 'fitness_rank'
+
+                    survival_selection.selection_type = 'proportional_no_replacement'
+                    survival_selection.tournament_size = 0
+
+                elif s.survival_selection_type == 'fitness_proportional_replacement':
                     survival_selection.root.operation = 'fitness'
 
-                    survival_selection.selection_type = 'proportional'
+                    survival_selection.selection_type = 'proportional_replacement'
                     survival_selection.tournament_size = 0
 
-                elif s.survival_selection_type == 'k_tournament':
+                elif s.survival_selection_type == 'fitness_proportional_no_replacement':
+                    survival_selection.root.operation = 'fitness'
+
+                    survival_selection.selection_type = 'proportional_no_replacement'
+                    survival_selection.tournament_size = 0
+
+                elif s.survival_selection_type == 'k_tournament_replacement':
                     survival_selection.root.operation = 'fitness'
 
                     survival_selection.selection_type = 'tournament_replacement'
+                    survival_selection.tournament_size = s.survival_selection_tournament_k
+
+                elif s.survival_selection_type == 'k_tournament_no_replacement':
+                    survival_selection.root.operation = 'fitness'
+
+                    survival_selection.selection_type = 'tournament_no_replacement'
                     survival_selection.tournament_size = s.survival_selection_tournament_k
 
                 elif s.survival_selection_type == 'random':
