@@ -7,7 +7,7 @@ import pickle
 import datetime
 
 from eppsea_basicEA import SelectionFunction, EA
-from fitness_functions import FitnessFunction
+import fitness_functions as ff
 
 
 def get_args():
@@ -36,12 +36,12 @@ def get_args():
         print('ERROR: parent and survival selection must be defined by either command line argument or config file')
         exit(1)
 
-    if args.parent_selection == 'k_tournament' and args.parent_selection_tournament_k is None:
-        print('ERROR: parent_selection is k_tournament but parent_selection_tournament_k is not defined')
+    if args.parent_selection  in ('k_tournament_replacement', 'k_tournament_no_replacement') and args.parent_selection_tournament_k is None:
+        print('ERROR: parent_selection is {0} but parent_selection_tournament_k is not defined'.format(args.parent_selection))
         exit(1)
         
-    if args.survival_selection == 'k_tournament' and args.survival_selection_tournament_k is None:
-        print('ERROR: survival_selection is k_tournament but survival_selection_tournament_k is not defined')
+    if args.survival_selection  in ('k_tournament_replacement', 'k_tournament_no_replacement') and args.survival_selection_tournament_k is None:
+        print('ERROR: survival_selection is {0} but survival_selection_tournament_k is not defined'.format(args.parent_selection))
         exit(1)
 
     if args.generate_configs and (args.selection_config_output_path is None or args.eppsea_basicea_config_output_path is None):
@@ -81,13 +81,13 @@ def main():
         selection_config.set('selection function', 'display name', '')
 
         selection_config.set('selection function', 'parent selection type', args.parent_selection)
-        if args.parent_selection == 'k_tournament':
+        if args.parent_selection in ('k_tournament_replacement', 'k_tournament_no_replacement'):
             selection_config.set('selection function', 'parent selection tournament k', str(args.parent_selection_tournament_k))
         else:
             selection_config.set('selection function', 'parent selection tournament k', '0')
 
         selection_config.set('selection function', 'survival selection type', args.survival_selection)
-        if args.survival_selection == 'k_tournament':
+        if args.survival_selection in ('k_tournament_replacement', 'k_tournament_no_replacement'):
             selection_config.set('selection function', 'survival selection tournament k', str(args.survival_selection_tournament_k))
         else:
             selection_config.set('selection function', 'survival selection tournament k', '0')
@@ -107,8 +107,7 @@ def main():
         exit(0)
 
     # load the fitness function from the fitness function path
-    with open(args.fitness_function_path, 'rb') as fitness_function_file:
-        fitness_function = pickle.load(fitness_function_file)
+    fitness_function = ff.load(args.fitness_function_path)
 
     # create an ea with the fitness function and selection function
     ea = EA(eppsea_ea_config, fitness_function, selection_function)
