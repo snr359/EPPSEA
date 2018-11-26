@@ -23,30 +23,26 @@ class GPNode:
     non_terminals = ['+', '-', '*', '/', 'step', 'absolute', 'min', 'max']
     child_count = {'+': 2, '-': 2, '*': 2, '/': 2, 'step': 2, 'absolute': 1, 'min': 2, 'max': 2}
 
-    def __init__(self, constant_min, constant_max, random_min, random_max):
+    def __init__(self, selection_parameters):
         self.operation = None
         self.data = None
         self.children = None
         self.parent = None
 
-        self.constant_min = constant_min
-        self.constant_max = constant_max
-        
-        self.random_min = random_min
-        self.random_max = random_max
+        self.selection_parameters = selection_parameters
 
     def grow(self, depth_limit, terminal_node_generation_chance, parent):
         if depth_limit == 0 or random.random() < terminal_node_generation_chance:
-            self.operation = random.choice(GPNode.terminals)
+            self.operation = random.choice(self.selection_parameters['selection_terminals'])
         else:
             self.operation = random.choice(GPNode.non_terminals)
 
         if self.operation == 'constant':
-            self.data = random.uniform(self.constant_min, self.constant_max)
+            self.data = random.uniform(self.selection_parameters['constant_min'], self.selection_parameters['constant_max'])
         if self.operation in GPNode.non_terminals:
             self.children = []
             for i in range(GPNode.child_count[self.operation]):
-                new_child_node = GPNode(self.constant_min, self.constant_max, self.random_min, self.random_max)
+                new_child_node = GPNode(self.selection_parameters)
                 new_child_node.grow(depth_limit - 1, terminal_node_generation_chance, self)
                 self.children.append(new_child_node)
         self.parent = parent
@@ -85,7 +81,7 @@ class GPNode:
 
         elif self.operation == 'random':
             population_size = terminal_values['population_size'][0]
-            return numpy.random.uniform(self.random_min, self.random_max, population_size)
+            return numpy.random.uniform(self.selection_parameters['random_min'], self.selection_parameters['random_max'], population_size)
 
     def get_string(self):
         result = ''
@@ -122,6 +118,7 @@ class GPNode:
         result = dict()
         result['data'] = self.data
         result['operation'] = self.operation
+        result['selection_parameters'] = self.selection_parameters
         if self.children is not None:
             result['children'] = []
             for c in self.children:
@@ -132,10 +129,11 @@ class GPNode:
         # builds a GPTree from a dictionary output by get_dict
         self.data = d['data']
         self.operation = d['operation']
+        self.selection_parameters = d['selection_parameters']
         if 'children' in d.keys():
             self.children = []
             for c in d['children']:
-                new_node = GPNode(self.constant_min, self.constant_max, self.random_min, self.random_max)
+                new_node = GPNode(self.selection_parameters)
                 new_node.build_from_dict(c)
                 new_node.parent = self
                 self.children.append(new_node)
@@ -163,17 +161,7 @@ class GPTree:
         self.final = False
         self.selected_in_generation = dict()
 
-        self.constant_min = None
-        self.constant_max = None
-        self.random_min = None
-        self.random_max = None
-
-        self.initial_gp_depth_limit = None
-        self.gp_terminal_node_generation_chance = None
-        self.tournament_size = None
-        self.min_tournament_size = None
-        self.max_tournament_no_replacement_size = None
-        self.max_tournament_size = None
+        self.selection_parameters = None
 
         self.id = None
 
@@ -442,24 +430,24 @@ class GPTree:
             new_child.tournament_size = random.randint(self.tournament_size, parent2.tournament_size)
 
         # clamp the tournament size
-            new_child.tournament_size = max(new_child.tournament_size, new_child.min_tournament_size)
+            new_child.tournament_size = max(new_child.tournament_size, new_child.selection_parameters['minimum_tournament_size'])
 
         if new_child.selection_type in new_child.replacement_selections:
-            new_child.tournament_size = min(new_child.tournament_size, new_child.max_tournament_size)
+            new_child.tournament_size = min(new_child.tournament_size, new_child.selection_parameters['maximum_tournament_size'])
         else:
-            new_child.tournament_size = min(new_child.tournament_size, new_child.max_tournament_no_replacement_size)
+            new_child.tournament_size = min(new_child.tournament_size, new_child.selection_parameters['maximum_tournament_no_replacement_size'])
 
         return new_child
 
-    def mutate(self):
+    def mutate(self, gp_terminal_node_generation_chance):
         # replaces a randomly selected subtree with a new random subtree, and flips the misc options
 
         # select a point to insert a new random tree
         insertion_point = random.choice(self.get_all_nodes())
 
         # randomly generate a new subtree
-        new_subtree = GPNode(self.constant_min, self.constant_max, self.random_min, self.random_max)
-        new_subtree.grow(3, self.gp_terminal_node_generation_chance, None)
+        new_subtree = GPNode(self.selection_parameters)
+        new_subtree.grow(3, gp_terminal_node_generation_chance, None)
 
         # insert the new subtree
         self.replace_node(insertion_point, new_subtree)
@@ -471,12 +459,12 @@ class GPTree:
         self.tournament_size = round((self.tournament_size + random.randint(-5, 5)) * random.uniform(0.9, 1.1))
 
         # clamp the tournament size
-        self.tournament_size = max(self.tournament_size, self.min_tournament_size)
+        self.tournament_size = max(self.tournament_size, self.selection_parameters['minimum_tournament_size'])
 
         if self.selection_type in self.replacement_selections:
-            self.tournament_size = min(self.tournament_size, self.max_tournament_size)
+            self.tournament_size = min(self.tournament_size, self.selection_parameters['maximum_tournament_size'])
         else:
-            self.tournament_size = min(self.tournament_size, self.max_tournament_no_replacement_size)
+            self.tournament_size = min(self.tournament_size, self.selection_parameters['maximum_tournament_no_replacement_size'])
 
     def get(self, terminal_values):
         values = self.root.get(terminal_values)
@@ -668,17 +656,17 @@ class GPTree:
                 target_node.data = target_node.children[0].data * target_node.children[1].data
                 self.children = None
 
-    def randomize(self):
+    def randomize(self, initial_gp_depth_limit, gp_terminal_node_generation_chance):
         if self.root is None:
-            self.root = GPNode(self.constant_min, self.constant_max, self.random_min, self.random_max)
-        self.root.grow(self.initial_gp_depth_limit, self.gp_terminal_node_generation_chance, None)
+            self.root = GPNode(self.selection_parameters)
+        self.root.grow(initial_gp_depth_limit, gp_terminal_node_generation_chance, None)
 
-        self.selection_type = random.choice(self.selection_types)
+        self.selection_type = random.choice(self.selection_parameters['selection_types'])
 
         if self.selection_type in self.replacement_selections:
-            self.tournament_size = random.randint(self.min_tournament_size, self.max_tournament_size)
+            self.tournament_size = random.randint(self.selection_parameters['minimum_tournament_size'], self.selection_parameters['maximum_tournament_size'])
         else:
-            self.tournament_size = random.randint(self.min_tournament_size, self.max_tournament_no_replacement_size)
+            self.tournament_size = random.randint(self.selection_parameters['minimum_tournament_size'], self.selection_parameters['maximum_tournament_no_replacement_size'])
 
         self.assign_id()
 
@@ -751,17 +739,7 @@ class EppseaSelectionFunction:
             self.gp_trees = copy.deepcopy(other.gp_trees)
 
             self.number_of_selectors = other.number_of_selectors
-            self.constant_min = other.constant_min
-            self.constant_max = other.constant_max
-            self.random_min = other.random_min
-            self.random_max = other.random_max
-
-            self.initial_gp_depth_limit = other.initial_gp_depth_limit
-            self.gp_terminal_node_generation_chance = other.gp_terminal_node_generation_chance
-            self.min_tournament_size = other.min_tournament_size
-            self.max_tournament_no_replacement_size = other.max_tournament_no_replacement_size
-            self.max_tournament_size = other.max_tournament_size
-
+            self.selection_parameters = other.selection_parameters
 
         else:
             self.fitness = None
@@ -772,16 +750,7 @@ class EppseaSelectionFunction:
             self.gp_trees = None
 
             self.number_of_selectors = None
-            self.constant_min = None
-            self.constant_max = None
-            self.random_min = None
-            self.random_max = None
-
-            self.initial_gp_depth_limit = None
-            self.gp_terminal_node_generation_chance = None
-            self.min_tournament_size = None
-            self.max_tournament_no_replacement_size = None
-            self.max_tournament_size = None
+            self.selection_parameters = None
 
         # the id should never be copied, and should instead be reassigned with assign_id
         self.assign_id()
@@ -790,34 +759,25 @@ class EppseaSelectionFunction:
         # assigns a random id to self. Every unique EPPSEA individual should call this once
         self.id = '{0}_{1}_{2}'.format('EppseaSelectionFunction', str(id(self)), str(uuid.uuid4()))
 
-    def randomize(self):
+    def randomize(self, initial_gp_depth_limit, gp_terminal_node_generation_chance):
         # randomizes this individual and assigns a new id
         # clear the gp_trees
         self.gp_trees = []
 
         # create each new tree (one for parent selection, one for survival selection)
-        for _ in range(self.number_of_selectors):
+        for i in range(self.number_of_selectors):
             new_gp_tree = GPTree()
 
-            new_gp_tree.constant_min = self.constant_min
-            new_gp_tree.constant_max = self.constant_max
-            new_gp_tree.random_min = self.random_min
-            new_gp_tree.random_max = self.random_max
+            new_gp_tree.selection_parameters = self.selection_parameters[i]
 
-            new_gp_tree.initial_gp_depth_limit = self.initial_gp_depth_limit
-            new_gp_tree.gp_terminal_node_generation_chance = self.gp_terminal_node_generation_chance
-            new_gp_tree.min_tournament_size = self.min_tournament_size
-            new_gp_tree.max_tournament_no_replacement_size = self.max_tournament_no_replacement_size
-            new_gp_tree.max_tournament_size = self.max_tournament_size
-
-            new_gp_tree.randomize()
+            new_gp_tree.randomize(initial_gp_depth_limit, gp_terminal_node_generation_chance)
 
             self.gp_trees.append(new_gp_tree)
 
-    def mutate(self):
+    def mutate(self, gp_terminal_node_generation_chance):
         # mutates each gp tree
         for tree in self.gp_trees:
-            tree.mutate()
+            tree.mutate(gp_terminal_node_generation_chance)
 
     def recombine(self, parent2):
         # recombines each gp_tree belonging to this selection function
@@ -917,34 +877,25 @@ class Eppsea:
         self.pickle_every_population = config.getboolean('experiment', 'pickle every population')
         self.pickle_final_population = config.getboolean('experiment', 'pickle final population')
 
-        self.number_of_selectors = config.getint('evolved selection', 'number of selectors')
+        self.number_of_selectors = config.getint('metaEA', 'number of selectors')
 
-        self.min_tournament_size = config.getint('evolved selection', 'minimum tournament size')
-        self.max_tournament_no_replacement_size = config.getint('evolved selection', 'maximum tournament (no replacement) size')
-        self.max_tournament_size = config.getint('evolved selection', 'maximum tournament size')
+        self.selection_parameters = list()
 
-        self.constant_min = config.getfloat('evolved selection', 'constant min')
-        self.constant_max = config.getfloat('evolved selection', 'constant max')
-        
-        self.random_min = config.getfloat('evolved selection', 'random min')
-        self.random_max = config.getfloat('evolved selection', 'random max')
+        for i in range(self.number_of_selectors):
+            self.selection_parameters.append(dict())
+            config_section = 'evolved selection {0}'.format(i)
 
-        selection_types = config.get('evolved selection', 'selection type').strip().split(',')
-        selection_types = list(s.strip() for s in selection_types)
-        for s in list(GPTree.selection_types):
-            if s not in selection_types:
-                GPTree.selection_types.remove(s)
+            self.selection_parameters[i]['selection_types'] = config.get(config_section, 'selection type').strip().split(',')
+            self.selection_parameters[i]['selection_terminals'] = config.get(config_section, 'selection terminals').strip().split(',')
 
-        selection_terminals = config.get('evolved selection', 'selection terminals').strip().split(',')
-        selection_terminals = list(s.strip() for s in selection_terminals)
-        for s in list(GPNode.data_terminals):
-            if s not in selection_terminals:
-                GPNode.data_terminals.remove(s)
-        for s in list(GPNode.numeric_terminals):
-            if s not in selection_terminals:
-                GPNode.numeric_terminals.remove(s)
+            self.selection_parameters[i]['constant_min'] = config.getfloat(config_section, 'constant min')
+            self.selection_parameters[i]['constant_max'] = config.getfloat(config_section, 'constant max')
+            self.selection_parameters[i]['random_min'] = config.getfloat(config_section, 'random min')
+            self.selection_parameters[i]['random_max'] = config.getfloat(config_section, 'random max')
 
-        GPNode.terminals = GPNode.data_terminals + GPNode.numeric_terminals
+            self.selection_parameters[i]['minimum_tournament_size'] = config.getint(config_section, 'minimum tournament size')
+            self.selection_parameters[i]['maximum_tournament_no_replacement_size'] = config.getint(config_section, 'maximum tournament (no replacement) size')
+            self.selection_parameters[i]['maximum_tournament_size'] = config.getint(config_section, 'maximum tournament size')
 
         # create a dictionary for the results
         self.results = dict()
@@ -1007,19 +958,10 @@ class Eppsea:
 
             # set parameters for new selection function
             new_selection_function.number_of_selectors = self.number_of_selectors
-            new_selection_function.constant_min = self.constant_min
-            new_selection_function.constant_max = self.constant_max
-            new_selection_function.random_min = self.random_min
-            new_selection_function.random_max = self.random_max
-            new_selection_function.initial_gp_depth_limit = self.initial_gp_depth_limit
-            new_selection_function.gp_terminal_node_generation_chance = self.gp_terminal_node_generation_chance
-
-            new_selection_function.min_tournament_size = self.min_tournament_size
-            new_selection_function.max_tournament_no_replacement_size = self.max_tournament_no_replacement_size
-            new_selection_function.max_tournament_size = self.max_tournament_size
+            new_selection_function.selection_parameters = self.selection_parameters
 
             # randomize the selection function and add it to the population
-            new_selection_function.randomize()
+            new_selection_function.randomize(self.initial_gp_depth_limit, self.gp_terminal_node_generation_chance)
             self.population.append(new_selection_function)
 
         # force mutation of clones
@@ -1028,7 +970,8 @@ class Eppsea:
             for i, p in enumerate(self.population):
                 p_string = p.get_string()
                 while p_string in new_pop_strings:
-                    p.mutate()
+                    p.mutate(self.gp_terminal_node_generation_chance)
+                    p.simplify()
                     p_string = p.get_string()
                 new_pop_strings.append(p)
 
@@ -1184,7 +1127,7 @@ class Eppsea:
                         parent = max(random.sample(self.population, self.gp_k_tournament_k), key=lambda p: p.fitness)
                     # split and mutation
                     new_child = copy.deepcopy(parent)
-                    new_child.mutate()
+                    new_child.mutate(self.gp_terminal_node_generation_chance)
                     self.new_population.append(new_child)
 
                 # sexual reproduction
@@ -1198,8 +1141,6 @@ class Eppsea:
                         parent2 = max(random.sample(self.population, self.gp_k_tournament_k), key=lambda p: p.fitness)
                     # recombination/mutation
                     new_child = parent1.recombine(parent2)
-                    if random.random() < self.gp_mutation_rate:
-                        new_child.mutate()
                     self.new_population.append(new_child)
 
                 # simplify the children
@@ -1212,7 +1153,8 @@ class Eppsea:
                     for i, p in enumerate(self.new_population):
                         p_string = p.get_string()
                         while p_string in self.fitness_assignments.keys() or p_string in new_pop_strings:
-                            p.mutate()
+                            p.mutate(self.gp_terminal_node_generation_chance)
+                            p.simplify()
                             p_string = p.get_string()
                         new_pop_strings.append(p_string)
 

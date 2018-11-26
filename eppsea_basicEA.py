@@ -870,32 +870,14 @@ class EppseaBasicEA:
             else:
                 result = eppsea_base.EppseaSelectionFunction()
                 result.number_of_selectors = 2
-                result.min_tournament_size = self.eppsea.min_tournament_size
-                result.max_tournament_no_replacement_size = self.eppsea.max_tournament_no_replacement_size
-                result.max_tournament_size = self.eppsea.max_tournament_size
-
-                result.constant_min = self.eppsea.constant_min
-                result.constant_max = self.eppsea.constant_max
-                result.random_min = self.eppsea.random_min
-                result.random_max = self.eppsea.random_max
+                result.selection_parameters = self.eppsea.selection_parameters
 
                 # build the parent selection tree
                 parent_selection = eppsea_base.GPTree()
                 
-                parent_selection.constant_min = self.eppsea.constant_min
-                parent_selection.constant_max = self.eppsea.constant_max
-                parent_selection.random_min = self.eppsea.random_min
-                parent_selection.random_max = self.eppsea.random_max
+                parent_selection.selection_parameters = result.selection_parameters[0]
 
-                parent_selection.initial_gp_depth_limit = self.eppsea.initial_gp_depth_limit
-                parent_selection.gp_terminal_node_generation_chance = self.eppsea.gp_terminal_node_generation_chance
-
-                parent_selection.min_tournament_size = self.eppsea.min_tournament_size
-                parent_selection.max_tournament_no_replacement_size = self.eppsea.max_tournament_no_replacement_size
-                parent_selection.max_tournament_size = self.eppsea.max_tournament_size
-
-                parent_selection.root = eppsea_base.GPNode(parent_selection.constant_min, parent_selection.constant_max,
-                                                           parent_selection.random_min, parent_selection.random_max)
+                parent_selection.root = eppsea_base.GPNode(parent_selection.selection_parameters)
                 
                 if s.parent_selection_type == 'truncation':
                     parent_selection.root.operation = 'fitness'
@@ -955,20 +937,9 @@ class EppseaBasicEA:
                 # build the survival selection tree
                 survival_selection = eppsea_base.GPTree()
 
-                survival_selection.constant_min = self.eppsea.constant_min
-                survival_selection.constant_max = self.eppsea.constant_max
-                survival_selection.random_min = self.eppsea.random_min
-                survival_selection.random_max = self.eppsea.random_max
+                survival_selection.selection_parameters = result.selection_parameters[1]
 
-                survival_selection.initial_gp_depth_limit = self.eppsea.initial_gp_depth_limit
-                survival_selection.gp_terminal_node_generation_chance = self.eppsea.gp_terminal_node_generation_chance
-
-                survival_selection.root = eppsea_base.GPNode(survival_selection.constant_min, survival_selection.constant_max,
-                                                             survival_selection.random_min, survival_selection.random_max)
-
-                survival_selection.min_tournament_size = self.eppsea.min_tournament_size
-                survival_selection.max_tournament_no_replacement_size = self.eppsea.max_tournament_no_replacement_size
-                survival_selection.max_tournament_size = self.eppsea.max_tournament_size
+                survival_selection.root = eppsea_base.GPNode(survival_selection.selection_parameters)
 
                 if s.survival_selection_type == 'truncation':
                     survival_selection.root.operation = 'fitness'
