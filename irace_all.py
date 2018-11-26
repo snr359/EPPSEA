@@ -15,6 +15,6 @@ for i in range(1,25):
 
     # run irace
     irace_path = sys.argv[1]
-    params = ['python3', 'init_irace.py', '-i', irace_path, '-c', eppsea_basicea_config_path, '-t', 'fitness_functions/coco_f{0}_d10'.format(i)]
+    params = ['python3', 'init_irace.py', '-i', irace_path, '-c', eppsea_basicea_config_path]
     print(' '.join(params))
     subprocess.run(params)
