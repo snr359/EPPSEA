@@ -310,25 +310,25 @@ class GPTree:
 
         # calculate selectabilities
         terminal_values = dict()
-        if 'fitness' in GPNode.terminals:
+        if 'fitness' in self.selection_parameters['selection_terminals']:
             terminal_values['fitness'] = numpy.array(list(c.fitness for c in sorted_candidates))
-        if 'fitness_rank' in GPNode.terminals:
+        if 'fitness_rank' in self.selection_parameters['selection_terminals']:
             terminal_values['fitness_rank'] = numpy.arange(1, len(sorted_candidates)+1)
-        if 'sum_fitness' in GPNode.terminals:
+        if 'sum_fitness' in self.selection_parameters['selection_terminals']:
             terminal_values['sum_fitness'] = numpy.repeat(sum_fitness, population_size)
-        if 'min_fitness' in GPNode.terminals:
+        if 'min_fitness' in self.selection_parameters['selection_terminals']:
             terminal_values['min_fitness'] = numpy.repeat(min_fitness, population_size)
-        if 'max_fitness' in GPNode.terminals:
+        if 'max_fitness' in self.selection_parameters['selection_terminals']:
             terminal_values['max_fitness'] = numpy.repeat(max_fitness, population_size)
-        if 'relative_fitness' in GPNode.terminals:
+        if 'relative_fitness' in self.selection_parameters['selection_terminals']:
             numpy.seterr(all='raise')
             if max_fitness == min_fitness or max_fitness == math.inf or min_fitness == math.inf:
                 terminal_values['relative_fitness'] = numpy.repeat(1, population_size)
             else:
                 terminal_values['relative_fitness'] = numpy.array(list(((c.fitness - min_fitness) / (max_fitness - min_fitness)) for c in sorted_candidates))
-        if 'population_size' in GPNode.terminals:
+        if 'population_size' in self.selection_parameters['selection_terminals']:
             terminal_values['population_size'] = numpy.repeat(population_size, population_size)
-        if 'birth_generation' in GPNode.terminals:
+        if 'birth_generation' in self.selection_parameters['selection_terminals']:
             terminal_values['birth_generation'] = numpy.array(list(c.birth_generation for c in sorted_candidates))
 
         if generation_number is not None:
@@ -336,7 +336,7 @@ class GPTree:
         else:
             terminal_values['generation_number'] = numpy.repeat(0, population_size)
 
-        if 'relative_uniqueness' in GPNode.terminals:
+        if 'relative_uniqueness' in self.selection_parameters['selection_terminals']:
             all_genomes = numpy.stack(list(c.genome for c in sorted_candidates))
             average_genome = numpy.average(all_genomes, axis=0)
             distances_from_average_genome = numpy.array(list(scipy.spatial.distance.euclidean(g, average_genome) for g in all_genomes))
