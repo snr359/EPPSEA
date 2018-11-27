@@ -37,11 +37,13 @@ def main():
 
     for r in results_directories:
         config_path = '{0}/config.cfg'.format(r)
-        config = configparser.ConfigParser()
-        config.read(config_path)
-        function_path = config.get('CMAES', 'fitness function config path')
-        if function_path in function_results:
-            function_results[function_path].append(r)
+        final_results_path = '{0}/final_results'.format(r)
+        if os.path.exists(config_path) and os.path.exists(final_results_path):
+            config = configparser.ConfigParser()
+            config.read(config_path)
+            function_path = config.get('CMAES', 'fitness function config path')
+            if function_path in function_results:
+                function_results[function_path].append(r)
 
     for f in function_paths:
         print('Results directories for fitness function at {0}'.format(f))
