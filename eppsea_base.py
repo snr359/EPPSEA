@@ -356,12 +356,12 @@ class GPTree:
         # raise an error if the population members do not have a fitness attribute
         if not all(hasattr(p, 'fitness') for p in population):
             raise Exception('EPPSEA ERROR: Trying to use an EEPSEA selector to select from a population'
-                            'when one of the members does not have "fitness" defined.')
+                            ' when one of the members does not have "fitness" defined.')
 
         # raise an error if the population members do not have a birth_generation attribute
-        if 'birth_generation' in GPNode.terminals and not all(hasattr(p, 'birth_generation') for p in population):
+        if 'birth_generation' in self.selection_parameters['selection_terminals'] and not all(hasattr(p, 'birth_generation') for p in population):
             raise Exception('EPPSEA ERROR: Trying to use an EEPSEA selector to select from a population'
-                            'when one of the members does not have "birth_generation" defined.')
+                            ' when one of the members does not have "birth_generation" defined.')
 
         candidates = list(population)
 
