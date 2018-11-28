@@ -405,6 +405,8 @@ class GPTree:
             selected_members = []
             for _ in range(n):
                 selected_members.append(random.choice(population))
+            return selected_members
+
 
     def recombine(self, parent2):
         # recombines two GPTrees and returns a new child

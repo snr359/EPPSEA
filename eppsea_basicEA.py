@@ -397,7 +397,6 @@ class EA:
             # select parents
             num_parents = self.lam*2
             all_parents = self.selection_function.parent_selection(population, num_parents, generation_number, self.minimize_fitness_function)
-            assert(len(all_parents) % 2 == 0)
             # pair up parents and recombine them
             for i in range(0, len(all_parents), 2):
                 parent1 = all_parents[i]
