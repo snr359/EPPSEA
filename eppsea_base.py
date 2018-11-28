@@ -571,7 +571,7 @@ class GPTree:
                 target_node.data = 1
                 self.children = None
 
-        # a subtraction function on two identical terminators is always 1
+        # a subtraction function on two identical terminators is always 0
         if target_node.operation == '-':
             if target_node.children[0].operation == target_node.children[1].operation and target_node.children[0].operation in GPNode.data_terminals:
                 target_node.operation = 'constant'
