@@ -436,7 +436,7 @@ class GPTree:
             new_child.tournament_size = random.randint(self.tournament_size, parent2.tournament_size)
 
         # clamp the tournament size
-            new_child.tournament_size = max(new_child.tournament_size, new_child.selection_parameters['minimum_tournament_size'])
+        new_child.tournament_size = max(new_child.tournament_size, new_child.selection_parameters['minimum_tournament_size'])
 
         if new_child.selection_type in new_child.replacement_selections:
             new_child.tournament_size = min(new_child.tournament_size, new_child.selection_parameters['maximum_tournament_size'])
