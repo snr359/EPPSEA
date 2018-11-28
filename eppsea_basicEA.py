@@ -149,7 +149,7 @@ class SelectionFunction:
 
     def basic_selection(self, population, n, selection_type, tournament_k):
         if selection_type == 'truncation':
-            return sorted(population, key=lambda x: x.fitness)[:n]
+            return sorted(population, key=lambda x: x.fitness, reverse=True)[:n]
 
         elif selection_type == 'fitness_rank_replacement':
             selected = []
@@ -250,6 +250,11 @@ class SelectionFunction:
                 for i in range(len(normalized_weights)):
                     normalized_weights[i] -= min_weight
 
+            # if the sum weight is 0 or inf, set all normalized weights to 1
+            sum_weight = sum(normalized_weights)
+            if sum_weight == 0 or sum_weight == math.inf:
+                normalized_weights = [1] * len(population)
+
             # build a list of the indices and cumulative selection weights
             indices_and_weights = []
             cum_weight = 0
@@ -257,13 +262,6 @@ class SelectionFunction:
                 cum_weight += normalized_weights[i]
                 indices_and_weights.append((i, cum_weight))
             sum_weight = cum_weight
-
-            # if the sum weight is 0 or inf, just return random candidate
-            if sum_weight == 0 or sum_weight == math.inf:
-                selected = []
-                for _ in range(n):
-                    selected.append(random.choice(population))
-                return selected
 
             # calculate interval length
             interval_length = sum_weight / n
@@ -399,7 +397,7 @@ class EA:
             # select parents
             num_parents = self.lam*2
             all_parents = self.selection_function.parent_selection(population, num_parents, generation_number, self.minimize_fitness_function)
-
+            assert(len(all_parents) % 2 == 0)
             # pair up parents and recombine them
             for i in range(0, len(all_parents), 2):
                 parent1 = all_parents[i]

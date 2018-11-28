@@ -250,6 +250,11 @@ class GPTree:
             for i in range(len(normalized_weights)):
                 normalized_weights[i] -= min_weight
 
+        # if the sum weight is 0 or inf, just assign a weight of 1 to all candidates
+        sum_weight = sum(normalized_weights)
+        if sum_weight == 0 or sum_weight == math.inf:
+            normalized_weights = [1]*len(population)
+
         # build a list of the indices and cumulative selection weights
         indices_and_weights = []
         cum_weight = 0
@@ -257,11 +262,6 @@ class GPTree:
             cum_weight += w
             indices_and_weights.append((i, cum_weight))
         sum_weight = cum_weight
-
-        # if the sum weight is 0 or inf, just return random candidates
-        if sum_weight == 0 or sum_weight == math.inf:
-            selected = random.sample(population, n)
-            return selected
 
         # calculate interval length
         interval_length = sum_weight / n
@@ -402,7 +402,9 @@ class GPTree:
             return selected_members
 
         except (OverflowError, FloatingPointError):
-            return random.sample(candidates, n)
+            selected_members = []
+            for _ in range(n):
+                selected_members.append(random.choice(population))
 
     def recombine(self, parent2):
         # recombines two GPTrees and returns a new child
