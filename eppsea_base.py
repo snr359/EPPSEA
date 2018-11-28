@@ -231,6 +231,8 @@ class GPTree:
 
     def truncation_selection(self, population, weights, n):
         # returns the population truncated to n members by the weights
+        if n > len(population) or n < 1:
+            raise Exception('ERROR: trying to truncate-select {0} members from a population of size {1}'.format(n, len(population)))
         population_and_weights = zip(population, weights)
         population_and_weights = sorted(population_and_weights, key=lambda p: p[1], reverse=True)
         population_and_weights = population_and_weights[:n]
