@@ -460,7 +460,7 @@ class GPTree:
         
         # chance to flip selection type
         if random.random() < 0.2:
-            self.selection_type = random.choice(self.selection_types)
+            self.selection_type = random.choice(self.selection_parameters['selection_types'])
 
         self.tournament_size = round((self.tournament_size + random.randint(-5, 5)) * random.uniform(0.9, 1.1))
 
