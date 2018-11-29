@@ -620,22 +620,47 @@ class GPTree:
                 target_node.data = 1
                 self.children = None
 
-        # max_fitness will always be >= min_fitness
+        # population_size and fitness_rank will always be greater than relative_fitness and relative_uniqueness
         if target_node.operation == 'max':
-            if target_node.children[0].operation == 'max_fitness' and target_node.children[1].operation == 'min_fitness':
+            if target_node.children[0].operation in ('population_size', 'fitness rank') and target_node.children[1].operation in ('relative_fitness', 'relative_uniqueness'):
                 new_node = copy.deepcopy(target_node.children[0])
                 self.replace_node(target_node, new_node)
                 return
-            elif target_node.children[0].operation == 'min_fitness' and target_node.children[1].operation == 'max_fitness':
+            elif target_node.children[0].operation in ('relative_fitness', 'relative_uniqueness') and target_node.children[1].operation in ('population_size', 'fitness rank'):
                 new_node = copy.deepcopy(target_node.children[1])
                 self.replace_node(target_node, new_node)
                 return
         if target_node.operation == 'min':
-            if target_node.children[0].operation == 'max_fitness' and target_node.children[1].operation == 'min_fitness':
+            if target_node.children[0].operation in ('population_size', 'fitness rank') and target_node.children[1].operation in ('relative_fitness', 'relative_uniqueness'):
                 new_node = copy.deepcopy(target_node.children[1])
                 self.replace_node(target_node, new_node)
                 return
-            elif target_node.children[0].operation == 'min_fitness' and target_node.children[1].operation == 'max_fitness':
+            elif target_node.children[0].operation in ('relative_fitness', 'relative_uniqueness') and target_node.children[1].operation in ('population_size', 'fitness rank'):
+                new_node = copy.deepcopy(target_node.children[0])
+                self.replace_node(target_node, new_node)
+                return
+        if target_node.operation == 'step':
+            if target_node.children[0].operation in ('population_size', 'fitness rank') and target_node.children[1].operation in ('relative_fitness', 'relative_uniqueness'):
+                target_node.operation = 'constant'
+                target_node.data = 1
+                self.children = None
+
+        # max_fitness will always be >= min_fitness and fitness, and min_fitness will always be <= fitness and max_fitness
+        if target_node.operation == 'max':
+            if target_node.children[0].operation == 'max_fitness' and target_node.children[1].operation in('min_fitness', 'fitness'):
+                new_node = copy.deepcopy(target_node.children[0])
+                self.replace_node(target_node, new_node)
+                return
+            elif target_node.children[0].operation in('min_fitness', 'fitness') and target_node.children[1].operation == 'max_fitness':
+                new_node = copy.deepcopy(target_node.children[1])
+                self.replace_node(target_node, new_node)
+                return
+        if target_node.operation == 'min':
+            if target_node.children[0].operation in ('fitness', 'max_fitness') and target_node.children[1].operation == 'min_fitness':
+                new_node = copy.deepcopy(target_node.children[1])
+                self.replace_node(target_node, new_node)
+                return
+            elif target_node.children[0].operation == 'min_fitness' and target_node.children[1].operation in ('fitness', 'max_fitness'):
                 new_node = copy.deepcopy(target_node.children[0])
                 self.replace_node(target_node, new_node)
                 return
@@ -661,6 +686,12 @@ class GPTree:
                 target_node.operation = 'constant'
                 target_node.data = target_node.children[0].data * target_node.children[1].data
                 self.children = None
+
+        # absolute value does not need to be applied more than one
+        if target_node.operation == 'absolute' and target_node.children[0].operation == 'absolute':
+            new_node = copy.deepcopy(target_node.children[0])
+            self.replace_node(target_node, new_node)
+            return
 
     def randomize(self, initial_gp_depth_limit, gp_terminal_node_generation_chance):
         if self.root is None:
