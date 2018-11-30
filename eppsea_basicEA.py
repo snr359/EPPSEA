@@ -1111,9 +1111,6 @@ def main(config_path):
         with open(selection_function_config_path, 'w') as selection_function_config_file:
             selection_function_config.write(selection_function_config_file)
 
-    with open('{0}/FinalTestResults'.format(evaluator.results_directory), 'wb') as pickle_file:
-        pickle.dump(evaluator.final_test_results, pickle_file, protocol=4)
-
 if __name__ == '__main__':
 
     if len(sys.argv) < 2:
