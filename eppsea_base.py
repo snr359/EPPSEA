@@ -726,34 +726,26 @@ class GPTree:
 
     def get_dict(self):
         result = dict()
-        result['select_with_replacement'] = self.select_with_replacement
-        result['select_from_subset'] = self.select_from_subset
+
         result['selection_type'] = self.selection_type
-        result['selection_subset_size'] = self.selection_subset_size
-        result['constant_min'] = self.constant_min
-        result['constant_max'] = self.constant_max
-        result['random_min'] = self.random_min
-        result['random_max'] = self.random_max
-        result['id'] = self.id
+        result['selection_parameters'] = self.selection_parameters
 
         result['root'] = self.root.get_dict()
+
+        result['id'] = self.id
 
         return result
 
     def build_from_dict(self, d):
         self.fitness = None
-        self.select_with_replacement = d['select_with_replacement']
-        self.select_from_subset = d['select_from_subset']
-        self.selection_type = d['selection_type']
-        self.selection_subset_size = d['selection_subset_size']
-        self.constant_min = d['constant_min']
-        self.constant_max = d['constant_max']
-        self.random_min = d['random_min']
-        self.random_max = d['random_max']
-        self.id = d['id']
 
-        self.root = GPNode(self.constant_min, self.constant_max, self.random_min, self.random_max)
+        self.selection_type = d['selection_type']
+        self.selection_parameters = d['selection_parameters']
+
+        self.root = GPNode(self.selection_parameters)
         self.root.build_from_dict(d['root'])
+
+        self.id = d['id']
 
     def save_to_dict(self, filename):
         with open(filename, 'wb') as pickleFile:
@@ -850,6 +842,24 @@ class EppseaSelectionFunction:
             size += tree.size()
         return size
 
+    def get_dict(self):
+        result = dict()
+        result['gp_trees'] = []
+        for tree in self.gp_trees:
+            result['gp_trees'].append(tree.get_dict())
+
+        result['selection_parameters'] = list(t.selection_parameters for t in self.gp_trees)
+
+        return result
+
+    def build_from_dict(self, d):
+        self.selection_parameters = d['selection_parameters']
+
+        self.gp_trees = []
+        for t in d['gp_trees']:
+            tree = GPTree()
+            tree.build_from_dict(t)
+            self.gp_trees.append(tree)
 
 class Eppsea:
     def __init__(self, config_path=None):
