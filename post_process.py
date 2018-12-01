@@ -149,11 +149,11 @@ def main(final_output_directory, results_file_paths):
         if significant_differences:
             for selection_function_name1, selection_function_name2, mean_difference_fitness, p_fitness in significant_differences:
                 if mean_difference_fitness > 0:
-                    print('{0} performed {1} higher than {2}, p={3}'.format(selection_function_name1, mean_difference_fitness, selection_function_name2, p_fitness))
+                    print('\t{0} performed {1} higher than {2}, p={3}'.format(selection_function_name1, mean_difference_fitness, selection_function_name2, p_fitness))
                 else:
-                    print('{0} performed {1} lower than {2}, p={3}'.format(selection_function_name1, mean_difference_fitness, selection_function_name2, p_fitness))
+                    print('\t{0} performed {1} lower than {2}, p={3}'.format(selection_function_name1, mean_difference_fitness, selection_function_name2, p_fitness))
         else:
-            print('No significant differences in performance')
+            print('\tNo significant differences in performance')
 
 
 if __name__ == '__main__':
