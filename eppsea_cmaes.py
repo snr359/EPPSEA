@@ -592,16 +592,22 @@ class EppseaCMAES:
             else:
                 raise Exception('ERROR: fitness assignment method {0} not recognized by eppsea_basicEA'.format(self.eppsea_fitness_assignment_method))
 
-    def run_final_tests(self, best_selection_function):
+    def run_final_tests(self, best_eppsea_selection_functions):
         if self.config.get('CMAES', 'test generalization'):
             fitness_functions = self.testing_fitness_functions + self.training_fitness_functions
         else:
             fitness_functions = self.training_fitness_functions
 
-        eppsea_selection_function = SelectionFunction()
-        eppsea_selection_function.generate_from_eppsea_individual(best_selection_function)
+        selection_functions = list()
+        for f in best_eppsea_selection_functions:
+            selection_function = SelectionFunction()
+            selection_function.generate_from_eppsea_individual(f)
+            selection_functions.append(selection_function)
 
-        cmaess = self.get_cmaes_runners(fitness_functions, [eppsea_selection_function])
+        for i, f in enumerate(selection_functions):
+            f.display_name += ' {0}'.format(i)
+
+        cmaess = self.get_cmaes_runners(fitness_functions, selection_functions)
         cmaes_results = self.run_cmaes_runners(cmaess, True, False)
 
         basic_cmaess = self.get_basic_cmaes_runners(fitness_functions)
@@ -673,7 +679,7 @@ class EppseaCMAES:
             self.evaluate_eppsea_population(eppsea.new_population, False)
             eppsea.next_generation()
 
-        best_selection_function = eppsea.final_best_member
+        best_selection_functions = sorted(eppsea.population, key=lambda p: p.fitness_pre_parsimony)[:3]
 
         self.log('Running final tests', 1)
         self.log('Training fitness functions:', 2)
@@ -682,7 +688,7 @@ class EppseaCMAES:
         self.log('Testing fitness functions:', 2)
         for f in self.testing_fitness_functions:
             self.log('Name: {0}, id: {1}'.format(f.display_name, f.id), 1)
-        self.final_test_results = self.run_final_tests(best_selection_function)
+        self.final_test_results = self.run_final_tests(best_selection_functions)
         self.save_final_results(self.final_test_results)
 
         self.log('Running Postprocessing', 1)
