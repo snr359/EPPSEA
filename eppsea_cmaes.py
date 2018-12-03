@@ -594,7 +594,7 @@ class EppseaCMAES:
 
     def run_final_tests(self, best_eppsea_selection_functions):
         if self.config.get('CMAES', 'test generalization'):
-            fitness_functions = self.testing_fitness_functions + self.training_fitness_functions
+            fitness_functions = self.testing_fitness_functions
         else:
             fitness_functions = self.training_fitness_functions
 
@@ -679,7 +679,7 @@ class EppseaCMAES:
             self.evaluate_eppsea_population(eppsea.new_population, False)
             eppsea.next_generation()
 
-        best_selection_functions = sorted(eppsea.population, key=lambda p: p.fitness_pre_parsimony)[:3]
+        best_selection_functions = sorted(eppsea.population, key=lambda p: p.fitness_pre_parsimony, reverse=True)[:3]
 
         self.log('Running final tests', 1)
         self.log('Training fitness functions:', 2)
