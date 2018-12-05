@@ -13,7 +13,7 @@ fitness_function_config.read('config/fitness_functions/coco_f1_d5.cfg')
 cmaes_config = configparser.ConfigParser()
 cmaes_config.read('config/cmaes/config1b.cfg')
 
-runs = 100
+runs = 20
 
 def run_basic_cmaes_runner(cmaes_runner):
     result = cmaes_runner.one_run(basic=True)
@@ -22,13 +22,20 @@ def run_basic_cmaes_runner(cmaes_runner):
 
 def main(start, end):
     for i in range(start,end+1):
+        print('------ Testing function {0} -----------'.format(i))
         for d in (2,3,5,10,20):
             print('Testing function {0}, D={1}'.format(i,d))
+
+            fitness_function_config = configparser.ConfigParser()
+            fitness_function_config.read('config/fitness_functions/coco_f{0}_d{1}.cfg'.format(i,d))
+
+            cmaes_config = configparser.ConfigParser()
+            cmaes_config.read('config/cmaes/config_f{0}_d{1}.cfg'.format(i,d))
             fitness_function_config['fitness function']['genome length'] = str(d)
             fitness_function_config['fitness function']['coco function index'] = str(i)
 
             cmaes_config['CMAES']['maximum evaluations'] = str(10000*d)
-            cmaes_config['CMAES']['popiulation size'] = str(10 * d)
+            cmaes_config['CMAES']['population size'] = str(10 * d)
 
             fitness_functions = ff.generate_coco_functions(fitness_function_config, True)
             cmaess = []
