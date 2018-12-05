@@ -55,7 +55,7 @@ def main(start, end):
             percent_solved = round(num_solved / len(all_run_results), 2) * 100
 
             print('\tFunction {0}, D={1} solved {2}% of problems'.format(i,d,percent_solved))
-            if percent_solved < 20:
+            if percent_solved < 50:
                 print('Stopping function {0} search at {1}'.format(i,d))
                 break
 
