@@ -22,7 +22,7 @@ def run_basic_cmaes_runner(cmaes_runner):
 
 def main(start, end):
     for i in range(start,end+1):
-        for d in (2,3,5,10,20,40):
+        for d in (2,3,5,10,20):
             print('Testing function {0}, D={1}'.format(i,d))
             fitness_function_config['fitness function']['genome length'] = str(d)
             fitness_function_config['fitness function']['coco function index'] = str(i)
@@ -47,9 +47,9 @@ def main(start, end):
             num_solved = len(list(r for r in all_run_results if r.termination_reason == 'target_fitness_hit'))
             percent_solved = round(num_solved / len(all_run_results), 2) * 100
 
-            print('Function {0}, D={1} solved {2}% of problems'.format(i,d,percent_solved))
+            print('\tFunction {0}, D={1} solved {2}% of problems'.format(i,d,percent_solved))
             if percent_solved < 20:
-                print('Stopping function {1} search at {1}'.format(i,d))
+                print('Stopping function {0} search at {1}'.format(i,d))
                 break
 
 if __name__ == '__main__':
