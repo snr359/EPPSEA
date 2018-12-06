@@ -840,7 +840,7 @@ class EppseaBasicEA:
             selection_functions.append(eppsea_selection_function)
 
         if self.test_generalization:
-            fitness_functions = self.testing_fitness_functions + self.training_fitness_functions
+            fitness_functions = self.testing_fitness_functions
         else:
             fitness_functions = self.training_fitness_functions
 
