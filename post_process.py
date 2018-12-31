@@ -16,6 +16,21 @@ def get_eval_counts(results):
         all_eval_counts.extend(r['eval_counts'])
     return sorted(list(set(all_eval_counts)))
 
+def get_average_best_fitnesses(mu, results):
+    # returns a dictionary mapping mu values to the best population fitness at, or closest to, mu, averaged over all runs
+    average_best_fitnesses = dict()
+    for m in mu:
+        best_fitnesses_at_m = []
+        for r in results:
+            if m in r['best_fitnesses']:
+                best_fitnesses_at_m.append(r['best_fitnesses'][m])
+            else:
+                next_largest_m = max(mm for mm in r['best_fitnesses'].keys() if mm <= m)
+                best_fitnesses_at_m.append(r['best_fitnesses'][next_largest_m])
+
+        average_best_fitnesses[m] = statistics.mean(best_fitnesses_at_m)
+    return average_best_fitnesses
+
 def main(final_output_directory, results_file_paths):
     # first, load all results
     results = []
@@ -59,20 +74,15 @@ def main(final_output_directory, results_file_paths):
         # filter out the results for this fitness function
         fitness_function_results = list(r for r in results if r['fitness_function_id'] == fitness_function_id)
 
-        # Set the plot to use Log Scale
-        plt.yscale('symlog')
 
         # Plot results for each selection function
         for selection_function_id in selection_function_ids:
             selection_function_results = list(r for r in fitness_function_results if r['selection_function_id'] == selection_function_id)
             selection_function_name = selection_function_display_names[selection_function_id]
             mu = get_eval_counts(selection_function_results)
-            average_best_fitnesses = []
-            for m in mu:
-                average_best_fitnesses.append(statistics.mean(
-                    r['best_fitnesses'][m] for r in selection_function_results if m in r['best_fitnesses']))
+            average_best_fitnesses = get_average_best_fitnesses(mu, selection_function_results)
 
-            plt.plot(mu, average_best_fitnesses, label=selection_function_name)
+            plt.plot(mu, average_best_fitnesses.values(), label=selection_function_name)
 
         plt.xlabel('Evaluations')
         plt.ylabel('Best Fitness')
@@ -84,9 +94,6 @@ def main(final_output_directory, results_file_paths):
         final_best_fitnesses_list = []
         selection_name_list = []
 
-        # Set the plot to use Log Scale
-        plt.yscale('symlog')
-
         for selection_function_id in selection_function_ids:
             selection_function_results = list(r for r in fitness_function_results if r['selection_function_id'] == selection_function_id)
             selection_function_name = selection_function_display_names[selection_function_id]
@@ -96,7 +103,6 @@ def main(final_output_directory, results_file_paths):
         plt.boxplot(final_best_fitnesses_list, labels=selection_name_list)
 
         plt.xlabel('Evaluations')
-        plt.xticks(rotation=90)
         plt.ylabel('Final Best Fitness')
         legend = plt.legend([])
         legend.remove()
