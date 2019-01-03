@@ -166,7 +166,7 @@ def main(final_output_directory, results_file_paths):
                 if equal_variances:
                     print_string += ' (T-test, equal variances, p={0})'.format(p_fitness)
                 else:
-                    print_string += '(T-test, unequal variances, p={0})'.format(p_fitness)
+                    print_string += ' (T-test, unequal variances, p={0})'.format(p_fitness)
 
                 print(print_string)
         else:
