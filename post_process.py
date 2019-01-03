@@ -133,11 +133,16 @@ def main(final_output_directory, results_file_paths):
                     average_final_best_fitness2 = round(statistics.mean(final_best_fitnesses2), 5)
                     target_hit_percentage2 = round(len(selection_function_target_results2) * 100 / len(selection_function_results2), 2)
 
-                    _, p_fitness = scipy.stats.ttest_rel(final_best_fitnesses1, final_best_fitnesses2)
+                    # test for equal variances using the bartlett test
+                    _, f_p_fitness = scipy.stats.bartlett(final_best_fitnesses1, final_best_fitnesses2)
+
+                    equal_variances = bool(f_p_fitness < 0.05)
+
+                    _, p_fitness = scipy.stats.ttest_ind(final_best_fitnesses1, final_best_fitnesses2, equal_var=equal_variances)
                     mean_difference_fitness = round(average_final_best_fitness1 - average_final_best_fitness2, 5)
 
                     if p_fitness < 0.05:
-                        significant_differences.append((selection_function_name1, selection_function_name2, mean_difference_fitness, p_fitness))
+                        significant_differences.append((selection_function_name1, selection_function_name2, mean_difference_fitness, p_fitness, equal_variances))
 
                     #final_target_evals1 = list(max(r['eval_counts']) for r in selection_function_target_results1)
                     #final_target_evals2 = list(max(r['eval_counts']) for r in selection_function_target_results2)
@@ -153,11 +158,15 @@ def main(final_output_directory, results_file_paths):
                     tested_pairs.append((selection_function_id1, selection_function_id2))
 
         if significant_differences:
-            for selection_function_name1, selection_function_name2, mean_difference_fitness, p_fitness in significant_differences:
+            for selection_function_name1, selection_function_name2, mean_difference_fitness, p_fitness, equal_variances in significant_differences:
                 if mean_difference_fitness > 0:
-                    print('\t{0} performed {1} higher than {2}, p={3}'.format(selection_function_name1, mean_difference_fitness, selection_function_name2, p_fitness))
+                    print_string = '\t{0} performed {1} higher than {2}'.format(selection_function_name1, mean_difference_fitness, selection_function_name2)
                 else:
-                    print('\t{0} performed {1} lower than {2}, p={3}'.format(selection_function_name1, mean_difference_fitness, selection_function_name2, p_fitness))
+                    print_string = '\t{0} performed {1} lower than {2}'.format(selection_function_name1, mean_difference_fitness, selection_function_name2)
+                if equal_variances:
+                    print_string += ' (T-test, equal variances, p={0})'.format(p_fitness)
+                else:
+                    print_string += '(T-test, unequal variances, p={0})'.format(p_fitness)
         else:
             print('\tNo significant differences in performance')
 
