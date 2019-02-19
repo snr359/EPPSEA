@@ -1,3 +1,6 @@
+# This file contains the base code that drives the EPPSEA system, including the objects that
+# Represent and evolve the selection functions
+
 import time
 import copy
 import random
@@ -13,8 +16,9 @@ import uuid
 import numpy
 import scipy.spatial
 
-
 class GPNode:
+    # Represents a node in the GPTree object. Contains either an operator or a terminal in the desirability
+    # calculation tree for the fitness function
     numeric_terminals = ['constant', 'random']
     data_terminals = ['fitness', 'fitness_rank', 'relative_fitness', 'birth_generation', 'relative_uniqueness', 'population_size', 'min_fitness', 'sum_fitness', 'max_fitness', 'generation_number']
 
@@ -32,6 +36,10 @@ class GPNode:
         self.selection_parameters = selection_parameters
 
     def grow(self, depth_limit, terminal_node_generation_chance, parent):
+        # Recursively randomizes this node and generates random children
+        # 'depth-limit is the deepest that this tree can generate
+        # 'terminal_node_generation_chance' is the chance for a terminal node to be generated before the depth limit
+        # 'parent' is a reference to the parent node, or None if none
         if depth_limit == 0 or random.random() < terminal_node_generation_chance:
             self.operation = random.choice(self.selection_parameters['selection_terminals'])
         else:
@@ -48,6 +56,9 @@ class GPNode:
         self.parent = parent
 
     def get(self, terminal_values):
+        # recursively evaluates the tree rooted at this GP Node, for an entire array of inputs at once
+        # 'terminal_values' is a dictionary of terminal values, mapping the name of each value to an array of inputs
+        #   for that value
         if self.operation == '+':
             return self.children[0].get(terminal_values) + self.children[1].get(terminal_values)
         elif self.operation == '-':
@@ -55,35 +66,44 @@ class GPNode:
         elif self.operation == '*':
             return self.children[0].get(terminal_values) * self.children[1].get(terminal_values)
         elif self.operation == '/':
+            # to avoid a division by zero, we instead divide by a very small number where the denominator is 0
             numerator = self.children[0].get(terminal_values)
             denominator = self.children[1].get(terminal_values)
             denominator = numpy.where(denominator!=0, denominator, 0.000001)
             return numpy.divide(numerator, denominator, where=denominator!=0)
 
         elif self.operation == 'step':
+            # returns 1 for inputs where left >= right, and 0 otherwise
             return numpy.array(self.children[0].get(terminal_values) >= self.children[1].get(terminal_values), dtype=int)
 
         elif self.operation == 'absolute':
+            # returns absolute value of input
             return numpy.absolute(self.children[0].get(terminal_values))
 
         elif self.operation == 'min':
+            # returns minimum of left or right input
             return numpy.amin(numpy.stack((self.children[0].get(terminal_values), self.children[1].get(terminal_values))), axis=0)
 
         elif self.operation == 'max':
+            # returns maximum of left or right input
             return numpy.amax(numpy.stack((self.children[0].get(terminal_values), self.children[1].get(terminal_values))), axis=0)
 
         elif self.operation in GPNode.data_terminals:
+            # returns a terminal value
             return terminal_values[self.operation]
 
         elif self.operation == 'constant':
+            # returns a constant generated at the creation time of this node
             population_size = terminal_values['population_size'][0]
             return numpy.repeat(self.data, population_size)
 
         elif self.operation == 'random':
+            # returns a value generated randomly
             population_size = terminal_values['population_size'][0]
             return numpy.random.uniform(self.selection_parameters['random_min'], self.selection_parameters['random_max'], population_size)
 
     def get_string(self):
+        # gets and returns a string representing this node
         result = ''
         if self.operation in GPNode.non_terminals:
             if self.child_count[self.operation] == 2:
@@ -97,6 +117,7 @@ class GPNode:
         return result
 
     def get_all_nodes(self):
+        # recursively gets a list of all the nodes in the tree rooted at this node (including this node)
         nodes = []
         nodes.append(self)
         if self.children is not None:
@@ -105,7 +126,7 @@ class GPNode:
         return nodes
 
     def get_all_nodes_depth_limited(self, depth_limit):
-        # returns all nodes down to a certain depth limit
+        # returns a list of all nodes down to a certain depth limit
         nodes = []
         nodes.append(self)
         if self.children is not None and depth_limit > 0:
@@ -142,8 +163,11 @@ class GPNode:
 
 
 class GPTree:
-    # encapsulates a tree made of GPNodes that determine probability of selection, as well as other options relating
-    # to parent selection
+    # encapsulates a generated selection function,including a tree made of GPNodes that determine the selectability
+    # of the members of a population, and the final selection method used to select population members based on
+    # their selectability
+
+    # a list of possible selection types
     selection_types = ['proportional_replacement',
                        'proportional_no_replacement',
                        'tournament_replacement',
@@ -151,6 +175,7 @@ class GPTree:
                        'truncation',
                        'stochastic_universal_sampling']
 
+    # the selection types which allow for selection with replacement
     replacement_selections = ['proportional_replacement',
                               'tournament_replacement']
 
@@ -159,7 +184,7 @@ class GPTree:
         self.fitness = None
         self.selection_type = None
         self.final = False
-        self.selected_in_generation = dict()
+        self.selected_in_generation = dict() # a mapping of generation number to the population members selected in that generation
 
         self.selection_parameters = None
 
@@ -300,7 +325,7 @@ class GPTree:
 
     def get_selectabilities(self, candidates, population_size, generation_number):
         # calculates the selectabilities of the candidates
-        # returns a new list of tuples, each of (candidate, selectability)
+        # returns a new list of tuples, each of the form (candidate, selectability)
 
         # sort the candidates by fitness (for calculating fitness rank)
         sorted_candidates = sorted(candidates, key=lambda c: c.fitness)
@@ -404,6 +429,8 @@ class GPTree:
             return selected_members
 
         except (OverflowError, FloatingPointError):
+            # if we caught an overflow, then this is probably a tree that generated all zeros, infs, or nans for
+            # selectabilities, so just select random population members
             selected_members = []
             for _ in range(n):
                 selected_members.append(random.choice(population))
@@ -446,7 +473,7 @@ class GPTree:
         return new_child
 
     def mutate(self, gp_terminal_node_generation_chance):
-        # replaces a randomly selected subtree with a new random subtree, and flips the misc options
+        # replaces a randomly selected subtree with a new random subtree, and potentially mutates the selection type
 
         # select a point to insert a new random tree
         insertion_point = random.choice(self.get_all_nodes())
@@ -462,33 +489,45 @@ class GPTree:
         if random.random() < 0.2:
             self.selection_type = random.choice(self.selection_parameters['selection_types'])
 
+        # tournament size is perturbed both additively and multiplicatively
         self.tournament_size = round((self.tournament_size + random.randint(-5, 5)) * random.uniform(0.9, 1.1))
 
-        # clamp the tournament size
+        # clamp the tournament size to prevent impossible selection parameters
         self.tournament_size = max(self.tournament_size, self.selection_parameters['minimum_tournament_size'])
-
         if self.selection_type in self.replacement_selections:
             self.tournament_size = min(self.tournament_size, self.selection_parameters['maximum_tournament_size'])
         else:
             self.tournament_size = min(self.tournament_size, self.selection_parameters['maximum_tournament_no_replacement_size'])
 
     def get(self, terminal_values):
+        # evaluates the entire GP tree for an entire array of inputs
+        # 'terminal' values is a dictionary mapping each terminal value to the array of inputs associated with that
+        #   terminal value
+        #   for example, terminal_values[fitness] are the fitness values of all population members
+
         values = self.root.get(terminal_values)
+
         # if only a single value was returned, expand it into an array of repeated numbers
+        # I don't think this is necessary anymore, but I'm not sure
         if not(type(values) is numpy.ndarray):
             population_length = len(terminal_values['fitness'])
             values = numpy.repeat(values, population_length)
+
+        # return the results
         return values
     
     def get_all_nodes(self):
+        # returns a list of all nodes in the tree
         result = self.root.get_all_nodes()
         return result
     
     def get_all_nodes_depth_limited(self, depth_limit):
+        # returns a list of all nodes down to a certain depth limit
         result = self.root.get_all_nodes_depth_limited(depth_limit)
         return result
 
     def size(self):
+        # returns the number of nodes in the tree
         return len(self.get_all_nodes())
     
     def replace_node(self, node_to_replace, replacement_node):
@@ -506,6 +545,7 @@ class GPTree:
 
     def simplify(self, target_node):
         # eliminates redundant branches in the tree
+        # not entirely comprehensive, but it should shrink down trees a fair amount
 
         # first, simplify the children
         if target_node.children is not None:
@@ -687,13 +727,14 @@ class GPTree:
                 target_node.data = target_node.children[0].data * target_node.children[1].data
                 self.children = None
 
-        # absolute value does not need to be applied more than one
+        # absolute value does not need to be applied more than once
         if target_node.operation == 'absolute' and target_node.children[0].operation == 'absolute':
             new_node = copy.deepcopy(target_node.children[0])
             self.replace_node(target_node, new_node)
             return
 
     def randomize(self, initial_gp_depth_limit, gp_terminal_node_generation_chance):
+        # generates a new random tree in place
         if self.root is None:
             self.root = GPNode(self.selection_parameters)
         self.root.grow(initial_gp_depth_limit, gp_terminal_node_generation_chance, None)
@@ -708,6 +749,7 @@ class GPTree:
         self.assign_id()
 
     def verify_parents(self):
+        # verifies that all children properly belong to their parents, and vice versa
         for n in self.get_all_nodes():
             if n is self.root:
                 assert(n.parent is None)
@@ -716,15 +758,15 @@ class GPTree:
                 assert(n in n.parent.children)
 
     def get_string(self):
+        # gets a string representation of the tree
         result = self.root.get_string() + ' | selection type: {0} | '.format(self.selection_type)
         if self.selection_type in ['tournament_replacement', 'tournament_no_replacement']:
             result += ' | tournament size: {0}'.format(self.tournament_size)
         return result
 
-    def get_code(self):
-        return self.root.get_code()
 
     def get_dict(self):
+        # returns a python dictionary containing the tree's data (for pickling)
         result = dict()
 
         result['selection_type'] = self.selection_type
@@ -737,6 +779,7 @@ class GPTree:
         return result
 
     def build_from_dict(self, d):
+        # rebuilds a tree from the python dictionary containing its data
         self.fitness = None
 
         self.selection_type = d['selection_type']
@@ -759,6 +802,8 @@ class GPTree:
 
 class EppseaSelectionFunction:
     # encapsulates all trees and functionality associated with one selection function
+    # this can contain multiple trees, each with their own selection method paired with them
+    # thus, parent and survival selection could be evolved together and encapsulated in one of these, for example
     def __init__(self, other=None):
         # if other is provided, copy variable values. Otherwise, initialize them all to none
         if other is not None:
@@ -825,9 +870,14 @@ class EppseaSelectionFunction:
         return new_selection_function
 
     def select(self, population, n=1, selector=0, generation_number=None):
+        # selects n individuals from the population. generation_number may need to be passed in if generation_number
+        # is a possible terminal in the GP Tree
+        # if more than one GP Tree is contained in this selection function, then 'selector' will determine which tree
+        # is used
         return self.gp_trees[selector].select(population, n, generation_number)
 
     def simplify(self):
+        # eliminates redundant branches in all of the GP Trees included in this selection function
         for t in self.gp_trees:
             t.simplify(t.root)
 
@@ -862,6 +912,7 @@ class EppseaSelectionFunction:
             self.gp_trees.append(tree)
 
 class Eppsea:
+    # this class contains and runs the core eppsea functionality. It is initialized with a path to a config file
     def __init__(self, config_path=None):
 
         # set up the results directory
@@ -875,16 +926,12 @@ class Eppsea:
         self.log_file_path = self.results_directory + '/log.txt'
 
         # try to read a config file from the config file path
-        # if we do not have a config file, generate and use a default config
         if config_path is None:
-            self.log('No config file path provided. Generating and using default config.', 'INFO')
-            config_path = 'config/base_config/default.cfg'
-            self.generate_default_config(config_path)
-        # if the provided file path does not exist, generate and use a default config
+            self.log('No config file path provided', 'ERROR')
+            raise Exception()
         elif not os.path.isfile(str(config_path)):
-            self.log('No config file found at {0}. Generating and using default config.'.format(config_path), 'INFO')
-            config_path = 'config/base_config/default.cfg'
-            self.generate_default_config(config_path)
+            self.log('No config file found at {0}.'.format(config_path), 'ERROR')
+            raise Exception()
         else:
             self.log('Using config file {0}'.format(config_path), 'INFO')
 
@@ -1330,7 +1377,9 @@ class Eppsea:
                 p.pareto_tier = i
 
     def insert_into_pareto_heirarchy(self, x, pareto_heirarchy, tier_num=0):
-        # inserts x into the pareto heirarchy at tier_num. Recursively inserts x into lower tiers if it is dominated, or moves dominated members to lower tiers
+        # inserts x into the pareto heirarchy at tier_num. Recursively inserts x into lower tiers if it is dominated,
+        # or moves dominated members to lower tiers
+
         # if x is being inserted at the bottom of the heirarchy, create a new tier for it
         if tier_num >= len(pareto_heirarchy):
             pareto_heirarchy.append([x])
@@ -1345,37 +1394,3 @@ class Eppsea:
                     return
                 # if this point is reached, x is pareto cooptimal with the whole tier, so insert it
             pareto_heirarchy[tier_num].append(x)
-
-    def generate_default_config(self, file_path):
-        # generates a default configuration file and writes it to file_path
-        with open(file_path, 'w') as file:
-            file.writelines([
-                '[experiment]\n',
-                'seed: time\n',
-                'pickle every population: True\n',
-                'pickle final population: True\n',
-                '\n',
-                '[metaEA]\n',
-                'metaEA mu: 20\n',
-                'metaEA lambda: 10\n',
-                'metaEA maximum fitness evaluations: 200\n',
-                'metaEA k-tournament size: 8\n',
-                'metaEA survival selection: truncation\n',
-                'metaEA GP tree initialization depth limit: 3\n',
-                'metaEA mutation rate: 0.01\n',
-                'force mutation of clones: True\n'
-                'terminate on maximum evals: True\n',
-                'terminate on no improvement in average fitness: False\n',
-                'terminate on no improvement in best fitness: False\n',
-                'generations to termination for no improvement: 25\n',
-                'restart on no improvement in average fitness: False\n',
-                'restart on no improvement in best fitness: False\n',
-                'generations to restart for no improvement: 5\n',
-                'parsimony pressure: 1\n',
-                '\n',
-                '[evolved selection]\n',
-                'selection type: evolved\n',
-                'select with replacement: evolved\n',
-                'select from subset: evolved\n',
-                'initial selection subset size: 10\n'
-            ])

@@ -1,9 +1,8 @@
 # this script contains test functions for the objects in eppsea_base.py
-# the EPPSEA object tested uses the config passed into sys.argv[1[
+# These tests are probably not comprehensive and could use some improvement
 
 import eppsea_base
 import math
-import sys
 
 class popi:
     # a dummy population member for testing population-based eppsea functions with

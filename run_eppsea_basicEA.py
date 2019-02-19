@@ -1,5 +1,6 @@
 # this script runs eppesa_basicEA for each config file passed into it
 # it will attempt to cythonize the code before running
+# at the moment, there is no corresponding script for eppsea_cmaes, so that file must be run with pure python
 
 import traceback
 import sys

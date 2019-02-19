@@ -1,3 +1,5 @@
+
+
 import math
 import random
 import statistics
@@ -9,7 +11,6 @@ import multiprocessing
 import time
 import datetime
 import pickle
-import json
 import uuid
 import subprocess
 
@@ -45,6 +46,7 @@ class EAResult:
         self.id = None
 
     def export(self):
+        # returns a dictionary containing the data for this object
         info_dict = dict()
 
         info_dict['eval_counts'] = self.eval_counts
@@ -1089,7 +1091,8 @@ def main(config_path):
     shutil.copy(config_path, '{0}/config.cfg'.format(evaluator.results_directory))
     evaluator.run_eppsea_basicea()
 
-    # pickle the entire eppsea_basicEA object, and separately the base selection function found and a config file for it, and the final test results
+    # pickle the entire eppsea_basicEA object, and separately the base selection function found and a config file for
+    # it, and the final test results
     evaluator_pickle_path = '{0}/EppseaBasicEA'.format(evaluator.results_directory)
     with open(evaluator_pickle_path, 'wb') as pickle_file:
         pickle.dump(evaluator, pickle_file, protocol=4)
