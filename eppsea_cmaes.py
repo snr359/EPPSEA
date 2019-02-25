@@ -1,3 +1,6 @@
+# This file includes the code that uses EPPSEA to evolve a new mean-update selection scheme for CMA-ES
+
+
 from eppsea_basicEA import SelectionFunction
 
 import math
@@ -18,11 +21,14 @@ import fitness_functions as ff
 from pycma.cma import purecma
 
 def run_cmaes_runner(cmaes_runner):
+    # a dedicated function to call the one_run() member function of the cmaes_runner, and return the result. Separated out
+    # for easier multiprocessing
     result = cmaes_runner.one_run()
 
     return result
 
 def run_basic_cmaes_runner(cmaes_runner):
+    # same as above, but for the basic cmaes_runner
     result = cmaes_runner.one_run(basic=True)
 
     return result
@@ -52,6 +58,7 @@ class CMAES_Result:
         self.fitness_function_id = None
 
     def export(self):
+        # returns a dictionary contining the information of these results
         info_dict = dict()
 
         info_dict['eval_counts'] = self.eval_counts
@@ -72,6 +79,7 @@ class CMAES_Result:
         return info_dict
 
 class ModifiedCMAES(purecma.CMAES):
+    # a modified version of the basic CMA-ES, with a new mean-update scheme based on an Eppsea selection function
     def tell_pop(self, arx, fitvals, population, selection_function, use_sorted_genomes):
         """update the evolution paths and the distribution parameters m,
         sigma, and C within CMA-ES.
@@ -157,6 +165,8 @@ class ModifiedCMAES(purecma.CMAES):
         pass
 
 class CMAES_runner:
+    # a class to contain the modified CMAES object, and the information and functionality necessary to run it
+    # the runner may, or may not, be using an evolved selection function, as determined by the config file
     def __init__(self, config, fitness_function, selection_function):
         self.config = config
         self.fitness_function = fitness_function
@@ -164,11 +174,13 @@ class CMAES_runner:
         self.use_sorted_genomes = config.getboolean('CMAES', 'use sorted genomes')
 
     class Popi:
+        # a 'POP'ulation 'I'ndividual in the CMA-ES population
         def __init__(self):
             self.genome = None
             self.fitness = None
 
     def one_run(self, basic=False):
+        # this function runs the modified CMA-ES for one run. Most of the functionality here is for checking for termination
         start = self.fitness_function.random_genome()
         init_sigma = 0.5
         max_evals = self.config.getint('CMAES', 'maximum evaluations')
@@ -261,6 +273,8 @@ class CMAES_runner:
 
 
 class EppseaCMAES:
+    # this class encapsulates the functionality to run a meta-EA using Eppsea to evolve new mean-update selection
+    # schemes for CMA-ES
     def __init__(self, config):
         self.config = config
 
@@ -313,6 +327,7 @@ class EppseaCMAES:
         self.prepare_fitness_functions(config)
 
     def log(self, message, verbosity):
+        # writes a message to the logs, unless the verbosity setting is too low
         if self.verbosity >= verbosity:
             print(message)
             with open(self.log_file_location, 'a') as log_file:
@@ -359,9 +374,9 @@ class EppseaCMAES:
 
     def get_cmaes_runners(self, fitness_functions, selection_functions):
         # this prepares and returns a list of cmaes_runners for the provided selection functions
-        # selection_functions is a list of tuples of the form (selection_function_name, selection_function),
-        # where, if the selection_function_name is 'eppsea_selection_function', then selection_function is
-        # expected to be an eppsea selection function
+        # returns one CMAES_runner for each combination of selection function and fitness function
+        # fitness_functions is a list of FitnessFunction objects from fitness_functions.py
+        # selection_functions is a list of SelectionFunction objects
 
         result = list()
 
@@ -372,6 +387,8 @@ class EppseaCMAES:
         return result
 
     def get_basic_cmaes_runners(self, fitness_functions):
+        # same as above, but only gets runners for the unmodified CMA-ES for each of the passed-in fitness functions
+
         result = list()
 
         for fitness_function in fitness_functions:
@@ -418,7 +435,7 @@ class EppseaCMAES:
         return all_run_results
 
     def run_basic_cmaes_runners(self, eas, is_testing):
-        # runs each of the eas for the configured number of runs, returning one result_holder for each ea
+        # runs each of the eas for the configured number of runs, returning one results object for each cmaes_runner
         all_run_results = []
 
         if is_testing:
@@ -497,10 +514,11 @@ class EppseaCMAES:
 
 
 
-    def assign_eppsea_fitness(self, selection_functions, ea_results):
-        fitness_function_ids = set(r.fitness_function_id for r in ea_results)
+    def assign_eppsea_fitness(self, selection_functions, cmaes_results):
+        # assigns fitness values to each of the eppsea selection functions, given the list of cmaes_results
+        fitness_function_ids = set(r.fitness_function_id for r in cmaes_results)
         for s in selection_functions:
-            s_results = list(r for r in ea_results if r.selection_function_id == s.id)
+            s_results = list(r for r in cmaes_results if r.selection_function_id == s.id)
             if self.config.get('CMAES', 'eppsea fitness assignment method') == 'adaptive':
                 if self.eppsea_fitness_assignment_method == 'best_fitness_reached':
                     if len(list(r for r in s_results if r.termination_reason == 'target_fitness_hit')) / len (s_results) >= 0.50:
@@ -526,7 +544,7 @@ class EppseaCMAES:
         # loop through the selection functions containing the eppsea individuals
         for s in selection_functions:
             # filter out the ea runs associated with this individual
-            s_results = list(r for r in ea_results if r.selection_function_id == s.id)
+            s_results = list(r for r in cmaes_results if r.selection_function_id == s.id)
 
             if self.eppsea_fitness_assignment_method == 'best_fitness_reached':
                 # loop through all fitness functions to get average final best fitnesses
@@ -593,6 +611,7 @@ class EppseaCMAES:
                 raise Exception('ERROR: fitness assignment method {0} not recognized by eppsea_basicEA'.format(self.eppsea_fitness_assignment_method))
 
     def run_final_tests(self, best_eppsea_selection_functions):
+        # runs the final tests to test the evolved new selection schemes
         if self.config.get('CMAES', 'test generalization'):
             fitness_functions = self.testing_fitness_functions
         else:
@@ -616,16 +635,19 @@ class EppseaCMAES:
         return cmaes_results + basic_cmaess_results
 
     def save_final_results(self, final_results):
+        # pickles the final results
         file_path = self.results_directory + '/final_results'
         with open(file_path, 'wb') as file:
             pickle.dump(list(f.export() for f in final_results), file, protocol=4)
 
     def postprocess(self):
+        # calls the postprocessing script to analyze the final results
         postprocess_args = ['python3', 'post_process.py', self.results_directory, self.results_directory + '/final_results']
         output = subprocess.run(postprocess_args, stdout=subprocess.PIPE, universal_newlines=True).stdout
         return output
 
     def run_eppsea_cmaes(self):
+        # runs the meta-EA to evolve new mean-update selection schemes. The final 3 best individuals are saved
         print('Now starting EPPSEA')
         start_time = time.time()
 
@@ -713,7 +735,7 @@ def main(config_path):
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        print('Please provide config file')
+        print('Please provide path to config file as command line argument')
         exit(1)
 
     config_paths = sys.argv[1:]

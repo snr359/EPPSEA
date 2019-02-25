@@ -1,3 +1,5 @@
+# this script contains code to run the fitness functions used by the bottom-level EAs and CMA-ESs in the meta-EA
+
 import random
 import itertools
 import uuid
@@ -12,6 +14,7 @@ except ImportError:
     print('BBOB COCO not found. COCO benchmarks will not be available')
 
 class FitnessFunction:
+    # a class encapsulating a fitness function
     genome_types = {
         'nk_landscape': 'bool',
         'mk_landscape': 'bool',
@@ -97,12 +100,14 @@ class FitnessFunction:
         return genome
 
     def fitness_target_hit(self):
+        # returns whether the fitness target has been fit (if using a coco BBOB function
         if self.type == 'coco':
             return self.coco_function.final_target_hit
         else:
             return False
 
     def nk_landscape(self, x):
+        # computes fitness value for an nk_landscape fitness function
         result = 0
 
         for i in range(self.genome_length):
@@ -114,6 +119,7 @@ class FitnessFunction:
         return result
 
     def mk_landscape(self, x):
+        # computes fitness value for an mk_landscape fitness function
         result = 0
 
         for e in self.epistasis:
@@ -125,9 +131,11 @@ class FitnessFunction:
         return result
 
     def coco(self, x):
+        # computes fitness value for a COCO BBOB fitness function
         return self.coco_function(x)
 
     def generate_nk_epistatis(self, n, k):
+        # generates and saves a random nk-landscape
         loci_values = dict()
         for locus in itertools.product([True, False], repeat=k+1):
             loci_values[locus] = random.randint(0,k)
@@ -139,6 +147,7 @@ class FitnessFunction:
         return loci_values, epistasis
 
     def generate_mk_epistatis(self, n, m, k):
+        # generates and saves a random mk-landscape
         loci_values = dict()
         for locus in itertools.product([True, False], repeat=k):
             loci_values[locus] = random.randint(0,k)
@@ -150,6 +159,7 @@ class FitnessFunction:
         return loci_values, epistasis
 
     def evaluate(self, genome):
+        # evalutes this fitness function for the given genome
         if self.type == 'nk_landscape':
             fitness = self.nk_landscape(genome)
         elif self.type == 'mk_landscape':
@@ -205,6 +215,8 @@ def generate_coco_functions(config, append_instance_number):
     return fitness_functions
 
 def generate_fitness_functions(config_path, append_instance_number, n=0):
+    # generate (or load, in the case of coco) a number of fitness functions, given a path to a fitness function
+    # configuration file
     config = configparser.ConfigParser()
     config.read(config_path)
 
@@ -220,6 +232,7 @@ def generate_fitness_functions(config_path, append_instance_number, n=0):
     return fitness_functions
 
 def save(fitness_function, filepath):
+    # save a fitness function
     info_dict = dict()
 
     info_dict['type'] = fitness_function.type
@@ -244,6 +257,7 @@ def save(fitness_function, filepath):
         pickle.dump(info_dict, file)
 
 def load(filepath):
+    # load a fitness function
     with open(filepath, 'rb') as file:
         info_dict = pickle.load(file)
 

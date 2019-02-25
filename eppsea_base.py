@@ -1392,5 +1392,5 @@ class Eppsea:
                 elif self.pareto_optimal(p, x):
                     self.insert_into_pareto_heirarchy(x, pareto_heirarchy, tier_num+1)
                     return
-                # if this point is reached, x is pareto cooptimal with the whole tier, so insert it
+            # if this point is reached, x is pareto cooptimal with the whole tier, so insert it
             pareto_heirarchy[tier_num].append(x)

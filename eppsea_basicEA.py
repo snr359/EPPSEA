@@ -1,4 +1,4 @@
-
+# This file includes the code that uses EPPSEA to evolve new parent and survival selection for a basic EA
 
 import math
 import random
@@ -20,6 +20,8 @@ import fitness_functions as ff
 import numpy as np
 
 def run_ea(ea):
+    # a dedicated function to call the one_run() member function of the EA, and return the result. Separated out
+    # for easier multiprocessing
     result = ea.one_run()
     return result
 
@@ -67,6 +69,8 @@ class EAResult:
         return info_dict
 
 class SelectionFunction:
+    # This class encodes both a parent and survival selection function, either based on an evolved EppseaSelectionFunction
+    # object or a conventional selection method such as k-tournament
     def __init__(self):
         self.eppsea_selection_function = None
         
@@ -88,6 +92,7 @@ class SelectionFunction:
         self.id = '{0}_{1}_{2}'.format('SelectionFunction', str(id(self)), str(uuid.uuid4()))
 
     def generate_from_config(self, config):
+        # generates a selection function from a ConfigParser object "config"
         if config.getboolean('selection function', 'evolved'):
             file_path = config.get('selection function', 'file path (for evolved selection)')
             with open(file_path, 'rb') as file:
@@ -107,6 +112,7 @@ class SelectionFunction:
         self.assign_id()
 
     def generate_from_eppsea_individual(self, eppsea_selection_function):
+        # generates a selection function from an EppseaSelectionFunction object
         self.parent_selection_type = 'eppsea_seleciton_function'
         self.parent_selection_tournament_k = None
 
@@ -118,6 +124,8 @@ class SelectionFunction:
         self.assign_id()
         
     def parent_selection(self, population, n, generation_number, minimizing):
+        # performs parent selection, returning a selection of n members from the population
+        # if "minimizing" is true, then a lower fitness is assumed to be better
         if minimizing:
             for p in population:
                 p.fitness *= -1
@@ -134,6 +142,8 @@ class SelectionFunction:
         return selected
         
     def survival_selection(self, population, n, generation_number, minimizing):
+        # performs parent selection, returning a selection of n members from the population
+        # if "minimizing" is true, then a lower fitness is assumed to be better
         if minimizing:
             for p in population:
                 p.fitness *= -1
@@ -150,6 +160,7 @@ class SelectionFunction:
         return selected
 
     def basic_selection(self, population, n, selection_type, tournament_k):
+        # performs a conventional, non-evolved selection, returning n selected members from the population
         if selection_type == 'truncation':
             return sorted(population, key=lambda x: x.fitness, reverse=True)[:n]
 
@@ -285,6 +296,7 @@ class SelectionFunction:
 
 
 class EA:
+    # this class encapsulates all the information and functionality needed to run a basic EA
     def __init__(self, config, fitness_function, selection_function):
         self.mu = config.getint('EA', 'population size')
         self.lam = config.getint('EA', 'offspring size')
@@ -307,6 +319,7 @@ class EA:
             self.selection_function_eppsea_string = self.selection_function.eppsea_selection_function.get_string()
 
     class Popi:
+        # a 'POP'ulation 'I'ndividual
         def __init__(self, other=None):
             if other is None:
                 self.genome = None
@@ -319,6 +332,7 @@ class EA:
                 self.genome_length = other.genome_length
 
         def randomize(self, n, max_range, genome_type):
+            # creates a new random population member by randomizing this individual
             self.genome_length = n
             if genome_type == 'bool':
                 self.genome_type = 'bool'
@@ -328,6 +342,7 @@ class EA:
                 self.genome = np.random.uniform(-max_range, max_range, n)
 
         def mutate_gene(self, gene):
+            # mutates a particular gene
             if self.genome_type == 'bool':
                 self.genome[gene] = not self.genome[gene]
 
@@ -335,14 +350,17 @@ class EA:
                 self.genome[gene] += random.uniform(-1, 1)
 
         def mutate_one(self):
+            # mutates some random gene
             gene = random.randrange(self.genome_length)
             self.mutate_gene(gene)
 
         def mutate_all(self):
+            # mutates every gene
             for i in range(self.genome_length):
                 self.mutate_gene(i)
 
         def recombine(self, parent2):
+            # recombines this population member with parent2 and returns a new popi
             new_child = EA.Popi(self)
             if self.genome_type == 'bool':
                 for i in range(self.genome_length):
@@ -355,6 +373,7 @@ class EA:
             return new_child
 
     def evaluate_child(self, popi, fitness_function):
+        # evaluates the fitness of a members of the population
         popi.fitness = fitness_function.evaluate(popi.genome)
 
     def one_run(self):
@@ -499,6 +518,8 @@ class EA:
 
 
 class EppseaBasicEA:
+    # this class encapsulates the functionality to run a meta-EA using Eppsea to evolve new parent and survival
+    # selection functions for a basic EA
     genome_types = {
         'rastrigin': 'float',
         'rosenbrock': 'float',
@@ -508,6 +529,7 @@ class EppseaBasicEA:
     }
 
     def __init__(self, config):
+        # initializes the meta-EA using a ConfigParser object "config"
         self.config = config
 
         present_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -606,6 +628,7 @@ class EppseaBasicEA:
             self.testing_fitness_functions = None
             
     def prepare_basic_selection_functions(self, config):
+        # prepares the non-evolved selection functions
         self.basic_selection_functions = []
         selection_configs = config.items('basic selection function configs')
         for _, selection_config_path in selection_configs:
@@ -616,15 +639,16 @@ class EppseaBasicEA:
             self.basic_selection_functions.append(basic_selection_function)
 
     def log(self, message):
+        # writes a message to the log file
         print(message)
         with open(self.log_file_location, 'a') as log_file:
             log_file.write(message + '\n')
 
     def get_eas(self, fitness_functions, selection_functions):
-        # this prepares and returns a list of EAs for the provided selection functions
-        # selection_functions is a list of tuples of the form (selection_function_name, selection_function),
-        # where, if the selection_function_name is 'eppsea_selection_function', then selection_function is
-        # expected to be an eppsea selection function
+        # this prepares and returns a list of EAs for the provided selection functions and fitness functions
+        # returns one EA for each combination of selection function and fitness function
+        # fitness_functions is a list of FitnessFunction objects from fitness_functions.py
+        # selection_functions is a list of SelectionFunction objects
 
         result = list()
 
@@ -789,7 +813,7 @@ class EppseaBasicEA:
                 s.eppsea_selection_function.fitness = -1 * statistics.mean(all_final_evals)
 
             elif self.eppsea_fitness_assignment_method == 'proportion_better_than_basic':
-                # assign the fitness as the proportion of runs that hit a fitness higher than cmaes did
+                # assign the fitness as the proportion of runs that hit a fitness higher than the basic EA did
                 proportions_better = []
                 for fitness_function_id in fitness_function_ids:
                     fitness_function_results = list(r for r in s_results if r.fitness_function_id == fitness_function_id)
@@ -807,7 +831,7 @@ class EppseaBasicEA:
                 s.eppsea_selection_function.fitness = statistics.mean(proportions_better)
 
             elif self.eppsea_fitness_assignment_method == 'proportion_better_than_basic_median':
-                # assign the fitness as the proportion of runs that hit a fitness higher than cmaes did
+                # assign the fitness as the proportion of runs that hit a fitness higher than the basic EA did
                 proportions_better = []
                 for fitness_function_id in fitness_function_ids:
                     fitness_function_results = list(r for r in s_results if r.fitness_function_id == fitness_function_id)
@@ -828,7 +852,8 @@ class EppseaBasicEA:
                 raise Exception('ERROR: fitness assignment method {0} not recognized by eppsea_basicEA'.format(self.eppsea_fitness_assignment_method))
 
     def test_against_basic_selection(self, eppsea_individuals):
-
+        # tests how the evolved selection function contained in the eppsea_individuals perform against converntional
+        # selection functions
         selection_functions = self.basic_selection_functions
         if self.config.getint('EA', 'offspring size') > self.config.getint('EA', 'population size') * 2:
             for s in list(selection_functions):
@@ -841,6 +866,8 @@ class EppseaBasicEA:
             eppsea_selection_function.display_name += ' {0}'.format(i)
             selection_functions.append(eppsea_selection_function)
 
+        # if we are not trying to test for generalization, then just use the same fitness functions used in the
+        # meta-EA to test the final results
         if self.test_generalization:
             fitness_functions = self.testing_fitness_functions
         else:
@@ -853,6 +880,7 @@ class EppseaBasicEA:
         return ea_results
 
     def postprocess(self):
+        # calls the post-processing script to process the results
         postprocess_args = ['python3', 'post_process.py', self.results_directory, self.results_directory + '/final_results']
         output = subprocess.run(postprocess_args, stdout=subprocess.PIPE, universal_newlines=True).stdout
         return output
@@ -1003,11 +1031,13 @@ class EppseaBasicEA:
         return results
 
     def save_final_results(self, final_results):
+        # pickles (i.e. saves to disk) the final test results
         file_path = self.results_directory + '/final_results'
         with open(file_path, 'wb') as file:
             pickle.dump(list(f.export() for f in final_results), file, protocol=4)
 
     def run_eppsea_basicea(self):
+        # runs the meta-EA
         print('Now starting EPPSEA')
         start_time = time.time()
 
@@ -1055,6 +1085,7 @@ class EppseaBasicEA:
                         evals.append(2 * self.config.getint('EA', 'maximum evaluations'))
                 self.basic_median_best_evals = statistics.median(evals)
 
+        # build an initial population by converting the conventional selection functions to EPPSEA selection functions
         initial_members = self.convert_to_eppsea_selection(self.basic_selection_functions)
         eppsea.initial_population.extend(initial_members)
 
@@ -1096,7 +1127,6 @@ def main(config_path):
     evaluator_pickle_path = '{0}/EppseaBasicEA'.format(evaluator.results_directory)
     with open(evaluator_pickle_path, 'wb') as pickle_file:
         pickle.dump(evaluator, pickle_file, protocol=4)
-    
     if not evaluator.use_multiobjective_ea:
         selection_function_pickle_path = '{0}/EvolvedSelectionFunction'.format(evaluator.results_directory)
         with open(selection_function_pickle_path, 'wb') as pickle_file:
@@ -1117,7 +1147,7 @@ def main(config_path):
 if __name__ == '__main__':
 
     if len(sys.argv) < 2:
-        print('Please provide config file')
+        print('Please provide path to config file as command-line argument')
         exit(1)
 
     config_path = sys.argv[1]
